@@ -6,8 +6,13 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B5CC0CDD2EBA3E81003B6A27 /* .gitignore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		B5CC0CC92EBA3C6D003B6A27 /* Chukkoomi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Chukkoomi.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		B5CC0CDD2EBA3E81003B6A27 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -32,6 +37,7 @@
 		B5CC0CC02EBA3C6D003B6A27 = {
 			isa = PBXGroup;
 			children = (
+				B5CC0CDD2EBA3E81003B6A27 /* .gitignore */,
 				B5CC0CCB2EBA3C6D003B6A27 /* Chukkoomi */,
 				B5CC0CCA2EBA3C6D003B6A27 /* Products */,
 			);
@@ -109,6 +115,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
