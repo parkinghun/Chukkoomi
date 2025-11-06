@@ -102,8 +102,8 @@ enum HTTPHeader {
         case .apiKey:
             return ("SeSACKey", APIInfo.apiKey)
         case .authorization:
-            // TODO: Token 어디다 저장할건지?
-            return ("Authorization", "")
+            // TODO: Token 저장하면 수정하기
+            return ("Authorization", APIInfo.token)
         case .productId:
             return ("ProductId", APIInfo.productId)
         case .custom(let key, let value):
