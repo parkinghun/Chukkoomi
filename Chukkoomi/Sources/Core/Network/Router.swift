@@ -25,7 +25,7 @@ protocol Router {
 
     var headers: [HTTPHeader]? { get }
     var body: AnyEncodable? { get }
-    var bodyEncoder: BodyEncoder { get }
+    var bodyEncoder: BodyEncoder? { get }
     var query: [HTTPQuery]? { get }
 
     func asURLRequest() throws -> URLRequest
@@ -58,7 +58,7 @@ extension Router {
         headers?.forEach { request.setValue($0.tuple.value, forHTTPHeaderField: $0.tuple.key) }
 
         // Body
-        if let body {
+        if let body, let bodyEncoder {
             switch bodyEncoder {
             case .json:
                 try JSONParameterEncoder().encode(body, into: &request)
