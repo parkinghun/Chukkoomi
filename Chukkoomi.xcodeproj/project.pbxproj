@@ -15,9 +15,22 @@
 		B5CC0CDD2EBA3E81003B6A27 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		154F14B82EBC9F390079B157 /* Exceptions for "Chukkoomi" folder in "Chukkoomi" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = B5CC0CC82EBA3C6D003B6A27 /* Chukkoomi */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		B5CC0CCB2EBA3C6D003B6A27 /* Chukkoomi */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				154F14B82EBC9F390079B157 /* Exceptions for "Chukkoomi" folder in "Chukkoomi" target */,
+			);
 			path = Chukkoomi;
 			sourceTree = "<group>";
 		};
@@ -263,6 +276,7 @@
 				DEVELOPMENT_TEAM = VDAQLM4XLQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Chukkoomi/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "추꾸미";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
@@ -297,6 +311,7 @@
 				DEVELOPMENT_TEAM = VDAQLM4XLQ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = Chukkoomi/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "추꾸미";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
