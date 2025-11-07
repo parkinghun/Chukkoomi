@@ -5,7 +5,7 @@
 //  Created by 김영훈 on 11/7/25.
 //
 
-struct Profile {
+struct Profile: Equatable {
     let userId: String
     let email: String?
     let nickname: String
