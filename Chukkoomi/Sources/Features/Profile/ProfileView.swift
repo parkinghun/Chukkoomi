@@ -31,9 +31,8 @@ struct ProfileView: View {
                     .padding(.top, AppPadding.medium)
 
                 // 그리드
-                ScrollView {
-                    postsGrid(viewStore: viewStore)
-                }
+                postsGrid(viewStore: viewStore)
+                
             }
             .padding(.horizontal, AppPadding.large)
             .navigationTitle("프로필")
@@ -57,18 +56,21 @@ struct ProfileView: View {
     private func profileHeaderSection(viewStore: ViewStoreOf<ProfileFeature>) -> some View {
         VStack(spacing: AppPadding.small) {
             // 프로필 이미지
-            AsyncImage(url: viewStore.profileImageURL) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-            } placeholder: {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .overlay {
-                        AppIcon.personFill
-                            .foregroundColor(.gray)
-                            .font(.system(size: 40))
-                    }
+            Group {
+                if let imageData = viewStore.profileImageData,
+                   let uiImage = UIImage(data: imageData) {
+                    Image(uiImage: uiImage)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                        .overlay {
+                            AppIcon.personFill
+                                .foregroundColor(.gray)
+                                .font(.system(size: 40))
+                        }
+                }
             }
             .frame(width: 80, height: 80)
             .clipShape(Circle())
@@ -156,9 +158,23 @@ struct ProfileView: View {
 
         let items = viewStore.selectedTab == .posts ? viewStore.postImages : viewStore.bookmarkImages
 
-        return LazyVGrid(columns: columns, spacing: 4) {
-            ForEach(items) { image in
-                postGridItem(postImage: image)
+        return ZStack {
+            if items.isEmpty {
+                VStack(spacing: AppPadding.medium) {
+                    Text(viewStore.selectedTab == .posts ? "게시글이 없습니다." : "북마크한 게시글이 없습니다.")
+                        .font(.appBody)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: columns, spacing: 4) {
+                        ForEach(items) { image in
+                            postGridItem(postImage: image)
+                        }
+                    }
+                    .padding(.horizontal, 4)
+                }
             }
         }
     }

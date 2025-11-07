@@ -17,13 +17,9 @@ struct ProfileFeature: Reducer {
         var postImages: [PostImage] = []
         var bookmarkImages: [PostImage] = []
         var isLoading: Bool = false
+        var profileImageData: Data?
 
         // Computed properties
-        var profileImageURL: URL? {
-            guard let urlString = profile?.profileImage else { return nil }
-            return URL(string: urlString)
-        }
-
         var nickname: String {
             profile?.nickname ?? ""
         }
@@ -56,9 +52,17 @@ struct ProfileFeature: Reducer {
         case searchButtonTapped
         case editProfileButtonTapped
         case tabSelected(State.Tab)
+
+        // API 응답
         case profileLoaded(Profile)
         case postImagesLoaded([PostImage])
         case bookmarkImagesLoaded([PostImage])
+        case profileImageLoaded(Data)
+
+        // 게시물 fetch
+        case fetchPosts(postIds: [String])
+        case fetchBookmarks
+        case fetchProfileImage(path: String)
     }
 
     // MARK: - Reducer
@@ -66,8 +70,19 @@ struct ProfileFeature: Reducer {
         switch action {
         case .onAppear:
             state.isLoading = true
-            // TODO: API 호출로 프로필 데이터 로드
-            return .none
+            return .run { send in
+                do {
+                    let profileDTO = try await NetworkManager.shared.performRequest(
+                        ProfileRouter.lookupMe,
+                        as: ProfileDTO.self
+                    )
+                    let profile = profileDTO.toDomain
+                    await send(.profileLoaded(profile))
+                } catch {
+                    // TODO: 에러 처리
+                    print("프로필 로드 실패: \(error)")
+                }
+            }
 
         case .searchButtonTapped:
             // TODO: 검색 화면으로 이동
@@ -79,12 +94,33 @@ struct ProfileFeature: Reducer {
 
         case .tabSelected(let tab):
             state.selectedTab = tab
-            return .none
+            switch tab {
+            case .posts:
+                // 이미 로드되어 있으면 스킵
+                guard state.postImages.isEmpty, let postIds = state.profile?.posts else {
+                    return .none
+                }
+                return .send(.fetchPosts(postIds: postIds))
+            case .bookmarks:
+                // 이미 로드되어 있으면 스킵
+                guard state.bookmarkImages.isEmpty else {
+                    return .none
+                }
+                return .send(.fetchBookmarks)
+            }
 
         case .profileLoaded(let profile):
             state.profile = profile
             state.isLoading = false
-            return .none
+            // 프로필 이미지와 게시물 fetch
+            if let imagePath = profile.profileImage {
+                return .merge(
+                    .send(.fetchProfileImage(path: imagePath)),
+                    .send(.fetchPosts(postIds: profile.posts))
+                )
+            } else {
+                return .send(.fetchPosts(postIds: profile.posts))
+            }
 
         case .postImagesLoaded(let images):
             state.postImages = images
@@ -92,6 +128,48 @@ struct ProfileFeature: Reducer {
 
         case .bookmarkImagesLoaded(let images):
             state.bookmarkImages = images
+            return .none
+
+        case .profileImageLoaded(let data):
+            state.profileImageData = data
+            return .none
+
+        case .fetchProfileImage(let path):
+            return .run { send in
+                do {
+                    let imageData = try await NetworkManager.shared.download(
+                        MediaRouter.getData(path: path)
+                    )
+                    await send(.profileImageLoaded(imageData))
+                } catch {
+                    print("프로필 이미지 로드 실패: \(error)")
+                }
+            }
+
+        case .fetchPosts(let postIds):
+            // TODO: postIds로 게시물 데이터 fetch 후 PostImage 배열로 변환
+            // return .run { send in
+            //     do {
+            //         let posts = try await fetchPostsByIds(postIds)
+            //         let postImages = posts.map { PostImage(id: $0.id, imageURL: $0.imageURL) }
+            //         await send(.postImagesLoaded(postImages))
+            //     } catch {
+            //         print("게시물 로드 실패: \(error)")
+            //     }
+            // }
+            return .none
+
+        case .fetchBookmarks:
+            // TODO: 북마크한 게시물 데이터 fetch
+            // return .run { send in
+            //     do {
+            //         let bookmarkedPosts = try await fetchBookmarkedPosts()
+            //         let bookmarkImages = bookmarkedPosts.map { PostImage(id: $0.id, imageURL: $0.imageURL) }
+            //         await send(.bookmarkImagesLoaded(bookmarkImages))
+            //     } catch {
+            //         print("북마크 로드 실패: \(error)")
+            //     }
+            // }
             return .none
         }
     }
