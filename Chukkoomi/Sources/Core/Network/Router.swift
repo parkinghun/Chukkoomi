@@ -25,7 +25,7 @@ protocol Router {
 
     var headers: [HTTPHeader]? { get }
     var body: AnyEncodable? { get }
-    var bodyEncoder: BodyEncoder { get }
+    var bodyEncoder: BodyEncoder? { get }
     var query: [HTTPQuery]? { get }
 
     func asURLRequest() throws -> URLRequest
@@ -58,7 +58,7 @@ extension Router {
         headers?.forEach { request.setValue($0.tuple.value, forHTTPHeaderField: $0.tuple.key) }
 
         // Body
-        if let body {
+        if let body, let bodyEncoder {
             switch bodyEncoder {
             case .json:
                 try JSONParameterEncoder().encode(body, into: &request)
@@ -74,9 +74,11 @@ extension Router {
 // MARK: - AnyEncodable
 struct AnyEncodable: Encodable {
     private let _encode: (Encoder) throws -> Void
+    fileprivate let base: Any  // MultipartFormDataEncoder가 원본 값에 접근하기 위해 사용
 
     init<T: Encodable>(_ value: T) {
         self._encode = value.encode
+        self.base = value
     }
 
     func encode(to encoder: Encoder) throws {
@@ -160,31 +162,56 @@ private struct MultipartFormDataEncoder: ParameterEncoder {
     
     func encode<T>(_ parameters: T, into request: inout URLRequest) throws where T : Encodable {
         var body = Data()
-        let mirror = Mirror(reflecting: parameters)
-        
+
+        // AnyEncodable에서 원본 값 추출
+        let actualValue: Any
+        if let anyEncodable = parameters as? AnyEncodable {
+            actualValue = anyEncodable.base
+        } else {
+            actualValue = parameters
+        }
+
+        let mirror = Mirror(reflecting: actualValue)
+
         for child in mirror.children {
             guard let key = child.label else { continue }
             let value = child.value
-            
-            if let files = value as? [MultipartFile] {
+
+            // Optional unwrapping
+            let unwrappedValue: Any
+            let valueMirror = Mirror(reflecting: value)
+            if valueMirror.displayStyle == .optional {
+                // Optional인 경우
+                if let wrappedValue = valueMirror.children.first?.value {
+                    unwrappedValue = wrappedValue
+                } else {
+                    // nil이면 필드를 보내지 않음
+                    continue
+                }
+            } else {
+                unwrappedValue = value
+            }
+
+            // 타입별 처리
+            if let files = unwrappedValue as? [MultipartFile] {
                 for file in files {
                     body.append(convertFileData(fieldName: key,
                                                 fileName: file.fileName,
                                                 mimeType: file.mimeType,
                                                 fileData: file.data))
                 }
-            } else if let file = value as? MultipartFile {
+            } else if let file = unwrappedValue as? MultipartFile {
                 body.append(convertFileData(fieldName: key,
                                             fileName: file.fileName,
                                             mimeType: file.mimeType,
                                             fileData: file.data))
             } else {
-                body.append(convertFormField(named: key, value: "\(value)"))
+                body.append(convertFormField(named: key, value: "\(unwrappedValue)"))
             }
         }
-        
+
         body.append("--\(boundary)--\r\n".data(using: .utf8)!)
-        
+
         request.httpBody = body
         request.setValue("multipart/form-data; boundary=\(boundary)", forHTTPHeaderField: "Content-Type")
     }

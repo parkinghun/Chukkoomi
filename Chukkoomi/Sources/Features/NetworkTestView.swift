@@ -13,8 +13,8 @@ struct NetworkTestView: View {
             Button("Test") {
                 Task {
                     do {
-                        let a = try await NetworkManager.shared.performRequest(UserRouter.validateEmail("kyh"), as: BasicMessageDTO.self)
-                        print(a.message)
+                        let a = try await NetworkManager.shared.performRequest(UserRouter.signUp(email: "kyh", password: "kyh", nickname: "kyh"), as: SignResponseDTO.self)
+                        print(a)
                     } catch {
                         print(error)
                     }
@@ -22,10 +22,6 @@ struct NetworkTestView: View {
             }
         }
         .padding()
-    }
-    
-    struct BasicMessageDTO: Decodable {
-        let message: String
     }
 }
 
