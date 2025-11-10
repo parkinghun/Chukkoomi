@@ -12,124 +12,251 @@ struct SignUpView: View {
 
     let store: StoreOf<SignUpFeature>
     @Environment(\.dismiss) var dismiss
+    @State private var isPasswordVisible = false
+    @State private var isPasswordConfirmVisible = false
 
     var body: some View {
         WithViewStore(store, observe: { $0 }) { viewStore in
-            ScrollView {
-                VStack(spacing: 24) {
-                    // 타이틀
+            VStack(spacing: 0) {
+                // 상단 헤더
+                ZStack {
                     Text("회원가입")
-                        .font(.largeTitle)
-                        .fontWeight(.bold)
-                        .padding(.top, 60)
+                        .font(.system(size: 17, weight: .semibold))
 
-                    // 이메일 입력 필드
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("이메일")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
+                    HStack {
+                        Spacer()
+                        Button {
+                            dismiss()
+                        } label: {
+                            Image(systemName: "xmark")
+                                .foregroundColor(.black)
+                                .font(.system(size: 16))
+                        }
+                    }
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
 
-                        HStack(spacing: 8) {
+                ScrollView {
+                    VStack(spacing: 0) {
+                        // 타이틀
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text("회원가입")
+                                .font(.system(size: 20, weight: .bold))
+                                .foregroundColor(.black)
+
+                            Text("회원여부 확인 및 가입을 진행합니다.")
+                                .font(.system(size: 13))
+                                .foregroundColor(.black)
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 24)
+                        .padding(.top, 8)
+                        .padding(.bottom, 24)
+
+                        VStack(spacing: 16) {
+                            // 이메일 입력 필드 + 중복확인
+                            VStack(alignment: .leading, spacing: 8) {
+                                HStack(spacing: 8) {
+                                    TextField(
+                                        "이메일을 입력해주세요",
+                                        text: viewStore.binding(
+                                            get: \.email,
+                                            send: SignUpFeature.Action.emailChanged
+                                        )
+                                    )
+                                    .padding()
+                                    .background(Color.clear)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .keyboardType(.emailAddress)
+
+                                    // 중복 확인 버튼
+                                    Button {
+                                        viewStore.send(.checkEmailButtonTapped)
+                                    } label: {
+                                        Text("중복확인")
+                                            .font(.system(size: 13, weight: .semibold))
+                                            .foregroundColor(.white)
+                                            .padding(.horizontal, 16)
+                                            .padding(.vertical, 16)
+                                            .background(AppColor.primary)
+                                            .cornerRadius(8)
+                                    }
+                                    .disabled(viewStore.email.isEmpty || viewStore.isLoading)
+                                    .opacity(viewStore.email.isEmpty || viewStore.isLoading ? 0.5 : 1.0)
+                                }
+
+                                // 이메일 검증 결과 또는 에러 메시지 (이메일 입력 필드 바로 아래)
+                                if let isEmailValid = viewStore.isEmailValid {
+                                    Text(isEmailValid ? "사용 가능한 이메일 입니다." : "중복된 이메일 입니다.")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(isEmailValid ? .green : AppColor.primary)
+                                        .padding(.leading, 4)
+                                } else if let errorMessage = viewStore.errorMessage {
+                                    Text(errorMessage)
+                                        .font(.system(size: 12))
+                                        .foregroundColor(AppColor.primary)
+                                        .padding(.leading, 4)
+                                }
+                            }
+
+                            // 비밀번호 입력 필드
+                            VStack(alignment: .leading, spacing: 8) {
+                                ZStack(alignment: .trailing) {
+                                    Group {
+                                        if isPasswordVisible {
+                                            TextField(
+                                                "비밀번호를 입력해주세요",
+                                                text: viewStore.binding(
+                                                    get: \.password,
+                                                    send: SignUpFeature.Action.passwordChanged
+                                                )
+                                            )
+                                        } else {
+                                            SecureField(
+                                                "비밀번호를 입력해주세요",
+                                                text: viewStore.binding(
+                                                    get: \.password,
+                                                    send: SignUpFeature.Action.passwordChanged
+                                                )
+                                            )
+                                        }
+                                    }
+                                    .padding()
+                                    .padding(.trailing, 40)
+                                    .background(Color.clear)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .keyboardType(.asciiCapable)
+
+                                    // 비밀번호 보기 토글 버튼
+                                    Button {
+                                        isPasswordVisible.toggle()
+                                    } label: {
+                                        Image(systemName: isPasswordVisible ? "eye.fill" : "eye.slash.fill")
+                                            .foregroundColor(.gray)
+                                            .padding(.trailing, 16)
+                                    }
+                                }
+
+                                // 비밀번호 유효성 검사
+                                if !viewStore.password.isEmpty && viewStore.password.count < 8 {
+                                    Text("8자이상 입력해주세요.")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(AppColor.primary)
+                                        .padding(.leading, 4)
+                                }
+                            }
+
+                            // 비밀번호 확인 입력 필드
+                            VStack(alignment: .leading, spacing: 8) {
+                                ZStack(alignment: .trailing) {
+                                    Group {
+                                        if isPasswordConfirmVisible {
+                                            TextField(
+                                                "비밀번호를 입력해주세요",
+                                                text: viewStore.binding(
+                                                    get: \.passwordConfirm,
+                                                    send: SignUpFeature.Action.passwordConfirmChanged
+                                                )
+                                            )
+                                        } else {
+                                            SecureField(
+                                                "비밀번호를 입력해주세요",
+                                                text: viewStore.binding(
+                                                    get: \.passwordConfirm,
+                                                    send: SignUpFeature.Action.passwordConfirmChanged
+                                                )
+                                            )
+                                        }
+                                    }
+                                    .padding()
+                                    .padding(.trailing, 40)
+                                    .background(Color.clear)
+                                    .overlay(
+                                        RoundedRectangle(cornerRadius: 8)
+                                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                                    )
+                                    .textInputAutocapitalization(.never)
+                                    .autocorrectionDisabled()
+                                    .keyboardType(.asciiCapable)
+
+                                    // 비밀번호 확인 보기 토글 버튼
+                                    Button {
+                                        isPasswordConfirmVisible.toggle()
+                                    } label: {
+                                        Image(systemName: isPasswordConfirmVisible ? "eye.fill" : "eye.slash.fill")
+                                            .foregroundColor(.gray)
+                                            .padding(.trailing, 16)
+                                    }
+                                }
+
+                                // 비밀번호 일치 검사
+                                if !viewStore.passwordConfirm.isEmpty && viewStore.password != viewStore.passwordConfirm {
+                                    Text("비밀번호가 일치하지 않습니다.")
+                                        .font(.system(size: 12))
+                                        .foregroundColor(AppColor.primary)
+                                        .padding(.leading, 4)
+                                }
+                            }
+
+                            // 닉네임 입력 필드
                             TextField(
-                                "이메일을 입력하세요",
+                                "닉네임을 입력해주세요",
                                 text: viewStore.binding(
-                                    get: \.email,
-                                    send: SignUpFeature.Action.emailChanged
+                                    get: \.nickname,
+                                    send: SignUpFeature.Action.nicknameChanged
                                 )
                             )
-                            .textFieldStyle(.roundedBorder)
+                            .padding()
+                            .background(Color.clear)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 8)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                            )
                             .textInputAutocapitalization(.never)
                             .autocorrectionDisabled()
-                            .keyboardType(.emailAddress)
 
-                            // 중복 확인 버튼
+                            Spacer()
+
+                            // 회원가입 버튼
                             Button {
-                                viewStore.send(.checkEmailButtonTapped)
+                                viewStore.send(.signUpButtonTapped)
                             } label: {
-                                Text("중복확인")
-                                    .font(.caption)
-                                    .padding(.horizontal, 12)
-                                    .padding(.vertical, 8)
+                                if viewStore.isLoading {
+                                    ProgressView()
+                                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 52)
+                                } else {
+                                    Text("가입완료")
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .foregroundColor(.white)
+                                        .frame(maxWidth: .infinity)
+                                        .frame(height: 52)
+                                }
                             }
-                            .buttonStyle(.bordered)
-                            .disabled(viewStore.email.isEmpty || viewStore.isLoading)
+                            .background(isSignUpButtonEnabled(viewStore) ? AppColor.primary : AppColor.secondary)
+                            .cornerRadius(8)
+                            .disabled(!isSignUpButtonEnabled(viewStore) || viewStore.isLoading)
+                            .padding(.bottom, 40)
                         }
-
-                        // 이메일 검증 결과
-                        if let isEmailValid = viewStore.isEmailValid {
-                            Text(isEmailValid ? "✓ 사용 가능한 이메일입니다" : "✗ 사용할 수 없는 이메일입니다")
-                                .font(.caption)
-                                .foregroundColor(isEmailValid ? .green : .red)
-                        }
+                        .padding(.horizontal, 24)
                     }
-
-                    // 비밀번호 입력 필드
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("비밀번호")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        SecureField(
-                            "비밀번호 (8자 이상)",
-                            text: viewStore.binding(
-                                get: \.password,
-                                send: SignUpFeature.Action.passwordChanged
-                            )
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                    }
-
-                    // 닉네임 입력 필드
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("닉네임")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-
-                        TextField(
-                            "닉네임을 입력하세요",
-                            text: viewStore.binding(
-                                get: \.nickname,
-                                send: SignUpFeature.Action.nicknameChanged
-                            )
-                        )
-                        .textFieldStyle(.roundedBorder)
-                        .textInputAutocapitalization(.never)
-                    }
-
-                    // 에러 메시지
-                    if let errorMessage = viewStore.errorMessage {
-                        Text(errorMessage)
-                            .font(.caption)
-                            .foregroundColor(.red)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    // 회원가입 버튼
-                    Button {
-                        viewStore.send(.signUpButtonTapped)
-                    } label: {
-                        if viewStore.isLoading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        } else {
-                            Text("회원가입")
-                                .font(.headline)
-                                .foregroundColor(.white)
-                                .frame(maxWidth: .infinity)
-                                .padding()
-                        }
-                    }
-                    .background(Color.blue)
-                    .cornerRadius(10)
-                    .disabled(viewStore.isLoading)
-                    .padding(.top, 8)
-
-                    Spacer()
                 }
-                .padding(.horizontal, 24)
+            }
+            .navigationBarHidden(true)
+            .onDisappear {
+                viewStore.send(.clearFields)
             }
             .alert("회원가입 성공", isPresented: .constant(viewStore.isSignUpSuccessful)) {
                 Button("확인") {
@@ -139,5 +266,14 @@ struct SignUpView: View {
                 Text("로그인 화면으로 돌아갑니다.")
             }
         }
+    }
+
+    // 가입완료 버튼 활성화 조건
+    private func isSignUpButtonEnabled(_ viewStore: ViewStore<SignUpFeature.State, SignUpFeature.Action>) -> Bool {
+        return !viewStore.email.isEmpty &&
+               !viewStore.nickname.isEmpty &&
+               !viewStore.password.isEmpty &&
+               !viewStore.passwordConfirm.isEmpty &&
+               viewStore.isEmailValid == true
     }
 }

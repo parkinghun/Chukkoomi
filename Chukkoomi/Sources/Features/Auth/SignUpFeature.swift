@@ -15,6 +15,7 @@ struct SignUpFeature {
     struct State: Equatable {
         var email: String = ""
         var password: String = ""
+        var passwordConfirm: String = ""
         var nickname: String = ""
         var isLoading: Bool = false
         var errorMessage: String?
@@ -27,11 +28,13 @@ struct SignUpFeature {
     enum Action {
         case emailChanged(String)
         case passwordChanged(String)
+        case passwordConfirmChanged(String)
         case nicknameChanged(String)
         case checkEmailButtonTapped
         case emailValidationResponse(Result<Void, Error>)
         case signUpButtonTapped
         case signUpResponse(Result<SignResponse, Error>)
+        case clearFields // 필드 초기화
     }
 
     // MARK: - Dependency
@@ -55,6 +58,11 @@ struct SignUpFeature {
                 state.errorMessage = nil
                 return .none
 
+            case let .passwordConfirmChanged(passwordConfirm):
+                state.passwordConfirm = passwordConfirm
+                state.errorMessage = nil
+                return .none
+
             case let .nicknameChanged(nickname):
                 state.nickname = nickname
                 state.errorMessage = nil
@@ -67,8 +75,13 @@ struct SignUpFeature {
                     return .none
                 }
 
-                // 이메일 형식 검사
-                guard state.email.contains("@"), state.email.contains(".") else {
+                // 이메일 형식 검사 (@와 .com 포함)
+                guard state.email.contains("@") else {
+                    state.errorMessage = "올바른 이메일 형식이 아닙니다."
+                    return .none
+                }
+
+                guard state.email.lowercased().contains(".com") else {
                     state.errorMessage = "올바른 이메일 형식이 아닙니다."
                     return .none
                 }
@@ -95,13 +108,9 @@ struct SignUpFeature {
                 state.isLoading = false
                 state.isEmailValid = false
 
+                // 서버 에러 메시지 또는 기본 메시지 표시
                 if let networkError = error as? NetworkError {
-                    switch networkError {
-                    case .statusCode(409):
-                        state.errorMessage = "이미 사용 중인 이메일입니다."
-                    default:
-                        state.errorMessage = "이메일 확인에 실패했습니다."
-                    }
+                    state.errorMessage = networkError.errorDescription ?? "이메일 확인에 실패했습니다."
                 } else {
                     state.errorMessage = "이메일 확인에 실패했습니다."
                 }
@@ -109,7 +118,7 @@ struct SignUpFeature {
 
             case .signUpButtonTapped:
                 // 유효성 검사
-                guard !state.email.isEmpty, !state.password.isEmpty, !state.nickname.isEmpty else {
+                guard !state.email.isEmpty, !state.password.isEmpty, !state.passwordConfirm.isEmpty, !state.nickname.isEmpty else {
                     state.errorMessage = "모든 항목을 입력해주세요."
                     return .none
                 }
@@ -121,6 +130,11 @@ struct SignUpFeature {
 
                 guard state.password.count >= 8 else {
                     state.errorMessage = "비밀번호는 8자 이상이어야 합니다."
+                    return .none
+                }
+
+                guard state.password == state.passwordConfirm else {
+                    state.errorMessage = "비밀번호가 일치하지 않습니다."
                     return .none
                 }
 
@@ -149,24 +163,24 @@ struct SignUpFeature {
             case let .signUpResponse(.failure(error)):
                 state.isLoading = false
 
-                // 에러 메시지 처리
+                // 서버 에러 메시지 또는 기본 메시지 표시
                 if let networkError = error as? NetworkError {
-                    switch networkError {
-                    case .statusCode(let code):
-                        state.errorMessage = "회원가입에 실패했습니다. (코드: \(code))"
-                    case .decodingFailed:
-                        state.errorMessage = "서버 응답을 처리할 수 없습니다."
-                    case .noData:
-                        state.errorMessage = "서버로부터 응답을 받지 못했습니다."
-                    case .invalidResponse:
-                        state.errorMessage = "잘못된 응답입니다."
-                    case .unauthorized:
-                        state.errorMessage = "인증에 실패했습니다."
-                    }
+                    state.errorMessage = networkError.errorDescription ?? "회원가입에 실패했습니다. 다시 시도해주세요."
                 } else {
                     state.errorMessage = "회원가입에 실패했습니다. 다시 시도해주세요."
                 }
 
+                return .none
+
+            case .clearFields:
+                state.email = ""
+                state.password = ""
+                state.passwordConfirm = ""
+                state.nickname = ""
+                state.errorMessage = nil
+                state.isEmailValid = nil
+                state.validatedEmail = ""
+                state.isLoading = false
                 return .none
             }
         }
@@ -183,11 +197,13 @@ extension SignUpClient: DependencyKey {
     static let liveValue = SignUpClient(
         validateEmail: { email in
             let router = UserRouter.validateEmail(email: email)
-            _ = try await NetworkManager.shared.performRequest(router, as: BasicMessageResponseDTO.self)
+            // 이메일 중복 체크는 401 인터셉트 없이 호출
+            _ = try await NetworkManager.shared.performRequestWithoutInterception(router, as: BasicMessageResponseDTO.self)
         },
         signUp: { email, password, nickname in
             let router = UserRouter.signUp(email: email, password: password, nickname: nickname)
-            let responseDTO = try await NetworkManager.shared.performRequest(router, as: SignResponseDTO.self)
+            // 회원가입은 401 인터셉트 없이 호출
+            let responseDTO = try await NetworkManager.shared.performRequestWithoutInterception(router, as: SignResponseDTO.self)
             return responseDTO.toDomain
         }
     )
