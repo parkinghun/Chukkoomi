@@ -7,7 +7,7 @@
 
 // MARK: - 기능
 enum ProfileRouter {
-    case editMe(profile: EditProfileRequestBody) // 내 프로필 수정
+    case updateMe(profile: EditProfileRequestBody) // 내 프로필 수정
     case lookupMe // 내 프로필 조회
     case lookupOther(id: String) // 다른 사람 프로필 조회
 }
@@ -21,7 +21,7 @@ extension ProfileRouter: Router {
     
     var path: String {
         switch self {
-        case .editMe, .lookupMe:
+        case .updateMe, .lookupMe:
             return "/\(version)/users/me/profile"
         case .lookupOther(let id):
             return "/\(version)/users/\(id)/profile"
@@ -30,7 +30,7 @@ extension ProfileRouter: Router {
     
     var method: HTTPMethod {
         switch self {
-        case .editMe:
+        case .updateMe:
             return .put
         case .lookupMe, .lookupOther:
             return .get
@@ -43,7 +43,7 @@ extension ProfileRouter: Router {
     
     var body: AnyEncodable? {
         switch self {
-        case .editMe(let profile):
+        case .updateMe(let profile):
             return .init(profile)
         case .lookupMe, .lookupOther:
             return nil
@@ -52,7 +52,7 @@ extension ProfileRouter: Router {
     
     var bodyEncoder: BodyEncoder? {
         switch self {
-        case .editMe:
+        case .updateMe:
             return .multipart
         case .lookupMe, .lookupOther:
             return nil

@@ -7,5 +7,7 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>프로필 사진 및 게시물에 사용할 사진을 선택하기 위해 앨범 접근 권한이 필요합니다.</string>
 </dict>
 </plist>

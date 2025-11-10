@@ -7,8 +7,8 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 154F15AF2EBDE1A20079B157 /* ComposableArchitecture */; };
 		B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B5CC0CDD2EBA3E81003B6A27 /* .gitignore */; };
-		ECE4E1AD2EBDF9CE00450DC2 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = ECE4E1AC2EBDF9CE00450DC2 /* ComposableArchitecture */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -42,7 +42,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				ECE4E1AD2EBDF9CE00450DC2 /* ComposableArchitecture in Frameworks */,
+				154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -86,7 +86,7 @@
 			);
 			name = Chukkoomi;
 			packageProductDependencies = (
-				ECE4E1AC2EBDF9CE00450DC2 /* ComposableArchitecture */,
+				154F15AF2EBDE1A20079B157 /* ComposableArchitecture */,
 			);
 			productName = Chukkoomi;
 			productReference = B5CC0CC92EBA3C6D003B6A27 /* Chukkoomi.app */;
@@ -117,7 +117,7 @@
 			mainGroup = B5CC0CC02EBA3C6D003B6A27;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				ECE4E1AB2EBDF9CE00450DC2 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B5CC0CCA2EBA3C6D003B6A27 /* Products */;
@@ -189,7 +189,7 @@
 				DEVELOPMENT_TEAM = VDAQLM4XLQ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_DYNAMIC_NO_PIC = NO;
 				GCC_NO_COMMON_BLOCKS = YES;
@@ -253,7 +253,7 @@
 				DEVELOPMENT_TEAM = VDAQLM4XLQ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
 				GCC_C_LANGUAGE_STANDARD = gnu17;
 				GCC_NO_COMMON_BLOCKS = YES;
 				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
@@ -281,7 +281,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VDAQLM4XLQ;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Chukkoomi/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "추꾸미";
@@ -317,7 +316,6 @@
 				CURRENT_PROJECT_VERSION = 1;
 				DEVELOPMENT_TEAM = VDAQLM4XLQ;
 				ENABLE_PREVIEWS = YES;
-				ENABLE_USER_SCRIPT_SANDBOXING = NO;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Chukkoomi/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = "추꾸미";
@@ -368,9 +366,9 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		ECE4E1AB2EBDF9CE00450DC2 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
+		154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture";
+			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture.git";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.23.1;
@@ -379,9 +377,9 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		ECE4E1AC2EBDF9CE00450DC2 /* ComposableArchitecture */ = {
+		154F15AF2EBDE1A20079B157 /* ComposableArchitecture */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = ECE4E1AB2EBDF9CE00450DC2 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
+			package = 154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
 			productName = ComposableArchitecture;
 		};
 /* End XCSwiftPackageProductDependency section */

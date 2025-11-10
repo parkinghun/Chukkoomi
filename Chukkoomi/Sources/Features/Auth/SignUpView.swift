@@ -245,7 +245,7 @@ struct SignUpView: View {
                                         .frame(height: 52)
                                 }
                             }
-                            .background(isSignUpButtonEnabled(viewStore) ? AppColor.primary : AppColor.secondary)
+                            .background(isSignUpButtonEnabled(viewStore) ? AppColor.primary : AppColor.disabled)
                             .cornerRadius(8)
                             .disabled(!isSignUpButtonEnabled(viewStore) || viewStore.isLoading)
                             .padding(.bottom, 40)

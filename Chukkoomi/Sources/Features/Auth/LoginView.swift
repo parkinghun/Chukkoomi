@@ -121,7 +121,7 @@ struct LoginView: View {
                                 .frame(height: 56)
                         }
                     }
-                    .background(isLoginButtonEnabled(viewStore) ? AppColor.primary : AppColor.secondary)
+                    .background(isLoginButtonEnabled(viewStore) ? AppColor.primary : AppColor.disabled)
                     .cornerRadius(12)
                     .disabled(!isLoginButtonEnabled(viewStore) || viewStore.isLoading)
                     .padding(.top, 8)

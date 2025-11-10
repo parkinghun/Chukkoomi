@@ -5,13 +5,13 @@
 //  Created by 김영훈 on 11/7/25.
 //
 
-struct Profile {
+struct Profile: Equatable {
     let userId: String
     let email: String?
     let nickname: String
     let profileImage: String?
-    let introduce: String
-    let followers: [User]
+    let introduce: String?
+    var followers: [User]
     let following: [User]
     let posts: [String]
 }
