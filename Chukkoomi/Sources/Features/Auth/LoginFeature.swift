@@ -26,6 +26,7 @@ struct LoginFeature {
         case passwordChanged(String)
         case loginButtonTapped
         case loginResponse(Result<SignResponse, Error>)
+        case clearFields // 필드 초기화
     }
 
     // MARK: - Dependency
@@ -53,8 +54,19 @@ struct LoginFeature {
                 }
 
                 // 이메일 형식 검사
-                guard state.email.contains("@"), state.email.contains(".") else {
+                guard state.email.contains("@") else {
                     state.errorMessage = "올바른 이메일 형식이 아닙니다."
+                    return .none
+                }
+
+                guard state.email.lowercased().contains(".com") else {
+                    state.errorMessage = "올바른 이메일 형식이 아닙니다."
+                    return .none
+                }
+
+                // 비밀번호 길이 검사
+                guard state.password.count >= 8 else {
+                    state.errorMessage = "비밀번호는 8자 이상이어야 합니다."
                     return .none
                 }
 
@@ -83,24 +95,20 @@ struct LoginFeature {
             case let .loginResponse(.failure(error)):
                 state.isLoading = false
 
-                // 에러 메시지 처리
+                // 서버 에러 메시지 또는 기본 메시지 표시
                 if let networkError = error as? NetworkError {
-                    switch networkError {
-                    case .statusCode(let code):
-                        state.errorMessage = code == 401 ? "이메일 또는 비밀번호가 올바르지 않습니다." : "로그인에 실패했습니다. (코드: \(code))"
-                    case .decodingFailed:
-                        state.errorMessage = "서버 응답을 처리할 수 없습니다."
-                    case .noData:
-                        state.errorMessage = "서버로부터 응답을 받지 못했습니다."
-                    case .invalidResponse:
-                        state.errorMessage = "잘못된 응답입니다."
-                    case .unauthorized:
-                        state.errorMessage = "인증에 실패했습니다. 다시 로그인해주세요."
-                    }
+                    state.errorMessage = networkError.errorDescription ?? "로그인에 실패했습니다. 다시 시도해주세요."
                 } else {
                     state.errorMessage = "로그인에 실패했습니다. 다시 시도해주세요."
                 }
 
+                return .none
+
+            case .clearFields:
+                state.email = ""
+                state.password = ""
+                state.errorMessage = nil
+                state.isLoading = false
                 return .none
             }
         }
@@ -116,7 +124,8 @@ extension NetworkClient: DependencyKey {
     static let liveValue = NetworkClient(
         signInWithEmail: { email, password in
             let router = UserRouter.signInWithEmail(email: email, password: password)
-            let responseDTO = try await NetworkManager.shared.performRequest(router, as: SignResponseDTO.self)
+            // 로그인은 401 인터셉트 없이 호출 (회원이 아니면 401이 정상 응답)
+            let responseDTO = try await NetworkManager.shared.performRequestWithoutInterception(router, as: SignResponseDTO.self)
             return responseDTO.toDomain
         }
     )

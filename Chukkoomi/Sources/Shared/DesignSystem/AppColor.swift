@@ -10,8 +10,8 @@ import SwiftUI
 enum AppColor {
     /// 주조색
     static let primary = Color(hex: "#FE333D")
-    /// 보조색
-    static let secondary = Color(hex: "#007AFF")
+    /// 보조색 (버튼 비활성화 등)
+    static let secondary = Color(hex: "#FD8C8C")
 
     /// 메인 텍스트 색상
     static let textPrimary = Color(hex: "#007AFF")

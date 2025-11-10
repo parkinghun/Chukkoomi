@@ -44,8 +44,11 @@ struct LoginView: View {
                         )
                     )
                     .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(12)
+                    .background(Color.clear)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
                     .textInputAutocapitalization(.never)
                     .autocorrectionDisabled()
                     .keyboardType(.emailAddress)
@@ -73,8 +76,11 @@ struct LoginView: View {
                         }
                         .padding()
                         .padding(.trailing, 40)
-                        .background(Color(.systemGray6))
-                        .cornerRadius(12)
+                        .background(Color.clear)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 8)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.asciiCapable)
@@ -115,7 +121,7 @@ struct LoginView: View {
                                 .frame(height: 56)
                         }
                     }
-                    .background(AppColor.primary.opacity(isLoginButtonEnabled(viewStore) ? 1.0 : 0.5))
+                    .background(isLoginButtonEnabled(viewStore) ? AppColor.primary : AppColor.secondary)
                     .cornerRadius(12)
                     .disabled(!isLoginButtonEnabled(viewStore) || viewStore.isLoading)
                     .padding(.top, 8)
@@ -124,10 +130,21 @@ struct LoginView: View {
 
                 // 간편 로그인
                 VStack(spacing: 16) {
-                    Text("간편 로그인")
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                        .padding(.top, 32)
+                    HStack(spacing: 12) {
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(height: 1)
+
+                        Text("간편 로그인")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+
+                        Rectangle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(height: 1)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
 
                     HStack(spacing: 16) {
                         // 카카오 로그인
@@ -174,10 +191,13 @@ struct LoginView: View {
                 }
                 .padding(.bottom, 40)
             }
+            .onDisappear {
+                viewStore.send(.clearFields)
+            }
         }
     }
 
-    // 로그인 버튼 활성화 조건
+    // 로그인 버튼 활성화 조건 (최소 조건: 빈 값이 아닐 것)
     private func isLoginButtonEnabled(_ viewStore: ViewStore<LoginFeature.State, LoginFeature.Action>) -> Bool {
         return !viewStore.email.isEmpty && !viewStore.password.isEmpty
     }
