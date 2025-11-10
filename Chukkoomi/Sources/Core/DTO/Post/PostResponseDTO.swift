@@ -39,8 +39,34 @@ struct PostResponseDTO: Decodable {
     let buyers: [String]
     let hashTags: [String]
     let commentCount: Int
-    let geolocation: GeoLocationDTO
+    let geolocation: GeoLocationDTO?
     let distance: Double?
+}
+
+extension PostResponseDTO {
+    var toDomain: Post {
+        return Post(
+            id: postId,
+            teams: FootballTeams(rawValue: category) ?? .total,
+            title: title,
+            price: price,
+            content: content,
+            values: [value1, value2, value3, value4, value5, value6, value7, value8, value9, value10],
+            createdAt: DateFormatters.iso8601.date(from: createdAt) ?? Date(),
+            creator: creator.toDomain,
+            files: files,
+            likes: likes,
+            bookmarks: likes2,
+            buyers: buyers,
+            hashTags: hashTags,
+            commentCount: commentCount,
+            location: GeoLocation(
+                longitude: geolocation?.longitude ?? GeoLocation.defaultLocation.longitude,
+                latitude: geolocation?.latitude ?? GeoLocation.defaultLocation.latitude
+            ),
+            distance: distance
+        )
+    }
 }
 
 struct GeoLocationDTO: Decodable {
