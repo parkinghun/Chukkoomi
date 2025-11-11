@@ -49,11 +49,7 @@ struct FollowListView: View {
     // MARK: - 유저 리스트
     private func userList(viewStore: ViewStoreOf<FollowListFeature>) -> some View {
         Group {
-            if viewStore.isLoading {
-                Spacer()
-                ProgressView()
-                Spacer()
-            } else if viewStore.filteredUsers.isEmpty {
+            if viewStore.filteredUsers.isEmpty {
                 Spacer()
                 Text(viewStore.searchText.isEmpty ? "목록이 비어있습니다" : "검색 결과가 없습니다")
                     .font(.appBody)

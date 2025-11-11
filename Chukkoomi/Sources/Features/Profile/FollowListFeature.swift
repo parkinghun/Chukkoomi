@@ -16,7 +16,6 @@ struct FollowListFeature {
         var listType: ListType
         var users: [UserItem] = []
         var searchText: String = ""
-        var isLoading: Bool = false
 
         @PresentationState var otherProfile: OtherProfileFeature.State?
 
@@ -77,7 +76,6 @@ struct FollowListFeature {
                 state.users = users.map { user in
                     UserItem(user: user, profileImageData: nil)
                 }
-                state.isLoading = false
 
                 // 각 유저의 프로필 이미지 다운로드
                 let effects = users.compactMap { user -> Effect<Action>? in
