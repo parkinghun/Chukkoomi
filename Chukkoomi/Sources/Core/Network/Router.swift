@@ -104,8 +104,8 @@ enum HTTPHeader {
         case .apiKey:
             return ("SeSACKey", APIInfo.apiKey)
         case .authorization:
-            // TODO: Token 저장하면 수정하기
-            return ("Authorization", APIInfo.token)
+            let token = KeychainManager.shared.load(for: .accessToken) ?? ""
+            return ("Authorization", token)
         case .productId:
             return ("ProductId", APIInfo.productId)
         case .custom(let key, let value):

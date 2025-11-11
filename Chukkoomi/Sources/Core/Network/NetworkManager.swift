@@ -31,8 +31,25 @@ final class NetworkManager: NSObject {
 // MARK: - Request Methods
 extension NetworkManager {
 
-    /// HTTP Method와 BodyEncoder에 따라 분기하는 통합 메서드
+    /// HTTP Method와 BodyEncoder에 따라 분기하는 통합 메서드 (401 인터셉트 포함)
     func performRequest<T: Decodable>(_ router: Router, as type: T.Type, progress: ((Double) -> Void)? = nil) async throws -> T {
+        do {
+            return try await performRequestWithoutInterception(router, as: type, progress: progress)
+        } catch NetworkError.statusCode(401, _) {
+            // 401 에러 발생 -> 토큰 갱신 시도
+            let refreshSuccess = await TokenRefreshManager.shared.refreshTokenIfNeeded()
+
+            guard refreshSuccess else {
+                throw NetworkError.unauthorized
+            }
+
+            // 토큰 갱신 성공 -> 원래 요청 재시도
+            return try await performRequestWithoutInterception(router, as: type, progress: progress)
+        }
+    }
+
+    /// HTTP Method와 BodyEncoder에 따라 분기하는 통합 메서드 (401 인터셉트 없음)
+    func performRequestWithoutInterception<T: Decodable>(_ router: Router, as type: T.Type, progress: ((Double) -> Void)? = nil) async throws -> T {
         let data: Data
 
         switch router.method {
@@ -71,7 +88,9 @@ extension NetworkManager {
         }
 
         guard (200...299).contains(httpResponse.statusCode) else {
-            throw NetworkError.statusCode(httpResponse.statusCode)
+            // 에러 응답의 body에서 message 파싱 시도
+            let errorMessage = try? JSONDecoder().decode(BasicMessageResponseDTO.self, from: data).message
+            throw NetworkError.statusCode(httpResponse.statusCode, message: errorMessage)
         }
 
         return data
@@ -170,7 +189,14 @@ extension NetworkManager: URLSessionTaskDelegate {
         // HTTP 응답 상태 코드 확인
         if let httpResponse = task.response as? HTTPURLResponse {
             guard (200...299).contains(httpResponse.statusCode) else {
-                continuation.resume(throwing: NetworkError.statusCode(httpResponse.statusCode))
+                // 에러 응답의 body에서 message 파싱 시도
+                let errorMessage: String?
+                if let data = receivedData[taskIdentifier] {
+                    errorMessage = try? JSONDecoder().decode(BasicMessageResponseDTO.self, from: data).message
+                } else {
+                    errorMessage = nil
+                }
+                continuation.resume(throwing: NetworkError.statusCode(httpResponse.statusCode, message: errorMessage))
                 return
             }
         }
@@ -240,7 +266,15 @@ extension NetworkManager: URLSessionDownloadDelegate {
         // HTTP 응답 상태 코드 확인
         if let httpResponse = downloadTask.response as? HTTPURLResponse {
             guard (200...299).contains(httpResponse.statusCode) else {
-                continuation.resume(throwing: NetworkError.statusCode(httpResponse.statusCode))
+                // 에러 응답의 body에서 message 파싱 시도 (다운로드 파일에서)
+                let errorMessage: String?
+                do {
+                    let data = try Data(contentsOf: location)
+                    errorMessage = try? JSONDecoder().decode(BasicMessageResponseDTO.self, from: data).message
+                } catch {
+                    errorMessage = nil
+                }
+                continuation.resume(throwing: NetworkError.statusCode(httpResponse.statusCode, message: errorMessage))
                 return
             }
         }
@@ -258,20 +292,26 @@ extension NetworkManager: URLSessionDownloadDelegate {
 // MARK: - NetworkError
 enum NetworkError: Error, LocalizedError {
     case invalidResponse
-    case statusCode(Int)
+    case statusCode(Int, message: String?) // 서버 에러 메시지 추가
     case noData
     case decodingFailed(Error)
+    case unauthorized // 토큰 갱신 실패
 
     var errorDescription: String? {
         switch self {
         case .invalidResponse:
             return "유효하지 않은 응답입니다."
-        case .statusCode(let code):
+        case .statusCode(let code, let message):
+            if let message = message {
+                return message // 서버 메시지 우선 사용
+            }
             return "HTTP 상태 코드 에러: \(code)"
         case .noData:
             return "데이터가 없습니다."
         case .decodingFailed(let error):
             return "디코딩에 실패했습니다: \(error.localizedDescription)"
+        case .unauthorized:
+            return "인증에 실패했습니다. 다시 로그인해주세요."
         }
     }
 }
