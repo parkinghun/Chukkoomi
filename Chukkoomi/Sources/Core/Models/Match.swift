@@ -6,3 +6,14 @@
 //
 
 import Foundation
+
+struct Match: Identifiable, Equatable {
+    let id: Int
+    let date: Date
+    let homeTeamName: String
+    let awayTeamName: String
+    let homeTeamLogo: String
+    let awayTeamLogo: String
+    let homeScore: Int?
+    let awayScore: Int?
+}
