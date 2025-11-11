@@ -31,13 +31,10 @@ struct FollowListView: View {
                     }
                 )
                 .padding(.horizontal, AppPadding.large)
-                .padding(.top, AppPadding.medium)
-
-                Divider()
-                    .padding(.top, AppPadding.medium)
 
                 // 리스트
                 userList(viewStore: viewStore)
+                    .padding(.top, 4)
             }
             .navigationTitle(viewStore.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -115,7 +112,7 @@ struct FollowListView: View {
             Spacer()
         }
         .padding(.horizontal, AppPadding.large)
-        .padding(.vertical, AppPadding.medium)
+        .padding(.vertical, 4)
         .background(Color.clear)
     }
 }

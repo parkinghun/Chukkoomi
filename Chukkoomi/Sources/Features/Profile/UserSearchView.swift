@@ -32,11 +32,9 @@ struct UserSearchView: View {
                 )
                 .padding(.horizontal, AppPadding.large)
 
-                Divider()
-                    .padding(.top, AppPadding.medium)
-
                 // 검색 결과 리스트
                 searchResultsList(viewStore: viewStore)
+                    .padding(.top, 4)
             }
             .navigationTitle("유저 검색")
             .navigationBarTitleDisplayMode(.inline)
@@ -113,7 +111,7 @@ struct UserSearchView: View {
             Spacer()
         }
         .padding(.horizontal, AppPadding.large)
-        .padding(.vertical, AppPadding.medium)
+        .padding(.vertical, 4)
         .background(Color.clear)
     }
 }

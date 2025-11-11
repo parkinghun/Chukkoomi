@@ -56,7 +56,7 @@ struct MyProfileView: View {
 
     // MARK: - 프로필 헤더
     private func profileHeaderSection(viewStore: ViewStoreOf<MyProfileFeature>) -> some View {
-        VStack(spacing: AppPadding.small) {
+        VStack(spacing: 0) {
             // 프로필 이미지
             Group {
                 if let imageData = viewStore.profileImageData,
@@ -80,12 +80,17 @@ struct MyProfileView: View {
             // 닉네임
             Text(viewStore.nickname)
                 .font(.appTitle)
+                .lineLimit(1)
+                .frame(height: 28)
+                .padding(.top, AppPadding.medium)
 
             // 한줄 소개
             Text(viewStore.introduce)
                 .font(.appBody)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .frame(height: 22)
         }
     }
 
@@ -109,17 +114,17 @@ struct MyProfileView: View {
             action?()
         } label: {
             VStack(spacing: AppPadding.small / 2) {
-                Text("\(count)")
-                    .font(.appSubTitle)
-                    .foregroundColor(.primary)
                 Text(title)
                     .font(.appCaption)
                     .foregroundColor(.secondary)
+                Text("\(count)")
+                    .font(.appSubTitle)
+                    .foregroundColor(.primary)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
-        .disabled(action == nil)
+        .allowsHitTesting(action != nil)
     }
 
     // MARK: - 프로필 수정 버튼
