@@ -8,7 +8,8 @@
 import ComposableArchitecture
 import Foundation
 
-struct UserSearchFeature: Reducer {
+@Reducer
+struct UserSearchFeature {
 
     // MARK: - State
     struct State: Equatable {
@@ -28,10 +29,11 @@ struct UserSearchFeature: Reducer {
         case clearSearch
     }
 
-    // MARK: - Reducer
-    func reduce(into state: inout State, action: Action) -> Effect<Action> {
-        switch action {
-        case .searchTextChanged(let text):
+    // MARK: - Body
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            switch action {
+            case .searchTextChanged(let text):
             state.searchText = text
             // 검색어가 비어있으면 결과 초기화
             if text.isEmpty {
@@ -108,6 +110,7 @@ struct UserSearchFeature: Reducer {
             state.searchResults = []
             state.isSearching = false
             return .none
+            }
         }
     }
 }

@@ -8,7 +8,8 @@
 import ComposableArchitecture
 import Foundation
 
-struct EditProfileFeature: Reducer {
+@Reducer
+struct EditProfileFeature {
 
     // MARK: - State
     struct State: Equatable {
@@ -65,12 +66,13 @@ struct EditProfileFeature: Reducer {
         case dismiss
     }
 
-    // MARK: - Reducer
+    // MARK: - Body
     @Dependency(\.dismiss) var dismiss
 
-    func reduce(into state: inout State, action: Action) -> Effect<Action> {
-        switch action {
-        case .cancelButtonTapped:
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            switch action {
+            case .cancelButtonTapped:
             return .run { send in
                 await send(.dismiss)
             }
@@ -128,6 +130,7 @@ struct EditProfileFeature: Reducer {
         case .dismiss:
             return .run { _ in
                 await self.dismiss()
+            }
             }
         }
     }

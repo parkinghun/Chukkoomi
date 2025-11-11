@@ -54,6 +54,11 @@ struct MyProfileView: View {
             ) { store in
                 EditProfileView(store: store)
             }
+            .navigationDestination(
+                store: store.scope(state: \.$userSearch, action: \.userSearch)
+            ) { store in
+                UserSearchView(store: store)
+            }
         }
     }
 
