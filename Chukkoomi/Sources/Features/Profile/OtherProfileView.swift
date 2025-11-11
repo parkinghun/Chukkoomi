@@ -2,7 +2,7 @@
 //  OtherProfileView.swift
 //  Chukkoomi
 //
-//  Created by Claude on 11/7/25.
+//  Created by 김영훈 on 11/7/25.
 //
 
 import SwiftUI
@@ -40,6 +40,8 @@ struct OtherProfileView: View {
             .onAppear {
                 viewStore.send(.onAppear)
             }
+            // 네비게이션 연결
+            .modifier(OtherProfileNavigation(store: store))
         }
     }
 
@@ -119,23 +121,34 @@ struct OtherProfileView: View {
     // MARK: - 통계 섹션
     private func statsSection(viewStore: ViewStoreOf<OtherProfileFeature>) -> some View {
         HStack(spacing: 0) {
-            statItem(title: "게시글", count: viewStore.postCount)
+            statItem(title: "게시글", count: viewStore.postCount, action: nil)
             Spacer()
-            statItem(title: "팔로워", count: viewStore.followerCount)
+            statItem(title: "팔로워", count: viewStore.followerCount) {
+                viewStore.send(.followerButtonTapped)
+            }
             Spacer()
-            statItem(title: "팔로잉", count: viewStore.followingCount)
+            statItem(title: "팔로잉", count: viewStore.followingCount) {
+                viewStore.send(.followingButtonTapped)
+            }
         }
     }
 
-    private func statItem(title: String, count: Int) -> some View {
-        VStack(spacing: AppPadding.small / 2) {
-            Text("\(count)")
-                .font(.appSubTitle)
-            Text(title)
-                .font(.appCaption)
-                .foregroundColor(.secondary)
+    private func statItem(title: String, count: Int, action: (() -> Void)? = nil) -> some View {
+        Button {
+            action?()
+        } label: {
+            VStack(spacing: AppPadding.small / 2) {
+                Text("\(count)")
+                    .font(.appSubTitle)
+                    .foregroundColor(.primary)
+                Text(title)
+                    .font(.appCaption)
+                    .foregroundColor(.secondary)
+            }
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
+        .disabled(action == nil)
     }
 
     // MARK: - 게시글 그리드
@@ -188,6 +201,20 @@ struct OtherProfileView: View {
             }
         }
         .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+// MARK: - Navigation 구성
+private struct OtherProfileNavigation: ViewModifier {
+    let store: StoreOf<OtherProfileFeature>
+
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(
+                store: store.scope(state: \.$followList, action: \.followList)
+            ) { store in
+                FollowListView(store: store)
+            }
     }
 }
 

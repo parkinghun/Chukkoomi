@@ -2,13 +2,14 @@
 //  OtherProfileFeature.swift
 //  Chukkoomi
 //
-//  Created by Claude on 11/7/25.
+//  Created by 김영훈 on 11/7/25.
 //
 
 import ComposableArchitecture
 import Foundation
 
-struct OtherProfileFeature: Reducer {
+@Reducer
+struct OtherProfileFeature {
 
     // MARK: - State
     struct State: Equatable {
@@ -19,6 +20,8 @@ struct OtherProfileFeature: Reducer {
         var isLoading: Bool = false
         var profileImageData: Data?
         var isFollowing: Bool = false
+
+        @PresentationState var followList: FollowListFeature.State?
 
         // Computed properties
         var nickname: String {
@@ -47,6 +50,8 @@ struct OtherProfileFeature: Reducer {
         case onAppear
         case followButtonTapped
         case messageButtonTapped
+        case followerButtonTapped
+        case followingButtonTapped
 
         // API 응답
         case myProfileLoaded(Profile)
@@ -60,10 +65,14 @@ struct OtherProfileFeature: Reducer {
         case fetchPosts(postIds: [String])
         case fetchProfileImage(path: String)
         case fetchPostImage(id: String, path: String)
+
+        // Navigation
+        case followList(PresentationAction<FollowListFeature.Action>)
     }
 
-    // MARK: - Reducer
-    func reduce(into state: inout State, action: Action) -> Effect<Action> {
+    // MARK: - Body
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
         switch action {
         case .onAppear:
             state.isLoading = true
@@ -104,6 +113,18 @@ struct OtherProfileFeature: Reducer {
 
         case .messageButtonTapped:
             // TODO: 메시지 화면으로 이동
+            return .none
+
+        case .followerButtonTapped:
+            state.followList = FollowListFeature.State(
+                listType: .followers(userId: state.userId)
+            )
+            return .none
+
+        case .followingButtonTapped:
+            state.followList = FollowListFeature.State(
+                listType: .following(userId: state.userId)
+            )
             return .none
 
         case .myProfileLoaded(let myProfile):
@@ -204,6 +225,13 @@ struct OtherProfileFeature: Reducer {
         case .fetchPosts(let postIds):
             // TODO: postIds로 게시물 데이터 fetch 후 PostImage 배열로 변환
             return .none
+
+        case .followList:
+            return .none
+        }
+        }
+        .ifLet(\.$followList, action: \.followList) {
+            FollowListFeature()
         }
     }
 }

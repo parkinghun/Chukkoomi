@@ -2,7 +2,7 @@
 //  EditProfileFeature.swift
 //  Chukkoomi
 //
-//  Created by Claude on 11/8/25.
+//  Created by 김영훈 on 11/8/25.
 //
 
 import ComposableArchitecture

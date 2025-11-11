@@ -22,6 +22,7 @@ struct MyProfileFeature {
         
         @PresentationState var editProfile: EditProfileFeature.State?
         @PresentationState var userSearch: UserSearchFeature.State?
+        @PresentationState var followList: FollowListFeature.State?
         
         // Computed properties
         var nickname: String {
@@ -57,6 +58,8 @@ struct MyProfileFeature {
         case editProfileButtonTapped
         case addPostButtonTapped
         case tabSelected(State.Tab)
+        case followerButtonTapped
+        case followingButtonTapped
         
         // API 응답
         case profileLoaded(Profile)
@@ -76,6 +79,7 @@ struct MyProfileFeature {
         // Navigation
         case editProfile(PresentationAction<EditProfileFeature.Action>)
         case userSearch(PresentationAction<UserSearchFeature.Action>)
+        case followList(PresentationAction<FollowListFeature.Action>)
     }
     
     // MARK: - Body
@@ -99,6 +103,18 @@ struct MyProfileFeature {
                 
             case .searchButtonTapped:
                 state.userSearch = UserSearchFeature.State()
+                return .none
+
+            case .followerButtonTapped:
+                state.followList = FollowListFeature.State(
+                    listType: .followers(userId: "me")
+                )
+                return .none
+
+            case .followingButtonTapped:
+                state.followList = FollowListFeature.State(
+                    listType: .following(userId: "me")
+                )
                 return .none
                 
             case .addPostButtonTapped:
@@ -249,6 +265,9 @@ struct MyProfileFeature {
                 
             case .userSearch:
                 return .none
+
+            case .followList:
+                return .none
             }
         }
         .ifLet(\.$editProfile, action: \.editProfile) {
@@ -256,6 +275,9 @@ struct MyProfileFeature {
         }
         .ifLet(\.$userSearch, action: \.userSearch) {
             UserSearchFeature()
+        }
+        .ifLet(\.$followList, action: \.followList) {
+            FollowListFeature()
         }
     }
 }
