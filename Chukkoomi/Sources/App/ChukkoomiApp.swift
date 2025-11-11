@@ -6,12 +6,17 @@
 //
 
 import SwiftUI
+import ComposableArchitecture
 
 @main
 struct ChukkoomiApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            MainTabView(
+                store: Store(initialState: MainTabFeature.State()) {
+                    MainTabFeature()
+                }
+            )
         }
     }
 }

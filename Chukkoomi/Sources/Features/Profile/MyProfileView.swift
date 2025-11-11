@@ -49,6 +49,11 @@ struct MyProfileView: View {
             .onAppear {
                 viewStore.send(.onAppear)
             }
+            .navigationDestination(
+                store: store.scope(state: \.$editProfile, action: \.editProfile)
+            ) { store in
+                EditProfileView(store: store)
+            }
         }
     }
 

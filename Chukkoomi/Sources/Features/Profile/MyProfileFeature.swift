@@ -8,7 +8,8 @@
 import ComposableArchitecture
 import Foundation
 
-struct MyProfileFeature: Reducer {
+@Reducer
+struct MyProfileFeature {
 
     // MARK: - State
     struct State: Equatable {
@@ -18,6 +19,8 @@ struct MyProfileFeature: Reducer {
         var bookmarkImages: [PostImage] = []
         var isLoading: Bool = false
         var profileImageData: Data?
+
+        @PresentationState var editProfile: EditProfileFeature.State?
 
         // Computed properties
         var nickname: String {
@@ -68,12 +71,16 @@ struct MyProfileFeature: Reducer {
         case fetchProfileImage(path: String)
         case fetchPostImage(id: String, path: String)
         case fetchBookmarkImage(id: String, path: String)
+
+        // Navigation
+        case editProfile(PresentationAction<EditProfileFeature.Action>)
     }
 
-    // MARK: - Reducer
-    func reduce(into state: inout State, action: Action) -> Effect<Action> {
-        switch action {
-        case .onAppear:
+    // MARK: - Body
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            switch action {
+            case .onAppear:
             state.isLoading = true
             return .run { send in
                 do {
@@ -97,7 +104,11 @@ struct MyProfileFeature: Reducer {
             return .none
 
         case .editProfileButtonTapped:
-            // TODO: 프로필 수정 화면으로 이동
+            guard let profile = state.profile else { return .none }
+            state.editProfile = EditProfileFeature.State(
+                profile: profile,
+                profileImageData: state.profileImageData
+            )
             return .none
 
         case .tabSelected(let tab):
@@ -223,6 +234,20 @@ struct MyProfileFeature: Reducer {
             //     }
             // }
             return .none
+
+        case .editProfile(.presented(.profileUpdated(let updatedProfile))):
+            state.profile = updatedProfile
+            if let imagePath = updatedProfile.profileImage {
+                return .send(.fetchProfileImage(path: imagePath))
+            }
+            return .none
+
+        case .editProfile:
+            return .none
+            }
+        }
+        .ifLet(\.$editProfile, action: \.editProfile) {
+            EditProfileFeature()
         }
     }
 }
