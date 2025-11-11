@@ -124,8 +124,7 @@ extension NetworkClient: DependencyKey {
     static let liveValue = NetworkClient(
         signInWithEmail: { email, password in
             let router = UserRouter.signInWithEmail(email: email, password: password)
-            // 로그인은 401 인터셉트 없이 호출 (회원이 아니면 401이 정상 응답)
-            let responseDTO = try await NetworkManager.shared.performRequestWithoutInterception(router, as: SignResponseDTO.self)
+            let responseDTO = try await NetworkManager.shared.performRequest(router, as: SignResponseDTO.self)
             return responseDTO.toDomain
         }
     )

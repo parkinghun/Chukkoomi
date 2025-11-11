@@ -197,13 +197,11 @@ extension SignUpClient: DependencyKey {
     static let liveValue = SignUpClient(
         validateEmail: { email in
             let router = UserRouter.validateEmail(email: email)
-            // 이메일 중복 체크는 401 인터셉트 없이 호출
-            _ = try await NetworkManager.shared.performRequestWithoutInterception(router, as: BasicMessageResponseDTO.self)
+            _ = try await NetworkManager.shared.performRequest(router, as: BasicMessageResponseDTO.self)
         },
         signUp: { email, password, nickname in
             let router = UserRouter.signUp(email: email, password: password, nickname: nickname)
-            // 회원가입은 401 인터셉트 없이 호출
-            let responseDTO = try await NetworkManager.shared.performRequestWithoutInterception(router, as: SignResponseDTO.self)
+            let responseDTO = try await NetworkManager.shared.performRequest(router, as: SignResponseDTO.self)
             return responseDTO.toDomain
         }
     )
