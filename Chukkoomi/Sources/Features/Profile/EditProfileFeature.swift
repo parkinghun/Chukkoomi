@@ -19,6 +19,8 @@ struct EditProfileFeature {
         var profileImageData: Data?
         var isLoading: Bool = false
 
+        @PresentationState var galleryPicker: GalleryPickerFeature.State?
+
         // Validation
         var isNicknameLengthValid: Bool {
             let trimmed = nickname.trimmingCharacters(in: .whitespaces)
@@ -64,6 +66,7 @@ struct EditProfileFeature {
         case introduceChanged(String)
         case profileUpdated(Profile)
         case dismiss
+        case galleryPicker(PresentationAction<GalleryPickerFeature.Action>)
     }
 
     // MARK: - Body
@@ -110,7 +113,10 @@ struct EditProfileFeature {
             }
 
         case .profileImageTapped:
-            // TODO: 커스텀 갤러리 화면으로 이동
+            state.galleryPicker = GalleryPickerFeature.State(
+                allowsVideo: false,
+                presentationMode: .push
+            )
             return .none
 
         case .nicknameChanged(let nickname):
@@ -131,7 +137,17 @@ struct EditProfileFeature {
             return .run { _ in
                 await self.dismiss()
             }
+
+        case .galleryPicker(.presented(.delegate(.didSelectImage(let imageData)))):
+            state.profileImageData = imageData
+            return .none
+
+        case .galleryPicker:
+            return .none
             }
+        }
+        .ifLet(\.$galleryPicker, action: \.galleryPicker) {
+            GalleryPickerFeature()
         }
     }
 }

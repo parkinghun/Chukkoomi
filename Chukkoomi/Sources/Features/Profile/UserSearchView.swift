@@ -86,6 +86,7 @@ struct UserSearchView: View {
                     LazyVStack(spacing: 0) {
                         ForEach(viewStore.searchResults) { result in
                             userRow(result: result, viewStore: viewStore)
+                                .contentShape(Rectangle())
                                 .onTapGesture {
                                     viewStore.send(.userTapped(result.user.userId))
                                 }

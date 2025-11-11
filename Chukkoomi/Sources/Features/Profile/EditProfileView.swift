@@ -39,6 +39,8 @@ struct EditProfileView: View {
             }
             .navigationTitle("프로필 수정")
             .navigationBarTitleDisplayMode(.inline)
+            // 네비게이션 연결
+            .modifier(EditProfileNavigation(store: store))
         }
     }
 
@@ -182,6 +184,20 @@ struct EditProfileView: View {
         .customRadius(.small)
         .padding(.horizontal, AppPadding.large)
         .padding(.bottom, AppPadding.large)
+    }
+}
+
+// MARK: - Navigation 구성
+private struct EditProfileNavigation: ViewModifier {
+    let store: StoreOf<EditProfileFeature>
+
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(
+                store: store.scope(state: \.$galleryPicker, action: \.galleryPicker)
+            ) { store in
+                GalleryPickerView(store: store)
+            }
     }
 }
 
