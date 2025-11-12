@@ -8,14 +8,14 @@
 import Foundation
 
 // MARK: - Chat User
-struct ChatUser {
+struct ChatUser: Equatable {
     let userId: String
     let nick: String
     let profileImage: String?
 }
 
 // MARK: - Last Chat Message
-struct LastChatMessage {
+struct LastChatMessage: Equatable {
     let chatId: String
     let roomId: String
     let content: String?
@@ -25,7 +25,7 @@ struct LastChatMessage {
 }
 
 // MARK: - Chat Room
-struct ChatRoom {
+struct ChatRoom: Equatable {
     let roomId: String
     let createdAt: String
     let updatedAt: String

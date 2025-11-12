@@ -39,11 +39,18 @@ struct MainTabView: View {
                     .tag(MainTabFeature.State.Tab.post)
 
                 // Chat Tab
-                ContentView()
-                    .tabItem {
-                        tabIcon(for: .chat)
-                    }
-                    .tag(MainTabFeature.State.Tab.chat)
+                NavigationStack {
+                    ChatListView(
+                        store: store.scope(
+                            state: \.chatList,
+                            action: \.chatList
+                        )
+                    )
+                }
+                .tabItem {
+                    tabIcon(for: .chat)
+                }
+                .tag(MainTabFeature.State.Tab.chat)
 
                 // Profile Tab
                 NavigationStack {
