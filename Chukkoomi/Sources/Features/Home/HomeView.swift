@@ -12,25 +12,23 @@ struct HomeView: View {
     let store: StoreOf<HomeFeature>
 
     var body: some View {
-        WithViewStore(store, observe: { $0 }) { viewStore in
-            NavigationStack {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 24) {
-                        cheeringSection()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                cheeringSection()
 
-                        matchScheduleSection(viewStore: viewStore)
+                matchScheduleSection()
 
-                        teamsSection(viewStore: viewStore)
-                    }
-                    .padding(.top, 16)
-                }
-                .navigationTitle("메인")
-                .navigationBarTitleDisplayMode(.inline)
-                .onAppear {
-                    viewStore.send(.onAppear)
-                }
+                teamsSection()
             }
+            .padding(.top, 16)
         }
+        .navigationTitle("메인")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            store.send(.onAppear)
+        }
+        // 네비게이션 연결
+        .modifier(HomeNavigation(store: store))
     }
     
     // MARK: - 응원 섹션
@@ -60,18 +58,18 @@ struct HomeView: View {
     }
 
     // MARK: - 경기 일정 섹션
-    private func matchScheduleSection(viewStore: ViewStoreOf<HomeFeature>) -> some View {
+    private func matchScheduleSection() -> some View {
         VStack(alignment: .leading, spacing: 0) {
             Text("오늘 경기 일정")
                 .font(.title2)
                 .fontWeight(.bold)
                 .padding(.horizontal, 20)
 
-            if viewStore.isLoadingMatches {
+            if store.isLoadingMatches {
                 ProgressView("경기 일정을 불러오는 중...")
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 40)
-            } else if viewStore.matches.isEmpty {
+            } else if store.matches.isEmpty {
                 VStack(spacing: 12) {
                     Image(systemName: "calendar.badge.exclamationmark")
                         .font(.system(size: 40))
@@ -84,7 +82,7 @@ struct HomeView: View {
                 .padding(.vertical, 40)
             } else {
                 TabView {
-                    ForEach(viewStore.matches) { match in
+                    ForEach(store.matches) { match in
                         MatchCard(match: match)
                             .padding(.horizontal, 20)
                     }
@@ -96,7 +94,7 @@ struct HomeView: View {
     }
 
     // MARK: - 구단 목록 섹션
-    private func teamsSection(viewStore: ViewStoreOf<HomeFeature>) -> some View {
+    private func teamsSection() -> some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
                 Text("구단 목록")
@@ -105,11 +103,11 @@ struct HomeView: View {
 
                 Spacer()
 
-                Text(viewStore.isShowingAllTeams ? "접기" : "더보기")
+                Text(store.isShowingAllTeams ? "접기" : "더보기")
                     .font(.subheadline)
                     .foregroundColor(AppColor.divider)
                     .buttonWrapper {
-                        viewStore.send(.toggleShowAllTeams)
+                        store.send(.toggleShowAllTeams)
                     }
             }
             .padding(.horizontal, 20)
@@ -121,14 +119,14 @@ struct HomeView: View {
                 GridItem(.flexible())
             ]
 
-            let displayedTeams = viewStore.isShowingAllTeams
-                ? viewStore.teams
-                : Array(viewStore.teams.prefix(4))
+            let displayedTeams = store.isShowingAllTeams
+                ? store.teams
+                : Array(store.teams.prefix(4))
 
             LazyVGrid(columns: columns, spacing: 20) {
                 ForEach(displayedTeams) { team in
                     TeamLogoButton(team: team, onTap: {
-                        viewStore.send(.teamTapped(team.id))
+                        store.send(.teamTapped(team.id))
                     })
                 }
             }
@@ -153,6 +151,20 @@ struct TeamLogoButton: View {
                     .stroke(AppColor.divider, lineWidth: 1)
             )
             .buttonWrapper(action: onTap)
+    }
+}
+
+// MARK: - Navigation 구성
+private struct HomeNavigation: ViewModifier {
+    let store: StoreOf<HomeFeature>
+
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(
+                store: store.scope(state: \.$postList, action: \.postList)
+            ) { store in
+                PostView(store: store)
+            }
     }
 }
 

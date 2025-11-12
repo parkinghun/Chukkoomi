@@ -18,11 +18,18 @@ struct MainTabView: View {
                 send: { .tabSelected($0) }
             )) {
                 // Home Tab
-                ContentView()
-                    .tabItem {
-                        tabIcon(for: .home)
-                    }
-                    .tag(MainTabFeature.State.Tab.home)
+                NavigationStack {
+                    HomeView(
+                        store: store.scope(
+                            state: \.home,
+                            action: \.home
+                        )
+                    )
+                }
+                .tabItem {
+                    tabIcon(for: .home)
+                }
+                .tag(MainTabFeature.State.Tab.home)
 
                 // Search Tab
                 NavigationStack {
