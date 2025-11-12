@@ -56,6 +56,7 @@ struct MainTabFeature {
             SearchFeature()
         }
 
+
         Scope(state: \.myProfile, action: \.myProfile) {
             MyProfileFeature()
         }

@@ -7,20 +7,18 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		1509EB382EC5721200E86228 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 15163D132EC49DB400843A8A /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
-		15163D142EC49DB400843A8A /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 15163D132EC49DB400843A8A /* RealmSwift */; };
-		154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 154F15AF2EBDE1A20079B157 /* ComposableArchitecture */; };
+		B5AA69A82EC793D900CA58C1 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = B5AA69A72EC793D900CA58C1 /* ComposableArchitecture */; };
+		B5AA69AB2EC7940100CA58C1 /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = B5AA69AA2EC7940100CA58C1 /* RealmSwift */; };
 		B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B5CC0CDD2EBA3E81003B6A27 /* .gitignore */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
-		1509EB392EC5721200E86228 /* Embed Frameworks */ = {
+		B5AA69A52EC78F2600CA58C1 /* Embed Frameworks */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
 			dstSubfolderSpec = 10;
 			files = (
-				1509EB382EC5721200E86228 /* RealmSwift in Embed Frameworks */,
 			);
 			name = "Embed Frameworks";
 			runOnlyForDeploymentPostprocessing = 0;
@@ -58,8 +56,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				15163D142EC49DB400843A8A /* RealmSwift in Frameworks */,
-				154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */,
+				B5AA69AB2EC7940100CA58C1 /* RealmSwift in Frameworks */,
+				B5AA69A82EC793D900CA58C1 /* ComposableArchitecture in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -93,7 +91,7 @@
 				B5CC0CC52EBA3C6D003B6A27 /* Sources */,
 				B5CC0CC62EBA3C6D003B6A27 /* Frameworks */,
 				B5CC0CC72EBA3C6D003B6A27 /* Resources */,
-				1509EB392EC5721200E86228 /* Embed Frameworks */,
+				B5AA69A52EC78F2600CA58C1 /* Embed Frameworks */,
 			);
 			buildRules = (
 			);
@@ -104,8 +102,8 @@
 			);
 			name = Chukkoomi;
 			packageProductDependencies = (
-				154F15AF2EBDE1A20079B157 /* ComposableArchitecture */,
-				15163D132EC49DB400843A8A /* RealmSwift */,
+				B5AA69A72EC793D900CA58C1 /* ComposableArchitecture */,
+				B5AA69AA2EC7940100CA58C1 /* RealmSwift */,
 			);
 			productName = Chukkoomi;
 			productReference = B5CC0CC92EBA3C6D003B6A27 /* Chukkoomi.app */;
@@ -136,8 +134,8 @@
 			mainGroup = B5CC0CC02EBA3C6D003B6A27;
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
-				154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
-				15163D122EC49DB400843A8A /* XCRemoteSwiftPackageReference "realm-swift" */,
+				B5AA69A62EC793D900CA58C1 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				B5AA69A92EC7940100CA58C1 /* XCRemoteSwiftPackageReference "realm-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B5CC0CCA2EBA3C6D003B6A27 /* Products */;
@@ -386,15 +384,7 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
-		15163D122EC49DB400843A8A /* XCRemoteSwiftPackageReference "realm-swift" */ = {
-			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/realm/realm-swift";
-			requirement = {
-				kind = exactVersion;
-				version = 20.0.3;
-			};
-		};
-		154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
+		B5AA69A62EC793D900CA58C1 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture";
 			requirement = {
@@ -402,18 +392,26 @@
 				minimumVersion = 1.23.1;
 			};
 		};
+		B5AA69A92EC7940100CA58C1 /* XCRemoteSwiftPackageReference "realm-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/realm/realm-swift.git";
+			requirement = {
+				kind = exactVersion;
+				version = 20.0.3;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
-		15163D132EC49DB400843A8A /* RealmSwift */ = {
+		B5AA69A72EC793D900CA58C1 /* ComposableArchitecture */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 15163D122EC49DB400843A8A /* XCRemoteSwiftPackageReference "realm-swift" */;
-			productName = RealmSwift;
-		};
-		154F15AF2EBDE1A20079B157 /* ComposableArchitecture */ = {
-			isa = XCSwiftPackageProductDependency;
-			package = B5F22CB62EC6F31000684181 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
+			package = B5AA69A62EC793D900CA58C1 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
 			productName = ComposableArchitecture;
+		};
+		B5AA69AA2EC7940100CA58C1 /* RealmSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B5AA69A92EC7940100CA58C1 /* XCRemoteSwiftPackageReference "realm-swift" */;
+			productName = RealmSwift;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};
