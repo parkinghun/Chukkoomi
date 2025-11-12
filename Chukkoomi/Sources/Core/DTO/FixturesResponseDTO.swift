@@ -14,16 +14,28 @@ struct FixturesResponseDTO: Codable {
 
 extension FixturesResponseDTO {
     var toDomain: [Match] {
-        return response.map {
+        return response.compactMap { item in
+            // API date 문자열 확인
+            let dateString = item.fixture.date
+
+            // 유연한 날짜 파싱 시도
+            guard let parsedDate = DateFormatters.parseDate(dateString) else {
+                print("날짜 파싱 실패: '\(dateString)'")
+                print("   Fixture ID: \(item.fixture.id)")
+                print("   홈팀: \(item.teams.home.name) vs 원정팀: \(item.teams.away.name)")
+                return nil  // 파싱 실패 시 해당 경기 제외
+            }
+
             return Match(
-                id: $0.fixture.id,
-                date: DateFormatters.iso8601.date(from: $0.fixture.date) ?? Date(),
-                homeTeamName: $0.teams.home.name,
-                awayTeamName: $0.teams.away.name,
-                homeTeamLogo: $0.teams.home.logo,
-                awayTeamLogo: $0.teams.away.logo,
-                homeScore: $0.goals.home,
-                awayScore: $0.goals.away)
+                id: item.fixture.id,
+                date: parsedDate,
+                homeTeamName: item.teams.home.name,
+                awayTeamName: item.teams.away.name,
+//                homeTeamLogo: item.teams.home.logo,
+//                awayTeamLogo: item.teams.away.logo,
+                homeScore: item.goals.home,
+                awayScore: item.goals.away
+            )
         }
     }
 }
