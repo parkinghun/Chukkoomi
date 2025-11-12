@@ -75,10 +75,10 @@ struct HomeView: View {
                 VStack(spacing: 12) {
                     Image(systemName: "calendar.badge.exclamationmark")
                         .font(.system(size: 40))
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColor.divider)
                     Text("오늘은 경기가 없습니다")
                         .font(.body)
-                        .foregroundColor(.gray)
+                        .foregroundColor(AppColor.divider)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
@@ -107,7 +107,7 @@ struct HomeView: View {
 
                 Text(viewStore.isShowingAllTeams ? "접기" : "더보기")
                     .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(AppColor.divider)
                     .buttonWrapper {
                         viewStore.send(.toggleShowAllTeams)
                     }
@@ -150,7 +150,7 @@ struct TeamLogoButton: View {
             .clipShape(Circle())
             .overlay(
                 Circle()
-                    .stroke(Color.gray.opacity(0.3), lineWidth: 2)
+                    .stroke(AppColor.divider, lineWidth: 1)
             )
             .buttonWrapper(action: onTap)
     }
@@ -174,7 +174,7 @@ struct MatchCard: View {
             // 경기 날짜/시간 (수평 센터)
             Text(match.date.matchDateString)
                 .font(.subheadline)
-                .foregroundColor(.gray)
+                .foregroundColor(AppColor.divider)
                 .frame(maxWidth: .infinity, alignment: .center)
 
             // 경기 정보
@@ -188,7 +188,7 @@ struct MatchCard: View {
                             .frame(width: 50, height: 50)
                     } else {
                         Circle()
-                            .fill(Color.gray.opacity(0.2))
+                            .fill(AppColor.divider.opacity(0.2))
                             .frame(width: 50, height: 50)
                     }
 
@@ -221,7 +221,7 @@ struct MatchCard: View {
                             .frame(width: 50, height: 50)
                     } else {
                         Circle()
-                            .fill(Color.gray.opacity(0.2))
+                            .fill(AppColor.divider.opacity(0.2))
                             .frame(width: 50, height: 50)
                     }
 
