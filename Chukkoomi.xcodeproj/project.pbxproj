@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		15163D142EC49DB400843A8A /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 15163D132EC49DB400843A8A /* RealmSwift */; };
 		154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 154F15AF2EBDE1A20079B157 /* ComposableArchitecture */; };
 		B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B5CC0CDD2EBA3E81003B6A27 /* .gitignore */; };
 /* End PBXBuildFile section */
@@ -42,6 +43,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				15163D142EC49DB400843A8A /* RealmSwift in Frameworks */,
 				154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -87,6 +89,7 @@
 			name = Chukkoomi;
 			packageProductDependencies = (
 				154F15AF2EBDE1A20079B157 /* ComposableArchitecture */,
+				15163D132EC49DB400843A8A /* RealmSwift */,
 			);
 			productName = Chukkoomi;
 			productReference = B5CC0CC92EBA3C6D003B6A27 /* Chukkoomi.app */;
@@ -118,6 +121,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
+				15163D122EC49DB400843A8A /* XCRemoteSwiftPackageReference "realm-swift" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B5CC0CCA2EBA3C6D003B6A27 /* Products */;
@@ -366,6 +370,14 @@
 /* End XCConfigurationList section */
 
 /* Begin XCRemoteSwiftPackageReference section */
+		15163D122EC49DB400843A8A /* XCRemoteSwiftPackageReference "realm-swift" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/realm/realm-swift";
+			requirement = {
+				kind = exactVersion;
+				version = 20.0.3;
+			};
+		};
 		154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture.git";
@@ -377,6 +389,11 @@
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
+		15163D132EC49DB400843A8A /* RealmSwift */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 15163D122EC49DB400843A8A /* XCRemoteSwiftPackageReference "realm-swift" */;
+			productName = RealmSwift;
+		};
 		154F15AF2EBDE1A20079B157 /* ComposableArchitecture */ = {
 			isa = XCSwiftPackageProductDependency;
 			package = 154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
