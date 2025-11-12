@@ -21,7 +21,8 @@ struct SignUpFeature {
         var errorMessage: String?
         var isEmailValid: Bool? = nil // nil: 미확인, true: 사용가능, false: 중복
         var validatedEmail: String = "" // 중복확인한 이메일 저장
-        var isSignUpSuccessful: Bool = false
+        var shouldDismiss: Bool = false
+        @PresentationState var alert: AlertState<Action.Alert>?
     }
 
     // MARK: - Action
@@ -35,6 +36,11 @@ struct SignUpFeature {
         case signUpButtonTapped
         case signUpResponse(Result<SignResponse, Error>)
         case clearFields // 필드 초기화
+        case alert(PresentationAction<Alert>)
+
+        enum Alert {
+            case confirmSignUp
+        }
     }
 
     // MARK: - Dependency
@@ -157,7 +163,23 @@ struct SignUpFeature {
                 KeychainManager.shared.save(response.accessToken, for: .accessToken)
                 KeychainManager.shared.save(response.refreshToken, for: .refreshToken)
 
-                state.isSignUpSuccessful = true
+                // Alert 표시
+                state.alert = AlertState {
+                    TextState("회원가입 성공")
+                } actions: {
+                    ButtonState(action: .confirmSignUp) {
+                        TextState("확인")
+                    }
+                } message: {
+                    TextState("로그인 화면으로 돌아갑니다.")
+                }
+                return .none
+
+            case .alert(.presented(.confirmSignUp)):
+                state.shouldDismiss = true
+                return .none
+
+            case .alert:
                 return .none
 
             case let .signUpResponse(.failure(error)):
@@ -184,6 +206,7 @@ struct SignUpFeature {
                 return .none
             }
         }
+        .ifLet(\.$alert, action: \.alert)
     }
 }
 

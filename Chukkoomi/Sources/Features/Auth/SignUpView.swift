@@ -16,7 +16,8 @@ struct SignUpView: View {
     @State private var isPasswordConfirmVisible = false
 
     var body: some View {
-        WithViewStore(store, observe: { $0 }) { viewStore in
+        WithPerceptionTracking {
+            WithViewStore(store, observe: { $0 }) { viewStore in
             VStack(spacing: 0) {
                 // 상단 헤더
                 ZStack {
@@ -255,16 +256,13 @@ struct SignUpView: View {
                 }
             }
             .navigationBarHidden(true)
-            .onDisappear {
-                viewStore.send(.clearFields)
-            }
-            .alert("회원가입 성공", isPresented: .constant(viewStore.isSignUpSuccessful)) {
-                Button("확인") {
+            .onChange(of: viewStore.shouldDismiss) { shouldDismiss in
+                if shouldDismiss {
                     dismiss()
                 }
-            } message: {
-                Text("로그인 화면으로 돌아갑니다.")
             }
+            }
+            .alert(store: store.scope(state: \.$alert, action: \.alert))
         }
     }
 

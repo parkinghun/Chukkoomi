@@ -191,9 +191,6 @@ struct LoginView: View {
                 }
                 .padding(.bottom, 40)
             }
-            .onDisappear {
-                viewStore.send(.clearFields)
-            }
         }
     }
 
