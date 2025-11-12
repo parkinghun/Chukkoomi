@@ -7,10 +7,8 @@
 
 import Foundation
 
-import Foundation
-
-struct Post {
-    let id: String?
+struct Post: Identifiable, Equatable {
+    let id: String
     let teams: FootballTeams
     let title: String
     let price: Int
@@ -27,6 +25,10 @@ struct Post {
     let commentCount: Int?
     let location: GeoLocation
     let distance: Double?
+
+    static func == (lhs: Post, rhs: Post) -> Bool {
+        lhs.id == rhs.id
+    }
 }
 
 extension Post {
@@ -40,7 +42,7 @@ extension Post {
         files: [String] = [],
         location: GeoLocation = .defaultLocation
     ) {
-        self.id = nil
+        self.id = UUID().uuidString
         self.teams = teams
         self.title = title
         self.price = price
@@ -81,14 +83,66 @@ extension Post {
     }
 }
 
+// MARK: - 축구 팀 카테고리
 enum FootballTeams: String, CaseIterable {
-    case total = "전체"
+    case all = "전체"
+
+    // K리그 팀들
+    case ulsan = "울산 HD FC"
+    case jeonbuk = "전북 현대 모터스"
+    case pohang = "포항 스틸러스"
+    case suwonFC = "수원 FC"
+    case kimcheon = "김천상무 FC"
+    case gangwon = "강원 FC"
+    case jeju = "제주 유나이티드"
+    case anyang = "FC 안양"
+    case seoul = "FC 서울"
+    case gwangju = "광주 FC"
+    case daejeon = "대전 하나 시티즌"
+    case daegu = "대구 FC"
+
+    // 숨김 카테고리 (결제 전용)
+    case payment = "결제"
+
+    /// UI에서 숨겨야 하는 카테고리인지
+    var isHidden: Bool {
+        self == .payment
+    }
+
+    /// 사용자에게 보여질 카테고리 목록
+    static var visibleCategories: [FootballTeams] {
+        allCases.filter { !$0.isHidden }
+    }
+
+    /// KLeagueTeam과 매핑
+    var kLeagueTeam: KLeagueTeam? {
+        switch self {
+        case .ulsan: return KLeagueTeam.allTeams.first { $0.koreanName == "울산 HD FC" }
+        case .jeonbuk: return KLeagueTeam.allTeams.first { $0.koreanName == "전북 현대 모터스" }
+        case .pohang: return KLeagueTeam.allTeams.first { $0.koreanName == "포항 스틸러스" }
+        case .suwonFC: return KLeagueTeam.allTeams.first { $0.koreanName == "수원 FC" }
+        case .kimcheon: return KLeagueTeam.allTeams.first { $0.koreanName == "김천상무 FC" }
+        case .gangwon: return KLeagueTeam.allTeams.first { $0.koreanName == "강원 FC" }
+        case .jeju: return KLeagueTeam.allTeams.first { $0.koreanName == "제주 유나이티드" }
+        case .anyang: return KLeagueTeam.allTeams.first { $0.koreanName == "FC 안양" }
+        case .seoul: return KLeagueTeam.allTeams.first { $0.koreanName == "FC 서울" }
+        case .gwangju: return KLeagueTeam.allTeams.first { $0.koreanName == "광주 FC" }
+        case .daejeon: return KLeagueTeam.allTeams.first { $0.koreanName == "대전 하나 시티즌" }
+        case .daegu: return KLeagueTeam.allTeams.first { $0.koreanName == "대구 FC" }
+        case .all, .payment: return nil
+        }
+    }
+
+    /// 한글 이름으로 FootballTeams 찾기
+    static func from(koreanName: String) -> FootballTeams? {
+        allCases.first { $0.rawValue == koreanName }
+    }
 }
 
-struct GeoLocation {
+struct GeoLocation: Equatable {
     let longitude: Double
     let latitude: Double
-    
+
     static let defaultLocation = GeoLocation(
         longitude: 126.886417,
         latitude: 37.517682

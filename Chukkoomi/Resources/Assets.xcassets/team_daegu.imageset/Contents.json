@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "team_daegu.jpeg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

@@ -9,6 +9,7 @@ import SwiftUI
 
 enum AppIcon {
     static let heart = Image(systemName: "heart")
+    static let heartFill = Image(systemName: "heart.fill")
     static let personFill = Image(systemName: "person.fill")
     static let search = Image(systemName: "magnifyingglass")
     static let camera = Image(systemName: "camera")
@@ -24,4 +25,9 @@ enum AppIcon {
     static let post = Image(systemName: "video.fill.badge.plus")
     static let chat = Image(systemName: "bubble.left.fill")
     static let profile = Image(systemName: "person")
+    static let message = Image(systemName: "ellipsis.message")
+    static let comment = Image(systemName: "ellipsis.message")
+    static let share = Image(systemName: "paperplane")
+    static let bookmark = Image(systemName: "bookmark")
+    static let bookmarkFill = Image(systemName: "bookmark.fill")
 }

@@ -1,0 +1,12 @@
+{
+  "images" : [
+    {
+      "filename" : "team_gangwon.jpeg",
+      "idiom" : "universal"
+    }
+  ],
+  "info" : {
+    "author" : "xcode",
+    "version" : 1
+  }
+}

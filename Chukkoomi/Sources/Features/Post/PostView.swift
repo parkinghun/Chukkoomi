@@ -5,4 +5,137 @@
 //  Created by 박성훈 on 11/5/25.
 //
 
-import Foundation
+import SwiftUI
+import ComposableArchitecture
+
+struct PostView: View {
+    let store: StoreOf<PostFeature>
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                if store.postCells.isEmpty && store.isLoading {
+                    // 초기 로딩
+                    ProgressView("게시글을 불러오는 중...")
+                } else if store.postCells.isEmpty && !store.isLoading {
+                    // 빈 상태
+                    emptyStateView
+                } else {
+                    // 게시글 리스트
+                    ScrollView {
+                        LazyVStack(spacing: 0) {
+                            ForEach(
+                                store.scope(state: \.postCells, action: \.postCell)
+                            ) { cellStore in
+                                PostCellView(store: cellStore)
+                                Divider()
+                                    .padding(.vertical, 8)
+                            }
+
+                            // 무한 스크롤 트리거
+                            if store.nextCursor != nil {
+                                loadMoreView
+                            }
+                        }
+                    }
+                    .refreshable {
+                        store.send(.loadPosts)
+                    }
+                }
+
+                // 에러 메시지
+                if let errorMessage = store.errorMessage {
+                    errorBanner(message: errorMessage)
+                }
+            }
+            .navigationTitle("게시글")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                store.send(.onAppear)
+            }
+        }
+    }
+
+    // MARK: - Empty State
+    private var emptyStateView: some View {
+        VStack(spacing: 16) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .font(.system(size: 60))
+                .foregroundColor(.gray)
+
+            Text("게시글이 없습니다")
+                .font(.headline)
+                .foregroundColor(.gray)
+
+            Button("새로고침") {
+                store.send(.loadPosts)
+            }
+            .buttonStyle(.bordered)
+        }
+    }
+
+    // MARK: - Load More
+    private var loadMoreView: some View {
+        HStack {
+            if store.isLoading {
+                ProgressView()
+                Text("불러오는 중...")
+                    .font(.caption)
+                    .foregroundColor(.gray)
+            } else {
+                Color.clear
+                    .frame(height: 1)
+                    .onAppear {
+                        store.send(.loadMorePosts)
+                    }
+            }
+        }
+        .frame(maxWidth: .infinity)
+        .padding()
+    }
+
+    // MARK: - Error Banner
+    private func errorBanner(message: String) -> some View {
+        VStack {
+            Spacer()
+
+            HStack {
+                Image(systemName: "exclamationmark.triangle.fill")
+                    .foregroundColor(.white)
+
+                Text(message)
+                    .font(.caption)
+                    .foregroundColor(.white)
+
+                Spacer()
+
+                Button {
+                    store.send(.loadPosts)
+                } label: {
+                    Text("재시도")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(Color.white.opacity(0.2))
+                        .cornerRadius(4)
+                }
+            }
+            .padding()
+            .background(Color.red)
+            .cornerRadius(8)
+            .padding()
+        }
+    }
+}
+
+
+#Preview {
+    PostView(
+        store: Store(
+            initialState: PostFeature.State()
+        ) {
+            PostFeature()
+        }
+    )
+}

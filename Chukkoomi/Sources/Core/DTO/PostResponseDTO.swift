@@ -47,7 +47,7 @@ extension PostResponseDTO {
     var toDomain: Post {
         return Post(
             id: postId,
-            teams: FootballTeams(rawValue: category) ?? .total,
+            teams: FootballTeams(rawValue: category) ?? .all,
             title: title,
             price: price,
             content: content,

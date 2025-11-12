@@ -18,7 +18,7 @@ enum HTTPMethod: String {
 
 // MARK: - Router Protocol
 protocol Router {
-
+    var baseURL: String { get }
     var version: String { get }
     var path: String { get }
     var method: HTTPMethod { get }
@@ -32,6 +32,7 @@ protocol Router {
 }
 
 extension Router {
+    // 기본 baseURL 구현 (다른 Router들을 위해)
     var baseURL: String {
         APIInfo.baseURL
     }
