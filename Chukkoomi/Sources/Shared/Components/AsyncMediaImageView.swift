@@ -86,18 +86,12 @@ struct AsyncMediaImageView: View {
                     return
                 }
                 let (data, _) = try await URLSession.shared.data(from: url)
-
-                // 다운로드 후 취소 확인
-                try Task.checkCancellation()
                 mediaData = data
             } else {
                 // 실제 사용 코드
                 mediaData = try await NetworkManager.shared.download(
                     MediaRouter.getData(path: imagePath)
                 )
-
-                // 다운로드 후 취소 확인
-                try Task.checkCancellation()
             }
 
             // 원래 코드 (picsum 테스트 후 복원)
@@ -108,8 +102,6 @@ struct AsyncMediaImageView: View {
             if isVideo {
                 // 동영상이면 썸네일 추출
                 if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: mediaData) {
-                    // 썸네일 생성 후 취소 확인
-                    try Task.checkCancellation()
                     imageData = thumbnailData
                     onImageLoaded?(thumbnailData)
                 }
