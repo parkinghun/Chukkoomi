@@ -15,32 +15,59 @@ struct SearchView: View {
     var body: some View {
         WithViewStore(store, observe: { $0 }) { viewStore in
             VStack(spacing: 0) {
-                // 검색바
-                SearchBar(
-                    text: viewStore.binding(
-                        get: \.searchText,
-                        send: { .searchTextChanged($0) }
-                    ),
-                    isFocused: $isSearchFieldFocused,
-                    placeholder: "검색",
-                    onSubmit: {
-                        viewStore.send(.search)
-                    },
-                    onClear: {
-                        viewStore.send(.clearSearch)
+                // 검색바 + 취소 버튼
+                HStack(spacing: AppPadding.medium) {
+                    SearchBar(
+                        text: viewStore.binding(
+                            get: \.searchText,
+                            send: { .searchTextChanged($0) }
+                        ),
+                        isFocused: $isSearchFieldFocused,
+                        placeholder: "해시태그로 검색해보세요",
+                        onSubmit: {
+                            viewStore.send(.search)
+                        },
+                        onClear: {
+                            viewStore.send(.clearSearch)
+                        }
+                    )
+                    .onChange(of: isSearchFieldFocused) { _, isFocused in
+                        if isFocused {
+                            viewStore.send(.searchBarFocused)
+                        }
                     }
-                )
-                .padding(.horizontal, AppPadding.large)
 
-                // 피드 그리드
-                feedContentView(viewStore: viewStore)
-                    .padding(.top, 4)
+                    if viewStore.isSearching {
+                        Button {
+                            isSearchFieldFocused = false
+                            viewStore.send(.cancelButtonTapped)
+                        } label: {
+                            Text("취소")
+                                .font(.appBody)
+                                .foregroundColor(.primary)
+                        }
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
+                }
+                .padding(.horizontal, AppPadding.large)
+                .animation(.easeInOut(duration: 0.2), value: viewStore.isSearching)
+
+                // 최근 검색어 또는 피드 그리드
+                if viewStore.isSearching {
+                    recentSearchesView(viewStore: viewStore)
+                        .padding(.top, 4)
+                } else {
+                    feedContentView(viewStore: viewStore)
+                        .padding(.top, 4)
+                }
             }
             .navigationTitle("피드")
             .navigationBarTitleDisplayMode(.inline)
             .onAppear {
                 viewStore.send(.onAppear)
             }
+            // 네비게이션 연결
+            .modifier(SearchNavigation(store: store))
         }
     }
 
@@ -185,8 +212,88 @@ struct SearchView: View {
         }
     }
 
+    // MARK: - 최근 검색어 뷰
+    private func recentSearchesView(viewStore: ViewStoreOf<SearchFeature>) -> some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 0) {
+                if viewStore.recentSearches.isEmpty {
+                    VStack(spacing: AppPadding.medium) {
+                        Spacer()
+                        Text("최근 검색어가 없습니다")
+                            .font(.appBody)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                    }
+                    .frame(maxWidth: .infinity)
+                } else {
+                    Text("최근 검색어")
+                        .font(.appSubTitle)
+                        .fontWeight(.semibold)
+                        .padding(.horizontal, AppPadding.large)
+                        .padding(.top, AppPadding.medium)
+
+                    LazyVStack(spacing: 0) {
+                        ForEach(viewStore.recentSearches, id: \.self) { searchText in
+                            recentSearchRow(searchText: searchText, viewStore: viewStore)
+                        }
+                    }
+                    .padding(.top, AppPadding.small)
+                }
+            }
+        }
+    }
+
+    // MARK: - 최근 검색어 행
+    private func recentSearchRow(searchText: String, viewStore: ViewStoreOf<SearchFeature>) -> some View {
+        HStack(spacing: AppPadding.medium) {
+            Text("#")
+                .font(.appBody)
+                .foregroundColor(.secondary)
+
+            Text(searchText)
+                .font(.appBody)
+                .foregroundColor(.primary)
+
+            Spacer()
+
+            Button {
+                viewStore.send(.deleteRecentSearch(searchText))
+            } label: {
+                AppIcon.xmark
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 14))
+            }
+        }
+        .padding(.horizontal, AppPadding.large)
+        .padding(.vertical, AppPadding.medium)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            isSearchFieldFocused = false
+            viewStore.send(.recentSearchTapped(searchText))
+        }
+    }
+
     // MARK: - Helper
     private func numberOfBlocks(for itemCount: Int) -> Int {
         return (itemCount + 11) / 12
+    }
+}
+
+// MARK: - Navigation 구성
+private struct SearchNavigation: ViewModifier {
+    let store: StoreOf<SearchFeature>
+
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(
+                store: store.scope(state: \.$searchResult, action: \.searchResult)
+            ) { store in
+                // TODO: 검색 결과 화면 구현 - 임시로 ContentView 표시
+                WithViewStore(store, observe: { $0 }) { viewStore in
+                    ContentView()
+                        .navigationTitle("#\(viewStore.searchQuery)")
+                        .navigationBarTitleDisplayMode(.inline)
+                }
+            }
     }
 }

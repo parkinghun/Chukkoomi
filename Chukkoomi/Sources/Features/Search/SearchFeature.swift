@@ -19,6 +19,10 @@ struct SearchFeature {
         var isLoadingMore: Bool = false
         var cursor: String? = nil
         var hasMorePages: Bool = true
+        var isSearching: Bool = false
+        var recentSearches: [String] = []
+
+        @PresentationState var searchResult: SearchResultFeature.State?
     }
 
     // MARK: - Action
@@ -30,6 +34,11 @@ struct SearchFeature {
         case postsLoaded([PostItem], nextCursor: String?, hasMore: Bool)
         case postTapped(String)
         case loadMorePosts
+        case searchBarFocused
+        case cancelButtonTapped
+        case recentSearchTapped(String)
+        case deleteRecentSearch(String)
+        case searchResult(PresentationAction<SearchResultFeature.Action>)
     }
 
     // MARK: - Body
@@ -52,11 +61,39 @@ struct SearchFeature {
                 return .none
 
             case .search:
-                // TODO: 검색 실행
+                guard !state.searchText.isEmpty else {
+                    return .none
+                }
+
+                // TODO: Realm을 사용해서 최근 검색어 저장
+
+                // 검색 결과 화면으로 이동
+                state.searchResult = SearchResultFeature.State(searchQuery: state.searchText)
+
+                // TODO: 실제 검색 API 호출
                 return .none
 
             case .clearSearch:
                 state.searchText = ""
+                return .none
+
+            case .searchBarFocused:
+                state.isSearching = true
+                // TODO: Realm에서 최근 검색어 불러오기
+                return .none
+
+            case .cancelButtonTapped:
+                state.isSearching = false
+                state.searchText = ""
+                return .none
+
+            case .recentSearchTapped(let searchText):
+                state.searchText = searchText
+                return .send(.search)
+
+            case .deleteRecentSearch(let searchText):
+                // TODO: Realm에서 최근 검색어 삭제
+                state.recentSearches.removeAll { $0 == searchText }
                 return .none
 
             case .postsLoaded(let posts, let nextCursor, let hasMore):
@@ -94,6 +131,35 @@ struct SearchFeature {
 
             case .postTapped:
                 // TODO: 게시물 상세 화면으로 이동
+                return .none
+
+            case .searchResult:
+                return .none
+            }
+        }
+        .ifLet(\.$searchResult, action: \.searchResult) {
+            SearchResultFeature()
+        }
+    }
+}
+
+// TODO: 삭제
+// MARK: - 검색 결과 Feature (임시)
+@Reducer
+struct SearchResultFeature {
+    struct State: Equatable {
+        var searchQuery: String
+    }
+
+    enum Action: Equatable {
+        case onAppear
+    }
+
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            switch action {
+            case .onAppear:
+                // TODO: 검색 결과 로드
                 return .none
             }
         }
