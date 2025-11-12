@@ -71,6 +71,22 @@ struct SearchView: View {
                 LazyVStack(spacing: 4) {
                     ForEach(0..<numberOfBlocks(for: posts.count), id: \.self) { blockIndex in
                         gridBlock(blockIndex: blockIndex, posts: posts, cellSize: cellSize, viewStore: viewStore)
+                            .onAppear {
+                                // 마지막 블록이 나타나면 다음 페이지 로드
+                                if blockIndex == numberOfBlocks(for: posts.count) - 1 {
+                                    viewStore.send(.loadMorePosts)
+                                }
+                            }
+                    }
+
+                    // 더 로딩 중일 때 로딩 인디케이터 표시
+                    if viewStore.isLoadingMore {
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                        .padding(.vertical, AppPadding.medium)
                     }
                 }
                 .padding(4)
