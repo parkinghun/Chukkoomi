@@ -51,6 +51,10 @@ struct MainTabFeature {
         Scope(state: \.home, action: \.home) {
             HomeFeature()
         }
+        
+        Scope(state: \.search, action: \.search) {
+            SearchFeature()
+        }
 
         Scope(state: \.myProfile, action: \.myProfile) {
             MyProfileFeature()
@@ -67,6 +71,9 @@ struct MainTabFeature {
                 return .none
 
             case .home:
+                return .none
+                
+            case .search:
                 return .none
 
             case .search:
