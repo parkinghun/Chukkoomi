@@ -104,8 +104,7 @@ enum HTTPHeader {
         case .apiKey:
             return ("SeSACKey", APIInfo.apiKey)
         case .authorization:
-//            let token = KeychainManager.shared.load(for: .accessToken) ?? ""
-            let token = APIInfo.token
+            let token = KeychainManager.shared.load(for: .accessToken) ?? ""
             return ("Authorization", token)
         case .productId:
             return ("ProductId", APIInfo.productId)
