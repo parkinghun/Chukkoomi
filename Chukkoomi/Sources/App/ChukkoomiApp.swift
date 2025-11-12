@@ -12,9 +12,9 @@ import ComposableArchitecture
 struct ChukkoomiApp: App {
     var body: some Scene {
         WindowGroup {
-            MainTabView(
-                store: Store(initialState: MainTabFeature.State()) {
-                    MainTabFeature()
+            AppView(
+                store: Store(initialState: AppFeature.State()) {
+                    AppFeature()
                 }
             )
         }
