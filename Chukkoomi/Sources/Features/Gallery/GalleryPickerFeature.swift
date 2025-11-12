@@ -19,14 +19,31 @@ struct GalleryPickerFeature: Reducer {
         var selectedImage: UIImage?
         var authorizationStatus: PHAuthorizationStatus = .notDetermined
         var isLoading: Bool = false
-        var allowsVideo: Bool = false
-        var presentationMode: PresentationMode = .push
+        var pickerMode: PickerMode = .profileImage
     }
 
-    // MARK: - PresentationMode
-    enum PresentationMode: Equatable {
-        case push
-        case modal
+    // MARK: - PickerMode
+    enum PickerMode: Equatable {
+        case profileImage  // 프로필 사진: "완료", 사진만
+        case post          // 게시물: "다음", 사진+영상
+
+        var buttonTitle: String {
+            switch self {
+            case .profileImage:
+                return "완료"
+            case .post:
+                return "다음"
+            }
+        }
+
+        var allowsVideo: Bool {
+            switch self {
+            case .profileImage:
+                return false
+            case .post:
+                return true
+            }
+        }
     }
 
     // MARK: - Action
@@ -78,7 +95,7 @@ struct GalleryPickerFeature: Reducer {
 
         case .loadMediaItems:
             state.isLoading = true
-            return .run { [allowsVideo = state.allowsVideo] send in
+            return .run { [allowsVideo = state.pickerMode.allowsVideo] send in
                 let fetchOptions = PHFetchOptions()
                 fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
                 fetchOptions.fetchLimit = 100

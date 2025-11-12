@@ -1,15 +1,15 @@
 //
-//  UserSearchView.swift
+//  FollowListView.swift
 //  Chukkoomi
 //
-//  Created by 김영훈 on 11/10/25.
+//  Created by 김영훈 on 11/11/25.
 //
 
 import SwiftUI
 import ComposableArchitecture
 
-struct UserSearchView: View {
-    let store: StoreOf<UserSearchFeature>
+struct FollowListView: View {
+    let store: StoreOf<FollowListFeature>
     @FocusState private var isSearchFieldFocused: Bool
 
     var body: some View {
@@ -24,7 +24,7 @@ struct UserSearchView: View {
                     isFocused: $isSearchFieldFocused,
                     placeholder: "닉네임으로 검색",
                     onSubmit: {
-                        viewStore.send(.search)
+                        // 검색은 실시간으로 이루어지므로 onSubmit은 빈 동작
                     },
                     onClear: {
                         viewStore.send(.clearSearch)
@@ -32,38 +32,37 @@ struct UserSearchView: View {
                 )
                 .padding(.horizontal, AppPadding.large)
 
-                // 검색 결과 리스트
-                searchResultsList(viewStore: viewStore)
+                // 리스트
+                userList(viewStore: viewStore)
                     .padding(.top, 4)
             }
-            .navigationTitle("유저 검색")
+            .navigationTitle(viewStore.title)
             .navigationBarTitleDisplayMode(.inline)
-            // 이 파일 전용 네비게이션 연결
-            .modifier(UserSearchNavigation(store: store))
+            .onAppear {
+                viewStore.send(.onAppear)
+            }
+            // 네비게이션 연결
+            .modifier(FollowListNavigation(store: store))
         }
     }
 
-    // MARK: - 검색 결과 리스트
-    private func searchResultsList(viewStore: ViewStoreOf<UserSearchFeature>) -> some View {
+    // MARK: - 유저 리스트
+    private func userList(viewStore: ViewStoreOf<FollowListFeature>) -> some View {
         Group {
-            if viewStore.isLoading {
+            if viewStore.filteredUsers.isEmpty {
                 Spacer()
-                ProgressView()
-                Spacer()
-            } else if viewStore.isSearching && viewStore.searchResults.isEmpty {
-                Spacer()
-                Text("검색 결과가 없습니다")
+                Text(viewStore.searchText.isEmpty ? "목록이 비어있습니다" : "검색 결과가 없습니다")
                     .font(.appBody)
                     .foregroundColor(.secondary)
                 Spacer()
-            } else if !viewStore.searchResults.isEmpty {
+            } else {
                 ScrollView {
                     LazyVStack(spacing: 0) {
-                        ForEach(viewStore.searchResults) { result in
-                            userRow(result: result, viewStore: viewStore)
+                        ForEach(viewStore.filteredUsers) { userItem in
+                            userRow(userItem: userItem, viewStore: viewStore)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
-                                    viewStore.send(.userTapped(result.user.userId))
+                                    viewStore.send(.userTapped(userItem.user.userId))
                                 }
                         }
                     }
@@ -73,18 +72,16 @@ struct UserSearchView: View {
                         isSearchFieldFocused = false
                     }
                 )
-            } else {
-                Spacer()
             }
         }
     }
 
     // MARK: - 유저 행
-    private func userRow(result: UserSearchFeature.SearchResult, viewStore: ViewStoreOf<UserSearchFeature>) -> some View {
+    private func userRow(userItem: FollowListFeature.UserItem, viewStore: ViewStoreOf<FollowListFeature>) -> some View {
         HStack(spacing: AppPadding.medium) {
             // 프로필 이미지
             Group {
-                if let imageData = result.profileImageData,
+                if let imageData = userItem.profileImageData,
                    let uiImage = UIImage(data: imageData) {
                     Image(uiImage: uiImage)
                         .resizable()
@@ -103,7 +100,7 @@ struct UserSearchView: View {
             .clipShape(Circle())
 
             // 닉네임
-            Text(result.user.nickname)
+            Text(userItem.user.nickname)
                 .font(.appBody)
                 .fontWeight(.semibold)
                 .foregroundColor(.primary)
@@ -117,8 +114,8 @@ struct UserSearchView: View {
 }
 
 // MARK: - Navigation 구성
-private struct UserSearchNavigation: ViewModifier {
-    let store: StoreOf<UserSearchFeature>
+private struct FollowListNavigation: ViewModifier {
+    let store: StoreOf<FollowListFeature>
 
     func body(content: Content) -> some View {
         content
@@ -129,16 +126,3 @@ private struct UserSearchNavigation: ViewModifier {
             }
     }
 }
-
-// MARK: - Preview
-//#Preview {
-//    NavigationStack {
-//        UserSearchView(
-//            store: Store(
-//                initialState: UserSearchFeature.State()
-//            ) {
-//                UserSearchFeature()
-//            }
-//        )
-//    }
-//}

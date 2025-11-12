@@ -59,7 +59,7 @@ actor TokenRefreshManager {
         do {
             // Refresh API 호출
             let router = AuthRouter.refresh(refreshToken: refreshToken)
-            let response = try await NetworkManager.shared.performRequestWithoutInterception(
+            let response = try await NetworkManager.shared.performRequest(
                 router,
                 as: RefreshTokenResponseDTO.self
             )
@@ -75,6 +75,12 @@ actor TokenRefreshManager {
             await handleLogout()
             return false
         }
+    }
+
+    // MARK: - 토큰 만료 처리 (외부 호출용)
+    /// RefreshToken 만료 시 호출되는 메서드 (418 에러)
+    func handleTokenExpiration() async {
+        await handleLogout()
     }
 
     // MARK: - 로그아웃 처리

@@ -45,15 +45,12 @@ struct GalleryPickerView: View {
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.light, for: .navigationBar)
             .toolbar {
-                // 모달일 때만 왼쪽에 X 버튼 표시
-                if viewStore.presentationMode == .modal {
-                    ToolbarItem(placement: .navigationBarLeading) {
-                        Button {
-                            viewStore.send(.cancel)
-                        } label: {
-                            AppIcon.xmark
-                                .foregroundColor(.primary)
-                        }
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button {
+                        viewStore.send(.cancel)
+                    } label: {
+                        AppIcon.xmark
+                            .foregroundColor(.primary)
                     }
                 }
 
@@ -61,7 +58,7 @@ struct GalleryPickerView: View {
                     Button {
                         viewStore.send(.confirmSelection)
                     } label: {
-                        Text(viewStore.presentationMode == .modal ? "다음" : "완료")
+                        Text(viewStore.pickerMode.buttonTitle)
                             .foregroundColor(viewStore.selectedItem != nil ? .primary : .gray)
                     }
                     .disabled(viewStore.selectedItem == nil)
@@ -76,30 +73,83 @@ struct GalleryPickerView: View {
     // MARK: - 선택된 이미지 미리보기
     private func selectedImagePreview(viewStore: ViewStoreOf<GalleryPickerFeature>) -> some View {
         Group {
-            if let image = viewStore.selectedImage {
-                ZStack {
-                    Color.black
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFit()
-                }
-                .frame(maxWidth: .infinity)
-                .frame(height: 300)
-                .clipped()
-            } else {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 300)
-                    .overlay {
-                        VStack(spacing: AppPadding.medium) {
-                            AppIcon.photo
-                                .font(.system(size: 50))
-                                .foregroundColor(.gray)
-                            Text("선택된 사진이 없습니다")
-                                .font(.appBody)
-                                .foregroundColor(.gray)
+            if viewStore.pickerMode == .profileImage {
+                // 프로필 이미지 모드: 원형 크롭 미리보기
+                if let image = viewStore.selectedImage {
+                    GeometryReader { geometry in
+                        ZStack {
+                            // 전체 이미지
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .clipped()
+
+                            // 어두운 오버레이 (원형 부분만 잘라냄)
+                            Rectangle()
+                                .fill(Color.black.opacity(0.5))
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .mask {
+                                    ZStack {
+                                        Rectangle()
+                                            .fill(Color.white)
+                                        Circle()
+                                            .fill(Color.black)
+                                            .frame(width: 300, height: 300)
+                                            .blendMode(.destinationOut)
+                                    }
+                                    .compositingGroup()
+                                }
+
+                            // 원형 테두리
+                            Circle()
+                                .stroke(Color.white, lineWidth: 2)
+                                .frame(width: 300, height: 300)
                         }
                     }
+                    .frame(height: 300)
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 300)
+                        .overlay {
+                            VStack(spacing: AppPadding.medium) {
+                                AppIcon.photo
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.gray)
+                                Text("선택된 사진이 없습니다")
+                                    .font(.appBody)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                }
+            } else {
+                // 게시물 모드
+                if let image = viewStore.selectedImage {
+                    ZStack {
+                        Color.black
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFit()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 300)
+                    .clipped()
+                } else {
+                    Rectangle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(height: 300)
+                        .overlay {
+                            VStack(spacing: AppPadding.medium) {
+                                AppIcon.photo
+                                    .font(.system(size: 50))
+                                    .foregroundColor(.gray)
+                                Text("선택된 사진이 없습니다")
+                                    .font(.appBody)
+                                    .foregroundColor(.gray)
+                            }
+                        }
+                }
             }
         }
     }

@@ -2,7 +2,7 @@
 //  EditProfileView.swift
 //  Chukkoomi
 //
-//  Created by Claude on 11/8/25.
+//  Created by 김영훈 on 11/8/25.
 //
 
 import SwiftUI
@@ -26,7 +26,7 @@ struct EditProfileView: View {
 
                         // 소개 문구 입력
                         introduceSection(viewStore: viewStore)
-                            .padding(.top, AppPadding.small)
+                            .padding(.top, AppPadding.medium)
                     }
                     .padding(.horizontal, AppPadding.large)
                 }
@@ -75,11 +75,15 @@ struct EditProfileView: View {
                 .clipShape(Circle())
                 .overlay(alignment: .bottomTrailing) {
                     Circle()
-                        .fill(AppColor.primary)
+                        .fill(.white)
                         .frame(width: 32, height: 32)
                         .overlay {
+                            Circle()
+                                .stroke(AppColor.divider, lineWidth: 1)
+                        }
+                        .overlay {
                             AppIcon.camera
-                                .foregroundColor(.white)
+                                .foregroundColor(.black)
                                 .font(.system(size: 16))
                         }
                 }
@@ -89,12 +93,7 @@ struct EditProfileView: View {
 
     // MARK: - 닉네임 섹션
     private func nicknameSection(viewStore: ViewStoreOf<EditProfileFeature>) -> some View {
-        VStack(alignment: .leading, spacing: AppPadding.small) {
-            Text("닉네임")
-                .font(.appBody)
-                .fontWeight(.semibold)
-                .foregroundStyle(.gray)
-
+        VStack(alignment: .leading, spacing: 0) {
             TextField("닉네임을 입력하세요", text: viewStore.binding(
                 get: \.nickname,
                 send: { .nicknameChanged($0) }
@@ -107,34 +106,26 @@ struct EditProfileView: View {
                     .stroke(AppColor.divider, lineWidth: 1)
             )
 
-            HStack {
-                if !viewStore.nickname.isEmpty {
-                    if !viewStore.isNicknameCharacterValid {
-                        Text("한글, 영문, 숫자만 사용 가능합니다 (특수문자 불가)")
-                            .font(.appCaption)
-                            .foregroundColor(.red)
-                    } else if !viewStore.isNicknameLengthValid {
-                        Text("닉네임은 공백 없이 2~8자여야 합니다")
-                            .font(.appCaption)
-                            .foregroundColor(.red)
-                    }
+            Group {
+                if viewStore.nickname.isEmpty {
+                    Text("닉네임을 입력해주세요")
+                } else if !viewStore.isNicknameCharacterValid {
+                    Text("한글, 영문, 숫자만 사용 가능합니다 (특수문자 불가)")
+                } else if !viewStore.isNicknameLengthValid {
+                    Text("닉네임은 공백 없이 2~8자여야 합니다")
+                } else {
+                    Text(" ")
                 }
-                Spacer()
-                Text("\(viewStore.nickname.count)/8")
-                    .font(.appCaption)
-                    .foregroundColor(.secondary)
             }
+            .font(.appCaption)
+            .foregroundColor(.red)
+            .frame(height: 16)
         }
     }
 
     // MARK: - 소개 문구 섹션
     private func introduceSection(viewStore: ViewStoreOf<EditProfileFeature>) -> some View {
-        VStack(alignment: .leading, spacing: AppPadding.small) {
-            Text("소개")
-                .font(.appBody)
-                .fontWeight(.semibold)
-                .foregroundStyle(.secondary)
-
+        VStack(alignment: .leading, spacing: 0) {
             TextField("소개를 입력하세요", text: viewStore.binding(
                 get: \.introduce,
                 send: { .introduceChanged($0) }
@@ -147,17 +138,16 @@ struct EditProfileView: View {
                     .stroke(AppColor.divider, lineWidth: 1)
             )
 
-            HStack {
+            Group {
                 if !viewStore.isIntroduceValid {
                     Text("소개는 20자 이내여야 합니다")
-                        .font(.appCaption)
-                        .foregroundColor(.red)
+                } else {
+                    Text(" ")
                 }
-                Spacer()
-                Text("\(viewStore.introduce.count)/20")
-                    .font(.appCaption)
-                    .foregroundColor(.secondary)
             }
+            .font(.appCaption)
+            .foregroundColor(.red)
+            .frame(height: 16)
         }
     }
     
@@ -193,10 +183,12 @@ private struct EditProfileNavigation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .navigationDestination(
+            .fullScreenCover(
                 store: store.scope(state: \.$galleryPicker, action: \.galleryPicker)
             ) { store in
-                GalleryPickerView(store: store)
+                NavigationStack {
+                    GalleryPickerView(store: store)
+                }
             }
     }
 }

@@ -2,12 +2,11 @@
 //  EditProfileFeature.swift
 //  Chukkoomi
 //
-//  Created by Claude on 11/8/25.
+//  Created by 김영훈 on 11/8/25.
 //
 
 import ComposableArchitecture
 import Foundation
-import UIKit
 
 @Reducer
 struct EditProfileFeature {
@@ -116,8 +115,7 @@ struct EditProfileFeature {
 
         case .profileImageTapped:
             state.galleryPicker = GalleryPickerFeature.State(
-                allowsVideo: false,
-                presentationMode: .push
+                pickerMode: .profileImage
             )
             return .none
 
@@ -143,8 +141,7 @@ struct EditProfileFeature {
         case .galleryPicker(.presented(.delegate(.didSelectImage(let imageData)))):
             // 프로필 사진을 100KB 이하로 압축
             return .run { send in
-                if let image = UIImage(data: imageData),
-                   let compressedData = await compressImage(image, maxSizeInBytes: 100_000) {
+                if let compressedData = await CompressHelper.compressImage(imageData, maxSizeInBytes: 100_000, maxWidth: 800, maxHeight: 800) {
                     await send(.profileImageCompressed(compressedData))
                 }
             }
@@ -160,53 +157,5 @@ struct EditProfileFeature {
         .ifLet(\.$galleryPicker, action: \.galleryPicker) {
             GalleryPickerFeature()
         }
-    }
-
-    // MARK: - Helper
-    private func compressImage(_ image: UIImage, maxSizeInBytes: Int) async -> Data? {
-        // 프로필 이미지 크기로 리사이징 (800x800)
-        let maxDimension: CGFloat = 800
-        var resizedImage = image
-
-        if image.size.width > maxDimension || image.size.height > maxDimension {
-            let ratio = min(maxDimension / image.size.width, maxDimension / image.size.height)
-            let newSize = CGSize(
-                width: image.size.width * ratio,
-                height: image.size.height * ratio
-            )
-
-            UIGraphicsBeginImageContextWithOptions(newSize, false, 1.0)
-            image.draw(in: CGRect(origin: .zero, size: newSize))
-            if let scaledImage = UIGraphicsGetImageFromCurrentImageContext() {
-                resizedImage = scaledImage
-            }
-            UIGraphicsEndImageContext()
-        }
-
-        // 압축 품질을 조정하면서 100KB 이하로 만들기
-        var compression: CGFloat = 0.8
-        let minCompression: CGFloat = 0.1
-        let step: CGFloat = 0.1
-
-        guard var imageData = resizedImage.jpegData(compressionQuality: compression) else {
-            return nil
-        }
-
-        // 이미 100KB 이하면 그대로 반환
-        if imageData.count <= maxSizeInBytes {
-            return imageData
-        }
-
-        // 압축 품질을 점진적으로 낮추면서 100KB 이하로 만들기
-        while imageData.count > maxSizeInBytes && compression > minCompression {
-            compression -= step
-            if let compressedData = resizedImage.jpegData(compressionQuality: max(compression, minCompression)) {
-                imageData = compressedData
-            } else {
-                break
-            }
-        }
-
-        return imageData
     }
 }

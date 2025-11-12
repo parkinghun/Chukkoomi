@@ -22,6 +22,7 @@ struct MyProfileFeature {
         
         @PresentationState var editProfile: EditProfileFeature.State?
         @PresentationState var userSearch: UserSearchFeature.State?
+        @PresentationState var followList: FollowListFeature.State?
         
         // Computed properties
         var nickname: String {
@@ -57,25 +58,28 @@ struct MyProfileFeature {
         case editProfileButtonTapped
         case addPostButtonTapped
         case tabSelected(State.Tab)
+        case followerButtonTapped
+        case followingButtonTapped
         
         // API 응답
         case profileLoaded(Profile)
         case postImagesLoaded([PostImage])
         case bookmarkImagesLoaded([PostImage])
         case profileImageLoaded(Data)
-        case postImageDownloaded(id: String, data: Data)
-        case bookmarkImageDownloaded(id: String, data: Data)
-        
+        case postImageDownloaded(id: String, data: Data, isVideo: Bool)
+        case bookmarkImageDownloaded(id: String, data: Data, isVideo: Bool)
+
         // 게시물 fetch
         case fetchPosts(postIds: [String])
         case fetchBookmarks
         case fetchProfileImage(path: String)
-        case fetchPostImage(id: String, path: String)
-        case fetchBookmarkImage(id: String, path: String)
+        case fetchPostImage(id: String, path: String, isVideo: Bool)
+        case fetchBookmarkImage(id: String, path: String, isVideo: Bool)
         
         // Navigation
         case editProfile(PresentationAction<EditProfileFeature.Action>)
         case userSearch(PresentationAction<UserSearchFeature.Action>)
+        case followList(PresentationAction<FollowListFeature.Action>)
     }
     
     // MARK: - Body
@@ -99,6 +103,20 @@ struct MyProfileFeature {
                 
             case .searchButtonTapped:
                 state.userSearch = UserSearchFeature.State()
+                return .none
+
+            case .followerButtonTapped:
+                guard let profile = state.profile else { return .none }
+                state.followList = FollowListFeature.State(
+                    listType: .followers(users: profile.followers)
+                )
+                return .none
+
+            case .followingButtonTapped:
+                guard let profile = state.profile else { return .none }
+                state.followList = FollowListFeature.State(
+                    listType: .following(users: profile.following)
+                )
                 return .none
                 
             case .addPostButtonTapped:
@@ -147,15 +165,15 @@ struct MyProfileFeature {
                 state.postImages = images
                 // 각 이미지 다운로드
                 let effects = images.map { image in
-                    Effect<Action>.send(.fetchPostImage(id: image.id, path: image.imagePath))
+                    Effect<Action>.send(.fetchPostImage(id: image.id, path: image.imagePath, isVideo: image.isVideo))
                 }
                 return .merge(effects)
-                
+
             case .bookmarkImagesLoaded(let images):
                 state.bookmarkImages = images
                 // 각 이미지 다운로드
                 let effects = images.map { image in
-                    Effect<Action>.send(.fetchBookmarkImage(id: image.id, path: image.imagePath))
+                    Effect<Action>.send(.fetchBookmarkImage(id: image.id, path: image.imagePath, isVideo: image.isVideo))
                 }
                 return .merge(effects)
                 
@@ -163,15 +181,33 @@ struct MyProfileFeature {
                 state.profileImageData = data
                 return .none
                 
-            case .postImageDownloaded(let id, let data):
+            case .postImageDownloaded(let id, let data, let isVideo):
                 if let index = state.postImages.firstIndex(where: { $0.id == id }) {
-                    state.postImages[index].imageData = data
+                    if isVideo {
+                        // 동영상이면 썸네일 추출
+                        return .run { send in
+                            if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: data) {
+                                await send(.postImageDownloaded(id: id, data: thumbnailData, isVideo: false))
+                            }
+                        }
+                    } else {
+                        state.postImages[index].imageData = data
+                    }
                 }
                 return .none
-                
-            case .bookmarkImageDownloaded(let id, let data):
+
+            case .bookmarkImageDownloaded(let id, let data, let isVideo):
                 if let index = state.bookmarkImages.firstIndex(where: { $0.id == id }) {
-                    state.bookmarkImages[index].imageData = data
+                    if isVideo {
+                        // 동영상이면 썸네일 추출
+                        return .run { send in
+                            if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: data) {
+                                await send(.bookmarkImageDownloaded(id: id, data: thumbnailData, isVideo: false))
+                            }
+                        }
+                    } else {
+                        state.bookmarkImages[index].imageData = data
+                    }
                 }
                 return .none
                 
@@ -187,27 +223,27 @@ struct MyProfileFeature {
                     }
                 }
                 
-            case .fetchPostImage(let id, let path):
+            case .fetchPostImage(let id, let path, let isVideo):
                 return .run { send in
                     do {
-                        let imageData = try await NetworkManager.shared.download(
+                        let mediaData = try await NetworkManager.shared.download(
                             MediaRouter.getData(path: path)
                         )
-                        await send(.postImageDownloaded(id: id, data: imageData))
+                        await send(.postImageDownloaded(id: id, data: mediaData, isVideo: isVideo))
                     } catch {
-                        print("게시글 이미지 로드 실패: \(error)")
+                        print("게시글 미디어 로드 실패: \(error)")
                     }
                 }
                 
-            case .fetchBookmarkImage(let id, let path):
+            case .fetchBookmarkImage(let id, let path, let isVideo):
                 return .run { send in
                     do {
-                        let imageData = try await NetworkManager.shared.download(
+                        let mediaData = try await NetworkManager.shared.download(
                             MediaRouter.getData(path: path)
                         )
-                        await send(.bookmarkImageDownloaded(id: id, data: imageData))
+                        await send(.bookmarkImageDownloaded(id: id, data: mediaData, isVideo: isVideo))
                     } catch {
-                        print("북마크 이미지 로드 실패: \(error)")
+                        print("북마크 미디어 로드 실패: \(error)")
                     }
                 }
                 
@@ -249,6 +285,9 @@ struct MyProfileFeature {
                 
             case .userSearch:
                 return .none
+
+            case .followList:
+                return .none
             }
         }
         .ifLet(\.$editProfile, action: \.editProfile) {
@@ -257,15 +296,26 @@ struct MyProfileFeature {
         .ifLet(\.$userSearch, action: \.userSearch) {
             UserSearchFeature()
         }
+        .ifLet(\.$followList, action: \.followList) {
+            FollowListFeature()
+        }
     }
 }
 
 // MARK: - Models
 extension MyProfileFeature {
-    // 게시글 그리드에 표시할 이미지 정보
+    // 게시글 그리드에 표시할 미디어 정보
     struct PostImage: Equatable, Identifiable {
         let id: String
         let imagePath: String
         var imageData: Data?
+        let isVideo: Bool
+
+        init(id: String, imagePath: String, imageData: Data? = nil) {
+            self.id = id
+            self.imagePath = imagePath
+            self.imageData = imageData
+            self.isVideo = MediaTypeHelper.isVideoPath(imagePath)
+        }
     }
 }

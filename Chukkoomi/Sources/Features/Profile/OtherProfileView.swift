@@ -2,7 +2,7 @@
 //  OtherProfileView.swift
 //  Chukkoomi
 //
-//  Created by Claude on 11/7/25.
+//  Created by 김영훈 on 11/7/25.
 //
 
 import SwiftUI
@@ -40,12 +40,14 @@ struct OtherProfileView: View {
             .onAppear {
                 viewStore.send(.onAppear)
             }
+            // 네비게이션 연결
+            .modifier(OtherProfileNavigation(store: store))
         }
     }
 
     // MARK: - 프로필 헤더
     private func profileHeaderSection(viewStore: ViewStoreOf<OtherProfileFeature>) -> some View {
-        VStack(spacing: AppPadding.small) {
+        VStack(spacing: 0) {
             // 프로필 이미지
             Group {
                 if let imageData = viewStore.profileImageData,
@@ -69,12 +71,17 @@ struct OtherProfileView: View {
             // 닉네임
             Text(viewStore.nickname)
                 .font(.appTitle)
+                .lineLimit(1)
+                .frame(height: 28)
+                .padding(.top, AppPadding.medium)
 
             // 한줄 소개
             Text(viewStore.introduce)
                 .font(.appBody)
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
+                .lineLimit(1)
+                .frame(height: 22)
         }
     }
 
@@ -119,23 +126,34 @@ struct OtherProfileView: View {
     // MARK: - 통계 섹션
     private func statsSection(viewStore: ViewStoreOf<OtherProfileFeature>) -> some View {
         HStack(spacing: 0) {
-            statItem(title: "게시글", count: viewStore.postCount)
+            statItem(title: "게시글", count: viewStore.postCount, action: nil)
             Spacer()
-            statItem(title: "팔로워", count: viewStore.followerCount)
+            statItem(title: "팔로워", count: viewStore.followerCount) {
+                viewStore.send(.followerButtonTapped)
+            }
             Spacer()
-            statItem(title: "팔로잉", count: viewStore.followingCount)
+            statItem(title: "팔로잉", count: viewStore.followingCount) {
+                viewStore.send(.followingButtonTapped)
+            }
         }
     }
 
-    private func statItem(title: String, count: Int) -> some View {
-        VStack(spacing: AppPadding.small / 2) {
-            Text("\(count)")
-                .font(.appSubTitle)
-            Text(title)
-                .font(.appCaption)
-                .foregroundColor(.secondary)
+    private func statItem(title: String, count: Int, action: (() -> Void)? = nil) -> some View {
+        Button {
+            action?()
+        } label: {
+            VStack(spacing: AppPadding.small / 2) {
+                Text(title)
+                    .font(.appCaption)
+                    .foregroundColor(.secondary)
+                Text("\(count)")
+                    .font(.appSubTitle)
+                    .foregroundColor(.primary)
+            }
+            .frame(maxWidth: .infinity)
         }
-        .frame(maxWidth: .infinity)
+        .buttonStyle(.plain)
+        .allowsHitTesting(action != nil)
     }
 
     // MARK: - 게시글 그리드
@@ -169,7 +187,7 @@ struct OtherProfileView: View {
 
     private func postGridItem(postImage: OtherProfileFeature.PostImage) -> some View {
         GeometryReader { geometry in
-            Group {
+            ZStack {
                 if let imageData = postImage.imageData,
                    let uiImage = UIImage(data: imageData) {
                     Image(uiImage: uiImage)
@@ -185,9 +203,37 @@ struct OtherProfileView: View {
                             ProgressView()
                         }
                 }
+
+                // 동영상 아이콘
+                if postImage.isVideo {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            AppIcon.videoCircle
+                                .foregroundColor(.white)
+                                .font(.system(size: 20))
+                                .padding(8)
+                        }
+                    }
+                }
             }
         }
         .aspectRatio(1, contentMode: .fit)
+    }
+}
+
+// MARK: - Navigation 구성
+private struct OtherProfileNavigation: ViewModifier {
+    let store: StoreOf<OtherProfileFeature>
+
+    func body(content: Content) -> some View {
+        content
+            .navigationDestination(
+                store: store.scope(state: \.$followList, action: \.followList)
+            ) { store in
+                FollowListView(store: store)
+            }
     }
 }
 

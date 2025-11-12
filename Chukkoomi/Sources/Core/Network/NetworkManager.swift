@@ -31,12 +31,12 @@ final class NetworkManager: NSObject {
 // MARK: - Request Methods
 extension NetworkManager {
 
-    /// HTTP Method와 BodyEncoder에 따라 분기하는 통합 메서드 (401 인터셉트 포함)
+    /// HTTP Method와 BodyEncoder에 따라 분기하는 통합 메서드 (토큰 만료 인터셉트 포함)
     func performRequest<T: Decodable>(_ router: Router, as type: T.Type, progress: ((Double) -> Void)? = nil) async throws -> T {
         do {
             return try await performRequestWithoutInterception(router, as: type, progress: progress)
-        } catch NetworkError.statusCode(401, _) {
-            // 401 에러 발생 -> 토큰 갱신 시도
+        } catch NetworkError.statusCode(419, _) {
+            // 419 에러 (AccessToken 만료) -> 토큰 갱신 시도
             let refreshSuccess = await TokenRefreshManager.shared.refreshTokenIfNeeded()
 
             guard refreshSuccess else {
@@ -45,11 +45,15 @@ extension NetworkManager {
 
             // 토큰 갱신 성공 -> 원래 요청 재시도
             return try await performRequestWithoutInterception(router, as: type, progress: progress)
+        } catch NetworkError.statusCode(418, _) {
+            // 418 에러 (RefreshToken 만료) -> 자동 로그아웃
+            await TokenRefreshManager.shared.handleTokenExpiration()
+            throw NetworkError.refreshTokenExpired
         }
     }
 
-    /// HTTP Method와 BodyEncoder에 따라 분기하는 통합 메서드 (401 인터셉트 없음)
-    func performRequestWithoutInterception<T: Decodable>(_ router: Router, as type: T.Type, progress: ((Double) -> Void)? = nil) async throws -> T {
+    /// HTTP Method와 BodyEncoder에 따라 분기하는 내부 메서드 (인터셉트 없음)
+    private func performRequestWithoutInterception<T: Decodable>(_ router: Router, as type: T.Type, progress: ((Double) -> Void)? = nil) async throws -> T {
         let data: Data
 
         switch router.method {
@@ -298,6 +302,7 @@ enum NetworkError: Error, LocalizedError {
     case noData
     case decodingFailed(Error)
     case unauthorized // 토큰 갱신 실패
+    case refreshTokenExpired // RefreshToken 만료
 
     var errorDescription: String? {
         switch self {
@@ -314,6 +319,8 @@ enum NetworkError: Error, LocalizedError {
             return "디코딩에 실패했습니다: \(error.localizedDescription)"
         case .unauthorized:
             return "인증에 실패했습니다. 다시 로그인해주세요."
+        case .refreshTokenExpired:
+            return "로그인 세션이 만료되었습니다. 다시 로그인해주세요."
         }
     }
 }
