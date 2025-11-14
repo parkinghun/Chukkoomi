@@ -124,6 +124,41 @@ enum DateFormatters {
         return String(format: "%@ %d:%02d", period, displayHour, minute)
     }
 
+    // MARK: - 채팅 날짜 구분선 포맷팅
+    /// 채팅 화면에서 사용하는 날짜 구분선 포맷
+    /// "YYYY년 MM월 DD일 (요일)" 형식
+    static func formatChatDateSeparator(_ dateString: String) -> String {
+        guard let date = parseDate(dateString) else {
+            return ""
+        }
+
+        let components = calendar.dateComponents([.year, .month, .day, .weekday], from: date)
+
+        guard let year = components.year,
+              let month = components.month,
+              let day = components.day,
+              let weekday = components.weekday else {
+            return ""
+        }
+
+        let weekdayString = weekdays[weekday]
+
+        return "\(year)년 \(month)월 \(day)일 (\(weekdayString))"
+    }
+
+    // MARK: - 날짜가 다른지 확인
+    /// 두 날짜 문자열이 다른 날인지 확인
+    static func isDifferentDay(_ date1: String, _ date2: String) -> Bool {
+        guard let d1 = parseDate(date1), let d2 = parseDate(date2) else {
+            return false
+        }
+
+        let start1 = calendar.startOfDay(for: d1)
+        let start2 = calendar.startOfDay(for: d2)
+
+        return start1 != start2
+    }
+
     // MARK: - 경기 날짜 포맷팅
     /// "11월 11일 (화) 오후 2시" 형식으로 포맷
     static func formatMatchDate(_ date: Date) -> String {

@@ -33,7 +33,13 @@ struct ChatView: View {
                             }
 
                             // 메시지 목록
-                            ForEach(viewStore.messages, id: \.chatId) { message in
+                            ForEach(Array(viewStore.messages.enumerated()), id: \.element.chatId) { index, message in
+                                // 날짜 구분선 표시 (첫 메시지이거나 이전 메시지와 날짜가 다를 때)
+                                if index == 0 || shouldShowDateSeparator(currentMessage: message, previousMessage: viewStore.messages[index - 1]) {
+                                    DateSeparatorView(dateString: message.createdAt)
+                                        .padding(.vertical, 12)
+                                }
+
                                 MessageRow(
                                     message: message,
                                     isMyMessage: isMyMessage(message, myUserId: viewStore.myUserId)
@@ -112,6 +118,27 @@ struct ChatView: View {
 
         // 나 자신과의 채팅방인 경우 (모든 participant가 나)
         return chatRoom.participants.first?.nick ?? "채팅"
+    }
+
+    // 날짜 구분선을 표시할지 확인
+    private func shouldShowDateSeparator(currentMessage: ChatMessage, previousMessage: ChatMessage) -> Bool {
+        return DateFormatters.isDifferentDay(previousMessage.createdAt, currentMessage.createdAt)
+    }
+}
+
+// MARK: - 날짜 구분선
+struct DateSeparatorView: View {
+    let dateString: String
+
+    var body: some View {
+        Text(DateFormatters.formatChatDateSeparator(dateString))
+            .font(.system(size: 12))
+            .foregroundColor(.white)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 4)
+            .background(Color.gray.opacity(0.6))
+            .cornerRadius(12)
+            .frame(maxWidth: .infinity)
     }
 }
 
