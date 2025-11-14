@@ -27,7 +27,6 @@ struct UserSearchFeature {
         case search
         case userTapped(String) // userId
         case searchResultsLoaded([SearchResult])
-        case profileImageDownloaded(userId: String, data: Data)
         case clearSearch
 
         // Navigation
@@ -65,10 +64,7 @@ struct UserSearchFeature {
 
                         // User를 SearchResult로 변환
                         let searchResults = users.map { user in
-                            SearchResult(
-                                user: user,
-                                profileImageData: nil
-                            )
+                            SearchResult(user: user)
                         }
 
                         await send(.searchResultsLoaded(searchResults))
@@ -86,28 +82,6 @@ struct UserSearchFeature {
             case .searchResultsLoaded(let results):
                 state.searchResults = results
                 state.isLoading = false
-
-                // 프로필 이미지 다운로드
-                let downloadEffects = results.compactMap { result -> Effect<Action>? in
-                    guard let imagePath = result.user.profileImage else { return nil }
-                    return .run { send in
-                        do {
-                            let imageData = try await NetworkManager.shared.download(
-                                MediaRouter.getData(path: imagePath)
-                            )
-                            await send(.profileImageDownloaded(userId: result.user.userId, data: imageData))
-                        } catch {
-                            print("프로필 이미지 다운로드 실패: \(error)")
-                        }
-                    }
-                }
-
-                return .merge(downloadEffects)
-
-            case .profileImageDownloaded(let userId, let data):
-                if let index = state.searchResults.firstIndex(where: { $0.user.userId == userId }) {
-                    state.searchResults[index].profileImageData = data
-                }
                 return .none
 
             case .clearSearch:
@@ -130,7 +104,6 @@ struct UserSearchFeature {
 extension UserSearchFeature {
     struct SearchResult: Equatable, Identifiable {
         let user: User
-        var profileImageData: Data?
 
         var id: String {
             user.userId

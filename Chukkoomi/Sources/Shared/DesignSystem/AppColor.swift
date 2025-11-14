@@ -12,16 +12,17 @@ enum AppColor {
     static let primary = Color(hex: "#FE333D")
     /// 비활성화
     static let disabled = Color(hex: "#FD8C8C")
-
-    /// 메인 텍스트 색상
-    static let textPrimary = Color(hex: "#000000")
-    /// 보조 텍스트 색상
-    static let textSecondary = Color(hex: "#007AFF")
-
-    /// 구분 선 색상
-    static let divider = Color(hex: "#C7C7C7")
-    /// 배경색
-    static let background = Color(hex: "#FFFFFF")
+    
+    /// 짙은 회색 배경 ex) 게시글 추가 버튼 배경
+    static let darkGray = Color(hex: "#C7C7C7")
+    /// 회색 배경 ex) 팔로우 버튼, 채팅 배경
+    static let lightGray = Color(hex: "E7E8E8")
+    
+    /// 보조 텍스트
+    static let textSecondary = Color.secondary
+    
+    /// 구분 선
+    static let divider = Color(hex: "#D8DADC")
 }
 
 

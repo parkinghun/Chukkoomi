@@ -25,11 +25,17 @@ struct MainTabView: View {
                     .tag(MainTabFeature.State.Tab.home)
 
                 // Search Tab
-                ContentView()
-                    .tabItem {
-                        tabIcon(for: .search)
+                NavigationStack {
+                    SearchView(
+                        store: store.scope(
+                            state: \.search,
+                            action: \.search)
+                    )
+                }
+                .tabItem {
+                    tabIcon(for: .search)
                     }
-                    .tag(MainTabFeature.State.Tab.search)
+                .tag(MainTabFeature.State.Tab.search)
 
                 // Post Tab
                 ContentView()

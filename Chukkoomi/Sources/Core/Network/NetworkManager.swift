@@ -11,14 +11,7 @@ final class NetworkManager: NSObject {
     static let shared = NetworkManager()
     private override init() {}
 
-    // 요청별 진행률 핸들러
-    private var progressHandlers: [Int: (Double) -> Void] = [:]
-    // Continuation 저장 (Upload용)
-    private var continuations: [Int: CheckedContinuation<Data, Error>] = [:]
-    // Continuation 저장 (Download용)
-    private var downloadContinuations: [Int: CheckedContinuation<Data, Error>] = [:]
-    // 받은 데이터 저장
-    private var receivedData: [Int: Data] = [:]
+    private let taskStorage = TaskStorage()
 
     private lazy var session: URLSession = {
         let config = URLSessionConfiguration.default
@@ -115,12 +108,14 @@ extension NetworkManager {
 
         // Progress handler 저장
         if let progress {
-            progressHandlers[taskIdentifier] = progress
+            await taskStorage.setProgressHandler(progress, for: taskIdentifier)
         }
 
         return try await withCheckedThrowingContinuation { continuation in
-            continuations[taskIdentifier] = continuation
-            task.resume()
+            Task {
+                await taskStorage.setContinuation(continuation, for: taskIdentifier)
+                task.resume()
+            }
         }
     }
 
@@ -132,22 +127,26 @@ extension NetworkManager {
 
         // Progress handler 저장
         if let progress {
-            progressHandlers[taskIdentifier] = progress
+            await taskStorage.setProgressHandler(progress, for: taskIdentifier)
         }
 
         return try await withCheckedThrowingContinuation { continuation in
-            downloadContinuations[taskIdentifier] = continuation
-            task.resume()
+            Task {
+                await taskStorage.setDownloadContinuation(continuation, for: taskIdentifier)
+                task.resume()
+            }
         }
     }
 
     /// 전체 진행률 핸들러 설정
     func setTotalProgressHandler(_ handler: @escaping (Double) -> Void) {
         // 메인 스레드에서 호출되도록 래핑
-        progressHandlers[-1] = { progress in
-            Task { @MainActor in
-                handler(progress)
-            }
+        Task {
+            await taskStorage.setProgressHandler({ progress in
+                Task { @MainActor in
+                    handler(progress)
+                }
+            }, for: -1)
         }
     }
 }
@@ -167,9 +166,11 @@ extension NetworkManager: URLSessionTaskDelegate {
         let taskIdentifier = task.taskIdentifier
 
         // 개별 진행률 핸들러 호출 (메인 스레드)
-        if let handler = progressHandlers[taskIdentifier] {
-            Task { @MainActor in
-                handler(progress)
+        Task {
+            if let handler = await taskStorage.getProgressHandler(for: taskIdentifier) {
+                Task { @MainActor in
+                    handler(progress)
+                }
             }
         }
     }
@@ -178,40 +179,44 @@ extension NetworkManager: URLSessionTaskDelegate {
     func urlSession(_ session: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
         let taskIdentifier = task.taskIdentifier
 
-        defer {
-            // 정리
-            continuations.removeValue(forKey: taskIdentifier)
-            progressHandlers.removeValue(forKey: taskIdentifier)
-            receivedData.removeValue(forKey: taskIdentifier)
-        }
+        Task {
+            guard let continuation = await taskStorage.getContinuation(for: taskIdentifier) else { return }
 
-        guard let continuation = continuations[taskIdentifier] else { return }
-
-        if let error = error {
-            continuation.resume(throwing: error)
-            return
-        }
-
-        // HTTP 응답 상태 코드 확인
-        if let httpResponse = task.response as? HTTPURLResponse {
-            guard (200...299).contains(httpResponse.statusCode) else {
-                // 에러 응답의 body에서 message 파싱 시도
-                let errorMessage: String?
-                if let data = receivedData[taskIdentifier] {
-                    errorMessage = try? JSONDecoder().decode(BasicMessageResponseDTO.self, from: data).message
-                } else {
-                    errorMessage = nil
+            defer {
+                // 정리
+                Task {
+                    await taskStorage.removeContinuation(for: taskIdentifier)
+                    await taskStorage.removeProgressHandler(for: taskIdentifier)
+                    await taskStorage.removeData(for: taskIdentifier)
                 }
-                continuation.resume(throwing: NetworkError.statusCode(httpResponse.statusCode, message: errorMessage))
+            }
+
+            if let error = error {
+                continuation.resume(throwing: error)
                 return
             }
-        }
 
-        // 데이터 반환
-        if let data = receivedData[taskIdentifier] {
-            continuation.resume(returning: data)
-        } else {
-            continuation.resume(throwing: NetworkError.noData)
+            // HTTP 응답 상태 코드 확인
+            if let httpResponse = task.response as? HTTPURLResponse {
+                guard (200...299).contains(httpResponse.statusCode) else {
+                    // 에러 응답의 body에서 message 파싱 시도
+                    let errorMessage: String?
+                    if let data = await taskStorage.getData(for: taskIdentifier) {
+                        errorMessage = try? JSONDecoder().decode(BasicMessageResponseDTO.self, from: data).message
+                    } else {
+                        errorMessage = nil
+                    }
+                    continuation.resume(throwing: NetworkError.statusCode(httpResponse.statusCode, message: errorMessage))
+                    return
+                }
+            }
+
+            // 데이터 반환
+            if let data = await taskStorage.getData(for: taskIdentifier) {
+                continuation.resume(returning: data)
+            } else {
+                continuation.resume(throwing: NetworkError.noData)
+            }
         }
     }
 }
@@ -223,11 +228,9 @@ extension NetworkManager: URLSessionDataDelegate {
     func urlSession(_ session: URLSession, dataTask: URLSessionDataTask, didReceive data: Data) {
         let taskIdentifier = dataTask.taskIdentifier
 
-        if receivedData[taskIdentifier] == nil {
-            receivedData[taskIdentifier] = Data()
+        Task {
+            await taskStorage.appendData(data, for: taskIdentifier)
         }
-
-        receivedData[taskIdentifier]?.append(data)
     }
 }
 
@@ -246,9 +249,11 @@ extension NetworkManager: URLSessionDownloadDelegate {
         let taskIdentifier = downloadTask.taskIdentifier
 
         // 개별 진행률 핸들러 호출 (메인 스레드)
-        if let handler = progressHandlers[taskIdentifier] {
-            Task { @MainActor in
-                handler(progress)
+        Task {
+            if let handler = await taskStorage.getProgressHandler(for: taskIdentifier) {
+                Task { @MainActor in
+                    handler(progress)
+                }
             }
         }
     }
@@ -261,66 +266,103 @@ extension NetworkManager: URLSessionDownloadDelegate {
     ) {
         let taskIdentifier = downloadTask.taskIdentifier
 
-        defer {
-            // 정리
-            downloadContinuations.removeValue(forKey: taskIdentifier)
-            progressHandlers.removeValue(forKey: taskIdentifier)
-        }
+        Task {
+            guard let continuation = await taskStorage.getDownloadContinuation(for: taskIdentifier) else { return }
 
-        guard let continuation = downloadContinuations[taskIdentifier] else { return }
-
-        // HTTP 응답 상태 코드 확인
-        if let httpResponse = downloadTask.response as? HTTPURLResponse {
-            guard (200...299).contains(httpResponse.statusCode) else {
-                // 에러 응답의 body에서 message 파싱 시도 (다운로드 파일에서)
-                let errorMessage: String?
-                do {
-                    let data = try Data(contentsOf: location)
-                    errorMessage = try? JSONDecoder().decode(BasicMessageResponseDTO.self, from: data).message
-                } catch {
-                    errorMessage = nil
+            defer {
+                // 정리
+                Task {
+                    await taskStorage.removeDownloadContinuation(for: taskIdentifier)
+                    await taskStorage.removeProgressHandler(for: taskIdentifier)
                 }
-                continuation.resume(throwing: NetworkError.statusCode(httpResponse.statusCode, message: errorMessage))
-                return
             }
-        }
 
-        // 임시 파일에서 Data 읽기
-        do {
-            let data = try Data(contentsOf: location)
-            continuation.resume(returning: data)
-        } catch {
-            continuation.resume(throwing: error)
+            // HTTP 응답 상태 코드 확인
+            if let httpResponse = downloadTask.response as? HTTPURLResponse {
+                guard (200...299).contains(httpResponse.statusCode) else {
+                    // 에러 응답의 body에서 message 파싱 시도 (다운로드 파일에서)
+                    let errorMessage: String?
+                    do {
+                        let data = try Data(contentsOf: location)
+                        errorMessage = try? JSONDecoder().decode(BasicMessageResponseDTO.self, from: data).message
+                    } catch {
+                        errorMessage = nil
+                    }
+                    continuation.resume(throwing: NetworkError.statusCode(httpResponse.statusCode, message: errorMessage))
+                    return
+                }
+            }
+
+            // 임시 파일에서 Data 읽기
+            do {
+                let data = try Data(contentsOf: location)
+                continuation.resume(returning: data)
+            } catch {
+                continuation.resume(throwing: error)
+            }
         }
     }
 }
 
-// MARK: - NetworkError
-enum NetworkError: Error, LocalizedError {
-    case invalidResponse
-    case statusCode(Int, message: String?) // 서버 에러 메시지 추가
-    case noData
-    case decodingFailed(Error)
-    case unauthorized // 토큰 갱신 실패
-    case refreshTokenExpired // RefreshToken 만료
+// MARK: - Task Storage Actor (Thread-safe dictionary access)
+actor TaskStorage {
+    private var progressHandlers: [Int: (Double) -> Void] = [:]
+    private var continuations: [Int: CheckedContinuation<Data, Error>] = [:]
+    private var downloadContinuations: [Int: CheckedContinuation<Data, Error>] = [:]
+    private var receivedData: [Int: Data] = [:]
 
-    var errorDescription: String? {
-        switch self {
-        case .invalidResponse:
-            return "유효하지 않은 응답입니다."
-        case .statusCode(let code, let message):
-            if let message = message {
-                return message // 서버 메시지 우선 사용
-            }
-            return "HTTP 상태 코드 에러: \(code)"
-        case .noData:
-            return "데이터가 없습니다."
-        case .decodingFailed(let error):
-            return "디코딩에 실패했습니다: \(error.localizedDescription)"
-        case .unauthorized:
-            return "인증에 실패했습니다. 다시 로그인해주세요."
-        case .refreshTokenExpired:
-            return "로그인 세션이 만료되었습니다. 다시 로그인해주세요."
+    // Progress Handler
+    func setProgressHandler(_ handler: @escaping (Double) -> Void, for taskId: Int) {
+        progressHandlers[taskId] = handler
+    }
+
+    func getProgressHandler(for taskId: Int) -> ((Double) -> Void)? {
+        return progressHandlers[taskId]
+    }
+
+    func removeProgressHandler(for taskId: Int) {
+        progressHandlers.removeValue(forKey: taskId)
+    }
+
+    // Upload Continuation
+    func setContinuation(_ continuation: CheckedContinuation<Data, Error>, for taskId: Int) {
+        continuations[taskId] = continuation
+    }
+
+    func getContinuation(for taskId: Int) -> CheckedContinuation<Data, Error>? {
+        return continuations[taskId]
+    }
+
+    func removeContinuation(for taskId: Int) {
+        continuations.removeValue(forKey: taskId)
+    }
+
+    // Download Continuation
+    func setDownloadContinuation(_ continuation: CheckedContinuation<Data, Error>, for taskId: Int) {
+        downloadContinuations[taskId] = continuation
+    }
+
+    func getDownloadContinuation(for taskId: Int) -> CheckedContinuation<Data, Error>? {
+        return downloadContinuations[taskId]
+    }
+
+    func removeDownloadContinuation(for taskId: Int) {
+        downloadContinuations.removeValue(forKey: taskId)
+    }
+
+    // Received Data
+    func appendData(_ data: Data, for taskId: Int) {
+        if receivedData[taskId] == nil {
+            receivedData[taskId] = Data()
         }
+        receivedData[taskId]?.append(data)
+    }
+
+    func getData(for taskId: Int) -> Data? {
+        return receivedData[taskId]
+    }
+
+    func removeData(for taskId: Int) {
+        receivedData.removeValue(forKey: taskId)
     }
 }

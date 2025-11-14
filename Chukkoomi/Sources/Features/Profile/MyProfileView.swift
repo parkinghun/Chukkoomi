@@ -58,28 +58,30 @@ struct MyProfileView: View {
     private func profileHeaderSection(viewStore: ViewStoreOf<MyProfileFeature>) -> some View {
         VStack(spacing: 0) {
             // 프로필 이미지
-            Group {
-                if let imageData = viewStore.profileImageData,
-                   let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .overlay {
-                            AppIcon.personFill
-                                .foregroundColor(.gray)
-                                .font(.system(size: 40))
-                        }
-                }
+            if let profileImagePath = viewStore.profile?.profileImage {
+                AsyncMediaImageView(
+                    imagePath: profileImagePath,
+                    width: 100,
+                    height: 100,
+                    onImageLoaded: { data in
+                        viewStore.send(.profileImageLoaded(data))
+                    }
+                )
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 100, height: 100)
+                    .overlay {
+                        AppIcon.personFill
+                            .foregroundColor(.gray)
+                            .font(.system(size: 50))
+                    }
             }
-            .frame(width: 80, height: 80)
-            .clipShape(Circle())
 
             // 닉네임
             Text(viewStore.nickname)
-                .font(.appTitle)
+                .font(.appMain)
                 .lineLimit(1)
                 .frame(height: 28)
                 .padding(.top, AppPadding.medium)
@@ -87,8 +89,7 @@ struct MyProfileView: View {
             // 한줄 소개
             Text(viewStore.introduce)
                 .font(.appBody)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+                .foregroundStyle(AppColor.textSecondary)
                 .lineLimit(1)
                 .frame(height: 22)
         }
@@ -116,10 +117,10 @@ struct MyProfileView: View {
             VStack(spacing: AppPadding.small / 2) {
                 Text(title)
                     .font(.appCaption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColor.textSecondary)
                 Text("\(count)")
                     .font(.appSubTitle)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
             }
             .frame(maxWidth: .infinity)
         }
@@ -129,17 +130,10 @@ struct MyProfileView: View {
 
     // MARK: - 프로필 수정 버튼
     private func editProfileButton(viewStore: ViewStoreOf<MyProfileFeature>) -> some View {
-        Button {
+        FillButton(title: "프로필 수정") {
             viewStore.send(.editProfileButtonTapped)
-        } label: {
-            Text("프로필 수정")
-                .font(.appBody)
-                .foregroundStyle(.white)
-                .frame(maxWidth: .infinity)
-                .frame(height: 36)
-                .background(AppColor.primary)
-                .customRadius(.small)
         }
+        .frame(maxWidth: .infinity)
     }
 
     // MARK: - 탭 선택
@@ -153,11 +147,11 @@ struct MyProfileView: View {
                         Text(tab.rawValue)
                             .font(.appBody)
                             .fontWeight(viewStore.selectedTab == tab ? .semibold : .regular)
-                            .foregroundColor(viewStore.selectedTab == tab ? .primary : .secondary)
+                            .foregroundColor(viewStore.selectedTab == tab ? .black : AppColor.textSecondary)
 
                         if viewStore.selectedTab == tab {
                             Rectangle()
-                                .fill(Color.primary)
+                                .fill(Color.black)
                                 .frame(height: 3)
                         } else {
                             Divider()
@@ -185,7 +179,7 @@ struct MyProfileView: View {
                 VStack(spacing: AppPadding.medium) {
                     Text("북마크한 게시글이 없습니다.")
                         .font(.appSubTitle)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColor.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -208,37 +202,11 @@ struct MyProfileView: View {
 
     private func postGridItem(postImage: MyProfileFeature.PostImage) -> some View {
         GeometryReader { geometry in
-            ZStack {
-                if let imageData = postImage.imageData,
-                   let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: geometry.size.width, height: geometry.size.width)
-                        .clipped()
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(width: geometry.size.width, height: geometry.size.width)
-                        .overlay {
-                            ProgressView()
-                        }
-                }
-
-                // 동영상 아이콘
-                if postImage.isVideo {
-                    VStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            AppIcon.videoCircle
-                                .foregroundColor(.white)
-                                .font(.system(size: 20))
-                                .padding(8)
-                        }
-                    }
-                }
-            }
+            AsyncMediaImageView(
+                imagePath: postImage.imagePath,
+                width: geometry.size.width,
+                height: geometry.size.width
+            )
         }
         .aspectRatio(1, contentMode: .fit)
     }
@@ -250,7 +218,7 @@ struct MyProfileView: View {
                 viewStore.send(.addPostButtonTapped)
             } label: {
                 Rectangle()
-                    .fill(Color.gray.opacity(0.3))
+                    .fill(AppColor.darkGray)
                     .frame(width: geometry.size.width, height: geometry.size.width)
                     .overlay {
                         AppIcon.plus
@@ -286,16 +254,3 @@ private struct MyProfileNavigation: ViewModifier {
             }
     }
 }
-
-// MARK: - Preview
-//#Preview {
-//    return NavigationStack {
-//        MyProfileView(
-//            store: Store(
-//                initialState: MyProfileFeature.State()
-//            ) {
-//                MyProfileFeature()
-//            }
-//        )
-//    }
-//}

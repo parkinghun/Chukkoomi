@@ -83,24 +83,23 @@ struct UserSearchView: View {
     private func userRow(result: UserSearchFeature.SearchResult, viewStore: ViewStoreOf<UserSearchFeature>) -> some View {
         HStack(spacing: AppPadding.medium) {
             // 프로필 이미지
-            Group {
-                if let imageData = result.profileImageData,
-                   let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .overlay {
-                            AppIcon.personFill
-                                .foregroundColor(.gray)
-                                .font(.system(size: 24))
-                        }
-                }
+            if let profileImagePath = result.user.profileImage {
+                AsyncMediaImageView(
+                    imagePath: profileImagePath,
+                    width: 50,
+                    height: 50
+                )
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 50, height: 50)
+                    .overlay {
+                        AppIcon.personFill
+                            .foregroundColor(.gray)
+                            .font(.system(size: 24))
+                    }
             }
-            .frame(width: 50, height: 50)
-            .clipShape(Circle())
 
             // 닉네임
             Text(result.user.nickname)

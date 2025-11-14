@@ -19,7 +19,7 @@ struct MyProfileFeature {
         var bookmarkImages: [PostImage] = []
         var isLoading: Bool = false
         var profileImageData: Data?
-        
+
         @PresentationState var editProfile: EditProfileFeature.State?
         @PresentationState var userSearch: UserSearchFeature.State?
         @PresentationState var followList: FollowListFeature.State?
@@ -60,22 +60,17 @@ struct MyProfileFeature {
         case tabSelected(State.Tab)
         case followerButtonTapped
         case followingButtonTapped
-        
+        case profileImageLoaded(Data)
+
         // API 응답
         case profileLoaded(Profile)
         case postImagesLoaded([PostImage])
         case bookmarkImagesLoaded([PostImage])
-        case profileImageLoaded(Data)
-        case postImageDownloaded(id: String, data: Data, isVideo: Bool)
-        case bookmarkImageDownloaded(id: String, data: Data, isVideo: Bool)
 
         // 게시물 fetch
         case fetchPosts(postIds: [String])
         case fetchBookmarks
-        case fetchProfileImage(path: String)
-        case fetchPostImage(id: String, path: String, isVideo: Bool)
-        case fetchBookmarkImage(id: String, path: String, isVideo: Bool)
-        
+
         // Navigation
         case editProfile(PresentationAction<EditProfileFeature.Action>)
         case userSearch(PresentationAction<UserSearchFeature.Action>)
@@ -130,6 +125,10 @@ struct MyProfileFeature {
                     profileImageData: state.profileImageData
                 )
                 return .none
+
+            case .profileImageLoaded(let data):
+                state.profileImageData = data
+                return .none
                 
             case .tabSelected(let tab):
                 state.selectedTab = tab
@@ -151,102 +150,16 @@ struct MyProfileFeature {
             case .profileLoaded(let profile):
                 state.profile = profile
                 state.isLoading = false
-                // 프로필 이미지와 게시물 fetch
-                if let imagePath = profile.profileImage {
-                    return .merge(
-                        .send(.fetchProfileImage(path: imagePath)),
-                        .send(.fetchPosts(postIds: profile.posts))
-                    )
-                } else {
-                    return .send(.fetchPosts(postIds: profile.posts))
-                }
+                return .send(.fetchPosts(postIds: profile.posts))
                 
             case .postImagesLoaded(let images):
                 state.postImages = images
-                // 각 이미지 다운로드
-                let effects = images.map { image in
-                    Effect<Action>.send(.fetchPostImage(id: image.id, path: image.imagePath, isVideo: image.isVideo))
-                }
-                return .merge(effects)
+                return .none
 
             case .bookmarkImagesLoaded(let images):
                 state.bookmarkImages = images
-                // 각 이미지 다운로드
-                let effects = images.map { image in
-                    Effect<Action>.send(.fetchBookmarkImage(id: image.id, path: image.imagePath, isVideo: image.isVideo))
-                }
-                return .merge(effects)
-                
-            case .profileImageLoaded(let data):
-                state.profileImageData = data
-                return .none
-                
-            case .postImageDownloaded(let id, let data, let isVideo):
-                if let index = state.postImages.firstIndex(where: { $0.id == id }) {
-                    if isVideo {
-                        // 동영상이면 썸네일 추출
-                        return .run { send in
-                            if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: data) {
-                                await send(.postImageDownloaded(id: id, data: thumbnailData, isVideo: false))
-                            }
-                        }
-                    } else {
-                        state.postImages[index].imageData = data
-                    }
-                }
                 return .none
 
-            case .bookmarkImageDownloaded(let id, let data, let isVideo):
-                if let index = state.bookmarkImages.firstIndex(where: { $0.id == id }) {
-                    if isVideo {
-                        // 동영상이면 썸네일 추출
-                        return .run { send in
-                            if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: data) {
-                                await send(.bookmarkImageDownloaded(id: id, data: thumbnailData, isVideo: false))
-                            }
-                        }
-                    } else {
-                        state.bookmarkImages[index].imageData = data
-                    }
-                }
-                return .none
-                
-            case .fetchProfileImage(let path):
-                return .run { send in
-                    do {
-                        let imageData = try await NetworkManager.shared.download(
-                            MediaRouter.getData(path: path)
-                        )
-                        await send(.profileImageLoaded(imageData))
-                    } catch {
-                        print("프로필 이미지 로드 실패: \(error)")
-                    }
-                }
-                
-            case .fetchPostImage(let id, let path, let isVideo):
-                return .run { send in
-                    do {
-                        let mediaData = try await NetworkManager.shared.download(
-                            MediaRouter.getData(path: path)
-                        )
-                        await send(.postImageDownloaded(id: id, data: mediaData, isVideo: isVideo))
-                    } catch {
-                        print("게시글 미디어 로드 실패: \(error)")
-                    }
-                }
-                
-            case .fetchBookmarkImage(let id, let path, let isVideo):
-                return .run { send in
-                    do {
-                        let mediaData = try await NetworkManager.shared.download(
-                            MediaRouter.getData(path: path)
-                        )
-                        await send(.bookmarkImageDownloaded(id: id, data: mediaData, isVideo: isVideo))
-                    } catch {
-                        print("북마크 미디어 로드 실패: \(error)")
-                    }
-                }
-                
             case .fetchPosts(let postIds):
                 // TODO: postIds로 게시물 데이터 fetch 후 PostImage 배열로 변환
                 // return .run { send in
@@ -275,9 +188,6 @@ struct MyProfileFeature {
                 
             case .editProfile(.presented(.profileUpdated(let updatedProfile))):
                 state.profile = updatedProfile
-                if let imagePath = updatedProfile.profileImage {
-                    return .send(.fetchProfileImage(path: imagePath))
-                }
                 return .none
                 
             case .editProfile:

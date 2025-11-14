@@ -80,24 +80,23 @@ struct FollowListView: View {
     private func userRow(userItem: FollowListFeature.UserItem, viewStore: ViewStoreOf<FollowListFeature>) -> some View {
         HStack(spacing: AppPadding.medium) {
             // 프로필 이미지
-            Group {
-                if let imageData = userItem.profileImageData,
-                   let uiImage = UIImage(data: imageData) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Circle()
-                        .fill(Color.gray.opacity(0.3))
-                        .overlay {
-                            AppIcon.personFill
-                                .foregroundColor(.gray)
-                                .font(.system(size: 24))
-                        }
-                }
+            if let profileImagePath = userItem.user.profileImage {
+                AsyncMediaImageView(
+                    imagePath: profileImagePath,
+                    width: 50,
+                    height: 50
+                )
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 50, height: 50)
+                    .overlay {
+                        AppIcon.personFill
+                            .foregroundColor(.gray)
+                            .font(.system(size: 24))
+                    }
             }
-            .frame(width: 50, height: 50)
-            .clipShape(Circle())
 
             // 닉네임
             Text(userItem.user.nickname)

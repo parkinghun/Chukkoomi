@@ -14,6 +14,7 @@ struct MainTabFeature {
     // MARK: - State
     struct State: Equatable {
         var selectedTab: Tab = .home
+        var search = SearchFeature.State()
         var myProfile = MyProfileFeature.State()
         var chatList = ChatListFeature.State()
 
@@ -29,12 +30,17 @@ struct MainTabFeature {
     // MARK: - Action
     enum Action: Equatable {
         case tabSelected(State.Tab)
+        case search(SearchFeature.Action)
         case myProfile(MyProfileFeature.Action)
         case chatList(ChatListFeature.Action)
     }
 
     // MARK: - Body
     var body: some ReducerOf<Self> {
+        Scope(state: \.search, action: \.search) {
+            SearchFeature()
+        }
+
         Scope(state: \.myProfile, action: \.myProfile) {
             MyProfileFeature()
         }
@@ -47,6 +53,9 @@ struct MainTabFeature {
             switch action {
             case .tabSelected(let tab):
                 state.selectedTab = tab
+                return .none
+
+            case .search:
                 return .none
 
             case .myProfile:
