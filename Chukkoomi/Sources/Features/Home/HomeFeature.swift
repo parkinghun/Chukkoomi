@@ -175,3 +175,44 @@ struct HomeFeature {
         }
     }
 }
+
+// MARK: - Dummy Data
+extension HomeFeature {
+    /// 경기 일정이 없을 때 보여줄 더미 경기 데이터 생성
+    /// - Returns: 오늘 날짜 기준 3개의 더미 경기
+    static func createDummyMatches() -> [Match] {
+        let today = Date()
+        let calendar = Calendar.current
+
+        // K리그 팀 목록
+        let teams = KLeagueTeam.allTeams
+
+        // 더미 경기 3개 생성
+        return [
+            Match(
+                id: -1,
+                date: calendar.date(byAdding: .hour, value: 2, to: today) ?? today,
+                homeTeamName: teams[0].koreanName, // 울산 HD FC
+                awayTeamName: teams[1].koreanName, // 전북 현대 모터스
+                homeScore: nil,
+                awayScore: nil
+            ),
+            Match(
+                id: -2,
+                date: calendar.date(byAdding: .hour, value: 5, to: today) ?? today,
+                homeTeamName: teams[2].koreanName, // 포항 스틸러스
+                awayTeamName: teams[8].koreanName, // FC 서울
+                homeScore: nil,
+                awayScore: nil
+            ),
+            Match(
+                id: -3,
+                date: calendar.date(byAdding: .hour, value: 7, to: today) ?? today,
+                homeTeamName: teams[6].koreanName, // 제주 유나이티드
+                awayTeamName: teams[3].koreanName, // 수원 FC
+                homeScore: nil,
+                awayScore: nil
+            )
+        ]
+    }
+}

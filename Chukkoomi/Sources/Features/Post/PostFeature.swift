@@ -11,6 +11,12 @@ import SwiftUI
 @Reducer
 struct PostFeature {
 
+    private let postService: PostServiceProtocol
+
+    init(postService: PostServiceProtocol = PostService.shared) {
+        self.postService = postService
+    }
+
     // MARK: - State
     @ObservableState
     struct State: Equatable {
@@ -63,7 +69,7 @@ struct PostFeature {
                 state.isLoading = true
                 state.errorMessage = nil
 
-                return .run { send in
+                return .run { [postService] send in
                     do {
                         let query = PostRouter.ListQuery(
                             next: nil,
@@ -71,10 +77,7 @@ struct PostFeature {
                             category: nil  // 전체 카테고리
                         )
 
-                        let response = try await NetworkManager.shared.performRequest(
-                            PostRouter.fetchPosts(query),
-                            as: PostListResponseDTO.self
-                        )
+                        let response = try await postService.fetchPosts(query: query)
 
                         await send(.postsResponse(.success(response)))
                     } catch {
@@ -90,7 +93,7 @@ struct PostFeature {
 
                 state.isLoading = true
 
-                return .run { send in
+                return .run { [postService] send in
                     do {
                         let query = PostRouter.ListQuery(
                             next: nextCursor,
@@ -98,10 +101,7 @@ struct PostFeature {
                             category: nil
                         )
 
-                        let response = try await NetworkManager.shared.performRequest(
-                            PostRouter.fetchPosts(query),
-                            as: PostListResponseDTO.self
-                        )
+                        let response = try await postService.fetchPosts(query: query)
 
                         await send(.postsResponse(.success(response)))
                     } catch {

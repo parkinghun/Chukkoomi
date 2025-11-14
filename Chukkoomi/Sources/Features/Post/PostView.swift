@@ -31,11 +31,6 @@ struct PostView: View {
                                 Divider()
                                     .padding(.vertical, 8)
                             }
-
-                            // 무한 스크롤 트리거
-                            if store.nextCursor != nil {
-                                loadMoreView
-                            }
                         }
                     }
                     .refreshable {
@@ -72,26 +67,6 @@ struct PostView: View {
             }
             .buttonStyle(.bordered)
         }
-    }
-
-    // MARK: - Load More
-    private var loadMoreView: some View {
-        HStack {
-            if store.isLoading {
-                ProgressView()
-                Text("불러오는 중...")
-                    .font(.caption)
-                    .foregroundColor(.gray)
-            } else {
-                Color.clear
-                    .frame(height: 1)
-                    .onAppear {
-                        store.send(.loadMorePosts)
-                    }
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
     }
 
     // MARK: - Error Banner

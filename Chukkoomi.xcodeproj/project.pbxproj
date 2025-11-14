@@ -396,7 +396,7 @@
 		};
 		154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */ = {
 			isa = XCRemoteSwiftPackageReference;
-			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture.git";
+			repositoryURL = "https://github.com/pointfreeco/swift-composable-architecture";
 			requirement = {
 				kind = upToNextMajorVersion;
 				minimumVersion = 1.23.1;
@@ -412,7 +412,7 @@
 		};
 		154F15AF2EBDE1A20079B157 /* ComposableArchitecture */ = {
 			isa = XCSwiftPackageProductDependency;
-			package = 154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
+			package = B5F22CB62EC6F31000684181 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
 			productName = ComposableArchitecture;
 		};
 /* End XCSwiftPackageProductDependency section */
