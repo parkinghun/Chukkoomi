@@ -106,8 +106,12 @@ struct ChatView: View {
         }
 
         // 내가 아닌 participant 찾기
-        let opponent = chatRoom.participants.first { $0.userId != myUserId }
-        return opponent?.nick ?? "채팅"
+        if let opponent = chatRoom.participants.first(where: { $0.userId != myUserId }) {
+            return opponent.nick
+        }
+
+        // 나 자신과의 채팅방인 경우 (모든 participant가 나)
+        return chatRoom.participants.first?.nick ?? "채팅"
     }
 }
 

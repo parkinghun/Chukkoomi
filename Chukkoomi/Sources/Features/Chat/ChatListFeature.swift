@@ -44,10 +44,8 @@ struct ChatListFeature: Reducer {
 
                 // myUserId는 한 번만 로드, chatRooms는 항상 새로고침
                 if state.myUserId == nil {
-                    return .merge(
-                        .send(.loadMyProfile),
-                        .send(.loadChatRooms)
-                    )
+                    // myUserId 먼저 로드 (순차 실행)
+                    return .send(.loadMyProfile)
                 } else {
                     return .send(.loadChatRooms)
                 }
@@ -67,7 +65,8 @@ struct ChatListFeature: Reducer {
 
             case .myProfileLoaded(let userId):
                 state.myUserId = userId
-                return .none
+                // myUserId 로드 완료 후 chatRooms 로드
+                return .send(.loadChatRooms)
 
             case .loadChatRooms:
                 return .run { send in

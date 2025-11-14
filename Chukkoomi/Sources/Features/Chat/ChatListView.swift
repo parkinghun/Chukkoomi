@@ -84,9 +84,22 @@ struct ChatRoomRow: View {
 
             // 닉네임 + 마지막 메시지
             VStack(alignment: .leading, spacing: 4) {
-                Text(opponentNickname)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.primary)
+                HStack(spacing: 6) {
+                    if isMyself {
+                        Circle()
+                            .fill(Color.yellow)
+                            .frame(width: 22, height: 22)
+                            .overlay(
+                                Text("나")
+                                    .font(.system(size: 11, weight: .bold))
+                                    .foregroundColor(.black)
+                            )
+                    }
+
+                    Text(opponentNickname)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.primary)
+                }
 
                 if let lastMessage = chatRoom.lastChat?.content {
                     Text(lastMessage)
@@ -130,6 +143,16 @@ struct ChatRoomRow: View {
         .padding(.vertical, 12)
     }
 
+    // 나 자신과의 대화인지 확인
+    private var isMyself: Bool {
+        guard let myUserId = myUserId else {
+            return false
+        }
+
+        // 모든 participant가 나인 경우 (나와의 채팅방)
+        return chatRoom.participants.allSatisfy { $0.userId == myUserId }
+    }
+
     // 상대방 닉네임 추출 (1:1 채팅이므로 본인 제외)
     private var opponentNickname: String {
         guard let myUserId = myUserId else {
@@ -137,7 +160,11 @@ struct ChatRoomRow: View {
         }
 
         // 내가 아닌 participant 찾기
-        let opponent = chatRoom.participants.first { $0.userId != myUserId }
-        return opponent?.nick ?? "알 수 없음"
+        if let opponent = chatRoom.participants.first(where: { $0.userId != myUserId }) {
+            return opponent.nick
+        }
+
+        // 나 자신과의 채팅방인 경우 (모든 participant가 나)
+        return chatRoom.participants.first?.nick ?? "알 수 없음"
     }
 }
