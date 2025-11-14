@@ -55,16 +55,15 @@ struct MainTabFeature {
         Scope(state: \.search, action: \.search) {
             SearchFeature()
         }
-
-
+        
         Scope(state: \.myProfile, action: \.myProfile) {
             MyProfileFeature()
         }
-
+        
         Scope(state: \.chatList, action: \.chatList) {
             ChatListFeature()
         }
-
+        
         Reduce { state, action in
             switch action {
             case .tabSelected(let tab):
