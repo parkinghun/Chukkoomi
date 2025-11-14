@@ -77,11 +77,13 @@ struct SearchFeature {
                 return .run { send in
                     await MainActor.run {
                         do {
+                            guard let userId = UserDefaultsHelper.userId else { return }
+
                             let realm = try Realm()
 
-                            // 기존에 같은 키워드가 있으면 삭제
+                            // 기존에 같은 키워드가 있으면 삭제 (현재 사용자만)
                             if let existingWord = realm.objects(FeedRecentWordDTO.self)
-                                .filter("keyword == %@", trimmedKeyword)
+                                .filter("userId == %@ AND keyword == %@", userId, trimmedKeyword)
                                 .first {
                                 try realm.write {
                                     realm.delete(existingWord)
@@ -89,13 +91,14 @@ struct SearchFeature {
                             }
 
                             // 새로운 검색어 추가
-                            let newWord = FeedRecentWordDTO(keyword: trimmedKeyword, searchedAt: Date())
+                            let newWord = FeedRecentWordDTO(userId: userId, keyword: trimmedKeyword, searchedAt: Date())
                             try realm.write {
                                 realm.add(newWord)
                             }
 
-                            // 최근 검색어 목록 갱신
+                            // 최근 검색어 목록 갱신 (현재 사용자만)
                             let recentWordDTOs = realm.objects(FeedRecentWordDTO.self)
+                                .filter("userId == %@", userId)
                                 .sorted(byKeyPath: "searchedAt", ascending: false)
                             let recentWords = Array(recentWordDTOs.prefix(10).map { $0.toDomain })
 
@@ -122,8 +125,14 @@ struct SearchFeature {
                 return .run { send in
                     await MainActor.run {
                         do {
+                            guard let userId = UserDefaultsHelper.userId else {
+                                send(.recentSearchesLoaded([]))
+                                return
+                            }
+
                             let realm = try Realm()
                             let recentWordDTOs = realm.objects(FeedRecentWordDTO.self)
+                                .filter("userId == %@", userId)
                                 .sorted(byKeyPath: "searchedAt", ascending: false)
 
                             let recentWords = Array(recentWordDTOs.prefix(10).map { $0.toDomain })
@@ -150,17 +159,20 @@ struct SearchFeature {
                 return .run { send in
                     await MainActor.run {
                         do {
+                            guard let userId = UserDefaultsHelper.userId else { return }
+
                             let realm = try Realm()
                             if let wordToDelete = realm.objects(FeedRecentWordDTO.self)
-                                .filter("keyword == %@", searchText)
+                                .filter("userId == %@ AND keyword == %@", userId, searchText)
                                 .first {
                                 try realm.write {
                                     realm.delete(wordToDelete)
                                 }
                             }
 
-                            // 삭제 후 최신 10개 다시 불러오기
+                            // 삭제 후 최신 10개 다시 불러오기 (현재 사용자만)
                             let recentWordDTOs = realm.objects(FeedRecentWordDTO.self)
+                                .filter("userId == %@", userId)
                                 .sorted(byKeyPath: "searchedAt", ascending: false)
                             let recentWords = Array(recentWordDTOs.prefix(10).map { $0.toDomain })
 
