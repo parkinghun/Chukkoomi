@@ -84,14 +84,23 @@ struct ChatRoomRow: View {
     var body: some View {
         HStack(spacing: 12) {
             // 프로필 이미지
-            Circle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 56, height: 56)
-                .overlay(
-                    // TODO: 실제 프로필 이미지 로드
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.gray)
+            if let profileImagePath = opponentProfileImage {
+                AsyncMediaImageView(
+                    imagePath: profileImagePath,
+                    width: 56,
+                    height: 56
                 )
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 56, height: 56)
+                    .overlay {
+                        AppIcon.personFill
+                            .foregroundColor(.gray)
+                            .font(.system(size: 28))
+                    }
+            }
 
             // 닉네임 + 마지막 메시지
             VStack(alignment: .leading, spacing: 4) {
@@ -177,5 +186,20 @@ struct ChatRoomRow: View {
 
         // 나 자신과의 채팅방인 경우 (모든 participant가 나)
         return chatRoom.participants.first?.nick ?? "알 수 없음"
+    }
+
+    // 상대방 프로필 이미지 추출
+    private var opponentProfileImage: String? {
+        guard let myUserId = myUserId else {
+            return chatRoom.participants.first?.profileImage
+        }
+
+        // 내가 아닌 participant 찾기
+        if let opponent = chatRoom.participants.first(where: { $0.userId != myUserId }) {
+            return opponent.profileImage
+        }
+
+        // 나 자신과의 채팅방인 경우
+        return chatRoom.participants.first?.profileImage
     }
 }
