@@ -52,24 +52,24 @@ struct OtherProfileView: View {
             if let profileImagePath = viewStore.profile?.profileImage {
                 AsyncMediaImageView(
                     imagePath: profileImagePath,
-                    width: 80,
-                    height: 80
+                    width: 100,
+                    height: 100
                 )
                 .clipShape(Circle())
             } else {
                 Circle()
                     .fill(Color.gray.opacity(0.3))
-                    .frame(width: 80, height: 80)
+                    .frame(width: 100, height: 100)
                     .overlay {
                         AppIcon.personFill
                             .foregroundColor(.gray)
-                            .font(.system(size: 40))
+                            .font(.system(size: 50))
                     }
             }
 
             // 닉네임
             Text(viewStore.nickname)
-                .font(.appTitle)
+                .font(.appMain)
                 .lineLimit(1)
                 .frame(height: 28)
                 .padding(.top, AppPadding.medium)
@@ -77,31 +77,9 @@ struct OtherProfileView: View {
             // 한줄 소개
             Text(viewStore.introduce)
                 .font(.appBody)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+                .foregroundColor(AppColor.textSecondary)
                 .lineLimit(1)
                 .frame(height: 22)
-        }
-    }
-
-    // MARK: - 액션 버튼
-    private func actionButtons(viewStore: ViewStoreOf<OtherProfileFeature>) -> some View {
-        HStack(spacing: AppPadding.large) {
-            // 팔로우 버튼
-            if viewStore.isFollowing {
-                BorderButton(title: "팔로잉") {
-                    viewStore.send(.followButtonTapped)
-                }
-            } else {
-                FillButton(title: "팔로우") {
-                    viewStore.send(.followButtonTapped)
-                }
-            }
-
-            // 메세지 버튼
-            BorderButton(title: "메세지") {
-                viewStore.send(.messageButtonTapped)
-            }
         }
     }
 
@@ -127,15 +105,36 @@ struct OtherProfileView: View {
             VStack(spacing: AppPadding.small / 2) {
                 Text(title)
                     .font(.appCaption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColor.textSecondary)
                 Text("\(count)")
                     .font(.appSubTitle)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
             }
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.plain)
         .allowsHitTesting(action != nil)
+    }
+    
+    // MARK: - 액션 버튼
+    private func actionButtons(viewStore: ViewStoreOf<OtherProfileFeature>) -> some View {
+        HStack(spacing: AppPadding.large) {
+            // 팔로우 버튼
+            if viewStore.isFollowing {
+                BorderButton(title: "팔로잉") {
+                    viewStore.send(.followButtonTapped)
+                }
+            } else {
+                FillButton(title: "팔로우") {
+                    viewStore.send(.followButtonTapped)
+                }
+            }
+
+            // 메세지 버튼
+            BorderButton(title: "메세지") {
+                viewStore.send(.messageButtonTapped)
+            }
+        }
     }
 
     // MARK: - 게시글 그리드
@@ -151,7 +150,7 @@ struct OtherProfileView: View {
                 VStack(spacing: AppPadding.medium) {
                     Text("게시글이 없습니다.")
                         .font(.appSubTitle)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColor.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -192,16 +191,3 @@ private struct OtherProfileNavigation: ViewModifier {
             }
     }
 }
-
-// MARK: - Preview
-//#Preview {
-//    NavigationStack {
-//        OtherProfileView(
-//            store: Store(
-//                initialState: OtherProfileFeature.State(userId: "690e1970ff94927948fea0a3")
-//            ) {
-//                OtherProfileFeature()
-//            }
-//        )
-//    }
-//}

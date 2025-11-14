@@ -61,8 +61,8 @@ struct MyProfileView: View {
             if let profileImagePath = viewStore.profile?.profileImage {
                 AsyncMediaImageView(
                     imagePath: profileImagePath,
-                    width: 80,
-                    height: 80,
+                    width: 100,
+                    height: 100,
                     onImageLoaded: { data in
                         viewStore.send(.profileImageLoaded(data))
                     }
@@ -71,17 +71,17 @@ struct MyProfileView: View {
             } else {
                 Circle()
                     .fill(Color.gray.opacity(0.3))
-                    .frame(width: 80, height: 80)
+                    .frame(width: 100, height: 100)
                     .overlay {
                         AppIcon.personFill
                             .foregroundColor(.gray)
-                            .font(.system(size: 40))
+                            .font(.system(size: 50))
                     }
             }
 
             // 닉네임
             Text(viewStore.nickname)
-                .font(.appTitle)
+                .font(.appMain)
                 .lineLimit(1)
                 .frame(height: 28)
                 .padding(.top, AppPadding.medium)
@@ -89,8 +89,7 @@ struct MyProfileView: View {
             // 한줄 소개
             Text(viewStore.introduce)
                 .font(.appBody)
-                .foregroundColor(.secondary)
-                .multilineTextAlignment(.center)
+                .foregroundStyle(AppColor.textSecondary)
                 .lineLimit(1)
                 .frame(height: 22)
         }
@@ -118,10 +117,10 @@ struct MyProfileView: View {
             VStack(spacing: AppPadding.small / 2) {
                 Text(title)
                     .font(.appCaption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(AppColor.textSecondary)
                 Text("\(count)")
                     .font(.appSubTitle)
-                    .foregroundColor(.primary)
+                    .foregroundColor(.black)
             }
             .frame(maxWidth: .infinity)
         }
@@ -135,17 +134,6 @@ struct MyProfileView: View {
             viewStore.send(.editProfileButtonTapped)
         }
         .frame(maxWidth: .infinity)
-//        Button {
-//            viewStore.send(.editProfileButtonTapped)
-//        } label: {
-//            Text("프로필 수정")
-//                .font(.appBody)
-//                .foregroundStyle(.white)
-//                .frame(maxWidth: .infinity)
-//                .frame(height: 36)
-//                .background(AppColor.primary)
-//                .customRadius(.small)
-//        }
     }
 
     // MARK: - 탭 선택
@@ -159,11 +147,11 @@ struct MyProfileView: View {
                         Text(tab.rawValue)
                             .font(.appBody)
                             .fontWeight(viewStore.selectedTab == tab ? .semibold : .regular)
-                            .foregroundColor(viewStore.selectedTab == tab ? .primary : .secondary)
+                            .foregroundColor(viewStore.selectedTab == tab ? .black : AppColor.textSecondary)
 
                         if viewStore.selectedTab == tab {
                             Rectangle()
-                                .fill(Color.primary)
+                                .fill(Color.black)
                                 .frame(height: 3)
                         } else {
                             Divider()
@@ -191,7 +179,7 @@ struct MyProfileView: View {
                 VStack(spacing: AppPadding.medium) {
                     Text("북마크한 게시글이 없습니다.")
                         .font(.appSubTitle)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(AppColor.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
@@ -230,7 +218,7 @@ struct MyProfileView: View {
                 viewStore.send(.addPostButtonTapped)
             } label: {
                 Rectangle()
-                    .fill(Color.gray.opacity(0.3))
+                    .fill(AppColor.darkGray)
                     .frame(width: geometry.size.width, height: geometry.size.width)
                     .overlay {
                         AppIcon.plus
@@ -266,16 +254,3 @@ private struct MyProfileNavigation: ViewModifier {
             }
     }
 }
-
-// MARK: - Preview
-//#Preview {
-//    return NavigationStack {
-//        MyProfileView(
-//            store: Store(
-//                initialState: MyProfileFeature.State()
-//            ) {
-//                MyProfileFeature()
-//            }
-//        )
-//    }
-//}
