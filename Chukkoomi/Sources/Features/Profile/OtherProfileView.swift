@@ -234,6 +234,11 @@ private struct OtherProfileNavigation: ViewModifier {
             ) { store in
                 FollowListView(store: store)
             }
+            .navigationDestination(
+                store: store.scope(state: \.$chat, action: \.chat)
+            ) { chatStore in
+                ChatView(store: chatStore)
+            }
     }
 }
 
