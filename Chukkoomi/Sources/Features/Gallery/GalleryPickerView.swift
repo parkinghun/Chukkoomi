@@ -23,7 +23,7 @@ struct GalleryPickerView: View {
                     Text("최근 항목")
                         .font(.appBody)
                         .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.black)
                     Spacer()
                 }
                 .padding(.horizontal, AppPadding.large)
@@ -37,6 +37,7 @@ struct GalleryPickerView: View {
                     Spacer()
                 } else {
                     mediaGrid(viewStore: viewStore)
+                        .padding(.horizontal, 4)
                 }
             }
             .background(Color(uiColor: .systemBackground))
@@ -50,7 +51,7 @@ struct GalleryPickerView: View {
                         viewStore.send(.cancel)
                     } label: {
                         AppIcon.xmark
-                            .foregroundColor(.primary)
+                            .foregroundStyle(.black)
                     }
                 }
 
@@ -59,7 +60,7 @@ struct GalleryPickerView: View {
                         viewStore.send(.confirmSelection)
                     } label: {
                         Text(viewStore.pickerMode.buttonTitle)
-                            .foregroundColor(viewStore.selectedItem != nil ? .primary : .gray)
+                            .foregroundStyle(viewStore.selectedItem != nil ? .black : .gray)
                     }
                     .disabled(viewStore.selectedItem == nil)
                 }
@@ -116,10 +117,10 @@ struct GalleryPickerView: View {
                             VStack(spacing: AppPadding.medium) {
                                 AppIcon.photo
                                     .font(.system(size: 50))
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.gray)
                                 Text("선택된 사진이 없습니다")
                                     .font(.appBody)
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.gray)
                             }
                         }
                 }
@@ -143,10 +144,10 @@ struct GalleryPickerView: View {
                             VStack(spacing: AppPadding.medium) {
                                 AppIcon.photo
                                     .font(.system(size: 50))
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.gray)
                                 Text("선택된 사진이 없습니다")
                                     .font(.appBody)
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.gray)
                             }
                         }
                 }
@@ -185,7 +186,7 @@ struct GalleryPickerView: View {
                                     Spacer()
                                     Text(formatDuration(duration))
                                         .font(.appCaption)
-                                        .foregroundColor(.white)
+                                        .foregroundStyle(.white)
                                         .padding(4)
                                         .background(Color.black.opacity(0.6))
                                         .clipShape(RoundedRectangle(cornerRadius: 4))

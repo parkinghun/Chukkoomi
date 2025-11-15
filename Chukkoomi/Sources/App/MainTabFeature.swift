@@ -33,6 +33,11 @@ struct MainTabFeature {
         case search(SearchFeature.Action)
         case myProfile(MyProfileFeature.Action)
         case chatList(ChatListFeature.Action)
+        case delegate(Delegate)
+
+        enum Delegate: Equatable {
+            case logout
+        }
     }
 
     // MARK: - Body
@@ -58,10 +63,16 @@ struct MainTabFeature {
             case .search:
                 return .none
 
+            case .myProfile(.logoutCompleted):
+                return .send(.delegate(.logout))
+
             case .myProfile:
                 return .none
 
             case .chatList:
+                return .none
+
+            case .delegate:
                 return .none
             }
         }

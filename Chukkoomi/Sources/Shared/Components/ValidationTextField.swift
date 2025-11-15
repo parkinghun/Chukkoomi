@@ -38,7 +38,7 @@ struct ValidationTextField: View {
 
             Text(validationMessage.isEmpty ? " " : validationMessage)
                 .font(.appCaption)
-                .foregroundColor(.red)
+                .foregroundStyle(.red)
                 .frame(height: 16)
         }
     }

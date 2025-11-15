@@ -88,6 +88,9 @@ struct LoginFeature {
                 // Keychain에 토큰 저장
                 KeychainManager.shared.save(response.accessToken, for: .accessToken)
                 KeychainManager.shared.save(response.refreshToken, for: .refreshToken)
+                
+                // UserDefaults에 userId 저장
+                UserDefaultsHelper.userId = response.userId
 
                 state.isLoginSuccessful = true
                 return .none

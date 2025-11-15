@@ -41,6 +41,7 @@ struct EditProfileView: View {
             }
             .navigationTitle("프로필 수정")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
             // 네비게이션 연결
             .modifier(EditProfileNavigation(store: store))
         }
@@ -68,7 +69,7 @@ struct EditProfileView: View {
                             .fill(Color.gray.opacity(0.3))
                             .overlay {
                                 AppIcon.personFill
-                                    .foregroundColor(.gray)
+                                    .foregroundStyle(.gray)
                                     .font(.system(size: 50))
                             }
                     }
@@ -85,7 +86,7 @@ struct EditProfileView: View {
                         }
                         .overlay {
                             AppIcon.camera
-                                .foregroundColor(.black)
+                                .foregroundStyle(.black)
                                 .font(.system(size: 16))
                         }
                 }

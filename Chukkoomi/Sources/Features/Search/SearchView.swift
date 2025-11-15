@@ -44,7 +44,7 @@ struct SearchView: View {
                         } label: {
                             Text("취소")
                                 .font(.appBody)
-                                .foregroundColor(.primary)
+                                .foregroundStyle(.black)
                         }
                         .transition(.move(edge: .trailing).combined(with: .opacity))
                     }
@@ -82,7 +82,7 @@ struct SearchView: View {
             Spacer()
             Text("게시물이 없습니다")
                 .font(.appBody)
-                .foregroundColor(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
             Spacer()
         } else {
             feedGrid(posts: viewStore.posts, viewStore: viewStore)
@@ -228,7 +228,7 @@ struct SearchView: View {
                         Spacer()
                         Text("최근 검색어가 없습니다")
                             .font(.appBody)
-                            .foregroundColor(.secondary)
+                            .foregroundStyle(AppColor.textSecondary)
                         Spacer()
                     }
                     .frame(maxWidth: .infinity)
@@ -249,11 +249,11 @@ struct SearchView: View {
         HStack(spacing: AppPadding.medium) {
             Text("#")
                 .font(.appBody)
-                .foregroundColor(.secondary)
+                .foregroundStyle(AppColor.textSecondary)
 
             Text(recentWord.keyword)
                 .font(.appBody)
-                .foregroundColor(.primary)
+                .foregroundStyle(.black)
 
             Spacer()
 
@@ -261,7 +261,7 @@ struct SearchView: View {
                 viewStore.send(.deleteRecentSearch(recentWord.keyword))
             } label: {
                 AppIcon.xmark
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(AppColor.textSecondary)
                     .font(.system(size: 14))
             }
         }

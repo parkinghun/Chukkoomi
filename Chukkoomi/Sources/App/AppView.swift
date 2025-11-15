@@ -12,7 +12,7 @@ struct AppView: View {
     let store: StoreOf<AppFeature>
 
     var body: some View {
-        ZStack {
+        Group {
             if store.isCheckingAuth {
                 // 인증 체크 중 - 스플래시 화면
                 ProgressView()

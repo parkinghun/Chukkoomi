@@ -62,7 +62,7 @@ struct OtherProfileView: View {
                     .frame(width: 100, height: 100)
                     .overlay {
                         AppIcon.personFill
-                            .foregroundColor(.gray)
+                            .foregroundStyle(.gray)
                             .font(.system(size: 50))
                     }
             }
@@ -77,7 +77,7 @@ struct OtherProfileView: View {
             // 한줄 소개
             Text(viewStore.introduce)
                 .font(.appBody)
-                .foregroundColor(AppColor.textSecondary)
+                .foregroundStyle(AppColor.textSecondary)
                 .lineLimit(1)
                 .frame(height: 22)
         }
@@ -105,10 +105,10 @@ struct OtherProfileView: View {
             VStack(spacing: AppPadding.small / 2) {
                 Text(title)
                     .font(.appCaption)
-                    .foregroundColor(AppColor.textSecondary)
+                    .foregroundStyle(AppColor.textSecondary)
                 Text("\(count)")
                     .font(.appSubTitle)
-                    .foregroundColor(.black)
+                    .foregroundStyle(.black)
             }
             .frame(maxWidth: .infinity)
         }
@@ -150,7 +150,7 @@ struct OtherProfileView: View {
                 VStack(spacing: AppPadding.medium) {
                     Text("게시글이 없습니다.")
                         .font(.appSubTitle)
-                        .foregroundColor(AppColor.textSecondary)
+                        .foregroundStyle(AppColor.textSecondary)
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {

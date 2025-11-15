@@ -56,11 +56,14 @@ struct UserSearchFeature {
 
                 return .run { [searchText = state.searchText] send in
                     do {
+                        let myId = UserDefaultsHelper.userId
+
                         // 닉네임으로 유저 검색 API 호출
                         let users = try await NetworkManager.shared.performRequest(
                             UserRouter.search(nickname: searchText),
                             as: UserListDTO.self
                         ).toDomain
+                            .filter { $0.userId != myId }
 
                         // User를 SearchResult로 변환
                         let searchResults = users.map { user in

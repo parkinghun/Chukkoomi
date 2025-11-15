@@ -74,7 +74,7 @@ struct AsyncMediaImageView: View {
                     HStack {
                         Spacer()
                         AppIcon.videoCircle
-                            .foregroundColor(.white)
+                            .foregroundStyle(.white)
                             .font(.system(size: width > 150 ? 30 : 20))
                             .padding(8)
                     }

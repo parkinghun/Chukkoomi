@@ -7,6 +7,7 @@
 
 import ComposableArchitecture
 import Foundation
+import RealmSwift
 
 @Reducer
 struct MyProfileFeature {
@@ -23,6 +24,7 @@ struct MyProfileFeature {
         @PresentationState var editProfile: EditProfileFeature.State?
         @PresentationState var userSearch: UserSearchFeature.State?
         @PresentationState var followList: FollowListFeature.State?
+        @PresentationState var settingsMenu: ConfirmationDialogState<Action.SettingsMenuAction>?
         
         // Computed properties
         var nickname: String {
@@ -61,6 +63,10 @@ struct MyProfileFeature {
         case followerButtonTapped
         case followingButtonTapped
         case profileImageLoaded(Data)
+        case settingsButtonTapped
+        case logout
+        case logoutCompleted
+        case deleteAccount
 
         // API 응답
         case profileLoaded(Profile)
@@ -75,6 +81,12 @@ struct MyProfileFeature {
         case editProfile(PresentationAction<EditProfileFeature.Action>)
         case userSearch(PresentationAction<UserSearchFeature.Action>)
         case followList(PresentationAction<FollowListFeature.Action>)
+        case settingsMenu(PresentationAction<SettingsMenuAction>)
+
+        enum SettingsMenuAction: Equatable {
+            case logout
+            case deleteAccount
+        }
     }
     
     // MARK: - Body
@@ -198,6 +210,67 @@ struct MyProfileFeature {
 
             case .followList:
                 return .none
+
+            case .settingsButtonTapped:
+                state.settingsMenu = ConfirmationDialogState {
+                    TextState("설정")
+                } actions: {
+                    ButtonState(role: .destructive, action: .logout) {
+                        TextState("로그아웃")
+                    }
+                    ButtonState(role: .destructive, action: .deleteAccount) {
+                        TextState("회원탈퇴")
+                    }
+                }
+                return .none
+
+            case .settingsMenu(.presented(.logout)):
+                return .send(.logout)
+
+            case .settingsMenu(.presented(.deleteAccount)):
+                return .send(.deleteAccount)
+
+            case .deleteAccount:
+                return .run { send in
+                    do {
+                        // 회원탈퇴 API 호출
+                        let _ = try await NetworkManager.shared.performRequest(UserRouter.withdraw, as: WithdrawResponseDTO.self)
+
+                        // Realm에서 해당 사용자의 최근 검색어 모두 삭제
+                        if let userId = UserDefaultsHelper.userId {
+                            await MainActor.run {
+                                do {
+                                    let realm = try Realm()
+                                    let userSearchWords = realm.objects(FeedRecentWordDTO.self)
+                                        .filter("userId == %@", userId)
+
+                                    try realm.write {
+                                        realm.delete(userSearchWords)
+                                    }
+                                } catch {
+                                    print("최근 검색어 삭제 실패: \(error)")
+                                }
+                            }
+                        }
+
+                        // 성공 시 로그아웃 처리
+                        await send(.logoutCompleted)
+                    } catch {
+                        // TODO: 에러 처리
+                        print("회원탈퇴 실패: \(error)")
+                    }
+                }
+
+            case .logout:
+                // 실제 로그아웃 처리는 AppFeature에서 수행
+                return .send(.logoutCompleted)
+
+            case .logoutCompleted:
+                // MainTabFeature를 통해 AppFeature로 전달되어 로그인 화면으로 전환
+                return .none
+
+            case .settingsMenu:
+                return .none
             }
         }
         .ifLet(\.$editProfile, action: \.editProfile) {
@@ -209,6 +282,7 @@ struct MyProfileFeature {
         .ifLet(\.$followList, action: \.followList) {
             FollowListFeature()
         }
+        .ifLet(\.$settingsMenu, action: \.settingsMenu)
     }
 }
 
