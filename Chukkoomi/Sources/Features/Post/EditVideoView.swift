@@ -70,14 +70,14 @@ struct EditVideoView: View {
             }
             .padding(.horizontal, AppPadding.large)
 
-            // 재생 컨트롤 버튼들 (중앙)
+            // 재생 컨트롤 버튼들
             HStack(spacing: AppPadding.large) {
                 // 10초 전
                 Button {
                     viewStore.send(.seekBackward)
                 } label: {
-                    Image(systemName: "gobackward.10")
-                        .font(.system(size: 24))
+                    AppIcon.backward
+                        .font(.system(size: 20))
                         .foregroundStyle(.black)
                 }
 
@@ -85,17 +85,23 @@ struct EditVideoView: View {
                 Button {
                     viewStore.send(.playPauseButtonTapped)
                 } label: {
-                    Image(systemName: viewStore.isPlaying ? "pause.circle.fill" : "play.circle.fill")
-                        .font(.system(size: 44))
-                        .foregroundStyle(.black)
+                    Group {
+                        if viewStore.isPlaying {
+                            AppIcon.pause
+                        } else {
+                            AppIcon.play
+                        }
+                    }
+                    .font(.system(size: 28))
+                    .foregroundStyle(.black)
                 }
 
                 // 10초 후
                 Button {
                     viewStore.send(.seekForward)
                 } label: {
-                    Image(systemName: "goforward.10")
-                        .font(.system(size: 24))
+                    AppIcon.forward
+                        .font(.system(size: 20))
                         .foregroundStyle(.black)
                 }
             }
@@ -157,7 +163,7 @@ struct CustomVideoPlayerView: UIViewRepresentable {
         )
     }
 
-    class Coordinator: NSObject {
+    final class Coordinator: NSObject {
         var player: AVPlayer?
         var playerLayer: AVPlayerLayer?
         var timeObserver: Any?
