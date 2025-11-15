@@ -21,7 +21,7 @@ struct OtherProfileFeature {
         var isFollowing: Bool = false
 
         @PresentationState var followList: FollowListFeature.State?
-        @PresentationState var chat: ChatFeature.State?
+//        @PresentationState var chat: ChatFeature.State?
 
         // Computed properties
         var nickname: String {
@@ -65,7 +65,7 @@ struct OtherProfileFeature {
 
         // Navigation
         case followList(PresentationAction<FollowListFeature.Action>)
-        case chat(PresentationAction<ChatFeature.Action>)
+//        case chat(PresentationAction<ChatFeature.Action>)
     }
 
     // MARK: - Body
@@ -191,7 +191,7 @@ struct OtherProfileFeature {
         case .chatRoomCreated(let chatRoom):
             // 채팅방 생성 성공 -> 채팅 화면으로 이동
             print("채팅방 생성 성공: \(chatRoom.roomId)")
-            state.chat = ChatFeature.State(chatRoom: chatRoom, myUserId: state.myUser?.userId)
+//            state.chat = ChatFeature.State(chatRoom: chatRoom, myUserId: state.myUser?.userId)
             return .none
 
         case .fetchPosts(let postIds):
@@ -201,16 +201,16 @@ struct OtherProfileFeature {
         case .followList:
             return .none
 
-        case .chat:
-            return .none
+//        case .chat:
+//            return .none
         }
         }
         .ifLet(\.$followList, action: \.followList) {
             FollowListFeature()
         }
-        .ifLet(\.$chat, action: \.chat) {
-            ChatFeature()
-        }
+//        .ifLet(\.$chat, action: \.chat) {
+//            ChatFeature()
+//        }
     }
 }
 
