@@ -33,13 +33,23 @@ struct PostCellView: View {
     private var headerView: some View {
         HStack(spacing: 12) {
             // 프로필 이미지
-            Circle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.gray)
+            if let profileImagePath = store.post.creator?.profileImage {
+                AsyncMediaImageView(
+                    imagePath: profileImagePath,
+                    width: 40,
+                    height: 40,
+                    onImageLoaded: { _ in }
                 )
+                .clipShape(Circle())
+            } else {
+                Circle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(width: 40, height: 40)
+                    .overlay(
+                        Image(systemName: "person.fill")
+                            .foregroundColor(.gray)
+                    )
+            }
 
             VStack(alignment: .leading, spacing: 2) {
                 Text(store.post.creator?.nickname ?? "사용자")
@@ -63,10 +73,19 @@ struct PostCellView: View {
 
     // MARK: - Title
     private var titleView: some View {
-        Text(store.post.title)
-            .font(.body)
-            .fontWeight(.medium)
-            .padding(.horizontal, 16)
+        VStack(alignment: .leading, spacing: 8) {
+            Text(store.post.title)
+                .font(.body)
+                .fontWeight(.medium)
+
+            // 해시태그 표시
+            if !store.post.hashTags.isEmpty {
+                Text(store.post.hashTags.map { "#\($0)" }.joined(separator: " "))
+                    .font(.caption)
+                    .foregroundColor(.blue)
+            }
+        }
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Media Content (Image or Video)
@@ -206,7 +225,7 @@ struct PostCellView: View {
                 Image(systemName: store.isLiked ? "heart.fill" : "heart")
                     .font(.system(size: 20))
                     .foregroundColor(store.isLiked ? .red : .primary)
-                Text("\(store.post.likes?.count ?? 0)")
+                Text("\(store.likeCount)")
                     .font(.caption)
             }
             .buttonWrapper {

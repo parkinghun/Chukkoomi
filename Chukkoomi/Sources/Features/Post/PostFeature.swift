@@ -149,11 +149,6 @@ struct PostFeature {
             print("📄 게시글 탭: \(postId)")
             return .none
 
-        case let .likePost(postId):
-            print("❤️ 좋아요 탭: \(postId)")
-            // TODO: API 호출 - 좋아요 토글
-            return .none
-
         case let .commentPost(postId):
             print("💬 댓글 탭: \(postId)")
             // TODO: 댓글 화면으로 이동
@@ -162,11 +157,6 @@ struct PostFeature {
         case let .sharePost(postId):
             print("📤 공유 탭: \(postId)")
             // TODO: 공유 시트 표시
-            return .none
-
-        case let .bookmarkPost(postId):
-            print("🔖 북마크 탭: \(postId)")
-            // TODO: API 호출 - 북마크 토글
             return .none
 
         case let .followUser(userId):
