@@ -51,10 +51,14 @@ struct VideoExporter {
         let avAsset = try await loadAVAsset(from: asset)
 
         // 2. 편집 적용하여 AVAsset Composition 생성
-        let composition = try await applyEdits(to: avAsset, editState: editState)
+        let (composition, videoComposition) = try await applyEdits(to: avAsset, editState: editState)
 
         // 3. 최종 영상 내보내기
-        let exportedURL = try await exportComposition(composition, progressHandler: progressHandler)
+        let exportedURL = try await exportComposition(
+            composition,
+            videoComposition: videoComposition,
+            progressHandler: progressHandler
+        )
 
         return exportedURL
     }
@@ -82,20 +86,20 @@ struct VideoExporter {
     private func applyEdits(
         to asset: AVAsset,
         editState: EditVideoFeature.EditState
-    ) async throws -> AVAsset {
+    ) async throws -> (AVAsset, AVVideoComposition?) {
         // AVMutableComposition 생성
         let composition = AVMutableComposition()
 
         // 1. Trim 적용
         let trimmedAsset = try await applyTrim(to: asset, editState: editState, composition: composition)
 
-        // TODO: 2. Filters 적용
-        // let filteredAsset = try await applyFilters(to: trimmedAsset, filters: editState.filters)
+        // 2. Filters 적용
+        let videoComposition = try await applyFilter(to: trimmedAsset, filterType: editState.selectedFilter)
 
         // TODO: 3. Subtitles 적용
         // let subtitledAsset = try await applySubtitles(to: filteredAsset, subtitles: editState.subtitles)
 
-        return trimmedAsset
+        return (trimmedAsset, videoComposition)
     }
 
     /// Trim 적용
@@ -144,9 +148,48 @@ struct VideoExporter {
         return composition
     }
 
+    /// Filter 적용
+    private func applyFilter(
+        to asset: AVAsset,
+        filterType: EditVideoFeature.FilterType?
+    ) async throws -> AVVideoComposition? {
+        // 필터가 없으면 nil 반환
+        guard let filterType = filterType,
+              let filterName = filterType.ciFilterName else {
+            return nil
+        }
+
+        // 비디오 트랙 가져오기
+        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
+            return nil
+        }
+
+        let naturalSize = try await videoTrack.load(.naturalSize)
+
+        // CIFilter 생성
+        let filter = CIFilter(name: filterName)
+
+        // AVVideoComposition 생성
+        let composition = AVMutableVideoComposition(
+            asset: asset,
+            applyingCIFiltersWithHandler: { request in
+                let source = request.sourceImage.clampedToExtent()
+                filter?.setValue(source, forKey: kCIInputImageKey)
+
+                let output = filter?.outputImage ?? source
+                request.finish(with: output, context: nil)
+            }
+        )
+
+        composition.renderSize = naturalSize
+
+        return composition
+    }
+
     /// Composition을 파일로 내보내기
     private func exportComposition(
         _ composition: AVAsset,
+        videoComposition: AVVideoComposition?,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
         // Export Session 생성
@@ -155,6 +198,11 @@ struct VideoExporter {
             presetName: AVAssetExportPresetHighestQuality
         ) else {
             throw ExportError.failedToCreateExportSession
+        }
+
+        // 비디오 컴포지션 설정 (필터가 있는 경우)
+        if let videoComposition = videoComposition {
+            exportSession.videoComposition = videoComposition
         }
 
         // 출력 파일 URL 설정 (Caches 디렉토리 사용)

@@ -25,6 +25,9 @@ struct EditVideoFeature {
         // 편집 데이터
         var editState: EditState = EditState()
 
+        // 필터 적용 상태
+        var isApplyingFilter: Bool = false
+
         // 내보내기 상태
         var isExporting: Bool = false
         var exportProgress: Double = 0.0
@@ -38,10 +41,35 @@ struct EditVideoFeature {
     struct EditState: Equatable {
         var trimStartTime: Double = 0.0
         var trimEndTime: Double = 0.0
+        var selectedFilter: FilterType? = nil
         // TODO: 추후 추가될 편집 옵션들
-        // var filters: [VideoFilter] = []
         // var subtitles: [Subtitle] = []
         // var audioAdjustments: AudioSettings?
+    }
+
+    enum FilterType: String, CaseIterable, Equatable {
+        case blackAndWhite = "흑백"
+        case warm = "따뜻한"
+        case cool = "차갑게"
+        case bright = "밝게"
+
+        var displayName: String {
+            return rawValue
+        }
+
+        /// CIFilter 이름 반환
+        var ciFilterName: String? {
+            switch self {
+            case .blackAndWhite:
+                return "CIPhotoEffectMono"
+            case .warm:
+                return nil // TODO: 추후 구현
+            case .cool:
+                return nil // TODO: 추후 구현
+            case .bright:
+                return nil // TODO: 추후 구현
+            }
+        }
     }
 
     enum SeekDirection: Equatable {
@@ -60,6 +88,8 @@ struct EditVideoFeature {
         case updateDuration(Double)
         case updateTrimStartTime(Double)
         case updateTrimEndTime(Double)
+        case filterSelected(FilterType)
+        case filterApplied
         case nextButtonTapped
         case exportProgressUpdated(Double)
         case exportCompleted(URL)
@@ -103,6 +133,23 @@ struct EditVideoFeature {
 
             case .updateTrimEndTime(let time):
                 state.editState.trimEndTime = min(state.duration, max(time, state.editState.trimStartTime + 0.1))
+                return .none
+
+            case .filterSelected(let filter):
+                // 같은 필터를 다시 선택하면 선택 해제, 다른 필터를 선택하면 변경
+                if state.editState.selectedFilter == filter {
+                    state.editState.selectedFilter = nil
+                    state.isApplyingFilter = true
+                } else {
+                    state.editState.selectedFilter = filter
+                    state.isApplyingFilter = true
+                }
+                // 필터 적용 중에는 재생 중지
+                state.isPlaying = false
+                return .none
+
+            case .filterApplied:
+                state.isApplyingFilter = false
                 return .none
 
             case .nextButtonTapped:
