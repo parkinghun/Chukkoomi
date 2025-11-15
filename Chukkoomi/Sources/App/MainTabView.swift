@@ -45,12 +45,20 @@ struct MainTabView: View {
                 .tag(MainTabFeature.State.Tab.search)
 
                 // Post Tab
-                EmptyForVideoView(
-                    store: store.scope(
-                        state: \.post,
-                        action: \.post
+                // EmptyForVideoView(
+                //     store: store.scope(
+                //         state: \.post,
+                //         action: \.post
+                //     )
+                // )
+                NavigationStack {
+                    PostCreateView(
+                        store: store.scope(
+                            state: \.postCreate,
+                            action: \.postCreate
+                        )
                     )
-                )
+                }
                 .tabItem {
                     tabIcon(for: .post)
                 }
