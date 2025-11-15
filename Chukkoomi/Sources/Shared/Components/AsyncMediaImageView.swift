@@ -139,10 +139,10 @@ struct AsyncMediaImageView: View {
 
             isLoading = false
         } catch is CancellationError {
-            // Task가 취소되었을 때는 조용히 처리
+            // Task가 취소되었을 때는 로그를 남기지 않음
             isLoading = false
         } catch {
-            print("❌ [AsyncMediaImageView] 미디어 로드 실패: \(error)")
+            print("미디어 로드 실패: \(error)")
             isLoading = false
         }
     }
