@@ -8,29 +8,58 @@
 import SwiftUI
 import ComposableArchitecture
 
-struct EmptyForVideoView: View {
-    @State private var showGalleryPicker = false
+// MARK: - Feature
+struct EmptyForVideoFeature: Reducer {
+    struct State: Equatable {
+        @PresentationState var galleryPicker: GalleryPickerFeature.State?
+    }
 
-    var body: some View {
-        Button {
-            showGalleryPicker = true
-        } label: {
-            Text("Edit Video")
-        }
-        .fullScreenCover(isPresented: $showGalleryPicker) {
-            NavigationStack {
-                GalleryPickerView(
-                    store: Store(
-                        initialState: GalleryPickerFeature.State(pickerMode: .post)
-                    ) {
-                        GalleryPickerFeature()
-                    }
-                )
+    @CasePathable
+    enum Action: Equatable {
+        case editVideoButtonTapped
+        case galleryPicker(PresentationAction<GalleryPickerFeature.Action>)
+    }
+
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            switch action {
+            case .editVideoButtonTapped:
+                state.galleryPicker = GalleryPickerFeature.State(pickerMode: .post)
+                return .none
+
+            case .galleryPicker(.presented(.cancel)):
+                state.galleryPicker = nil
+                return .none
+
+            case .galleryPicker:
+                return .none
             }
+        }
+        .ifLet(\.$galleryPicker, action: \.galleryPicker) {
+            GalleryPickerFeature()
         }
     }
 }
 
-#Preview {
-    EmptyForVideoView()
+// MARK: - View
+struct EmptyForVideoView: View {
+    let store: StoreOf<EmptyForVideoFeature>
+
+    var body: some View {
+        Button {
+            store.send(.editVideoButtonTapped)
+        } label: {
+            Text("Edit Video")
+        }
+        .fullScreenCover(
+            store: store.scope(
+                state: \.$galleryPicker,
+                action: \.galleryPicker
+            )
+        ) { store in
+            NavigationStack {
+                GalleryPickerView(store: store)
+            }
+        }
+    }
 }
