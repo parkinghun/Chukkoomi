@@ -19,12 +19,12 @@ struct AppView: View {
                     .progressViewStyle(CircularProgressViewStyle())
             } else if store.isLoggedIn {
                 // 로그인 상태 - MainTabView 표시
-                IfLetStore(store.scope(state: \.mainTabState, action: \.mainTab)) { mainTabStore in
+                if let mainTabStore = store.scope(state: \.mainTabState, action: \.mainTab) {
                     MainTabView(store: mainTabStore)
                 }
             } else {
                 // 비로그인 상태 - LoginView 표시
-                IfLetStore(store.scope(state: \.loginState, action: \.login)) { loginStore in
+                if let loginStore = store.scope(state: \.loginState, action: \.login) {
                     NavigationStack {
                         LoginView(store: loginStore)
                     }

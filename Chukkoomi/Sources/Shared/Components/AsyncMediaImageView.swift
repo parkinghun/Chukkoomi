@@ -7,6 +7,20 @@
 
 import SwiftUI
 
+// MARK: - 간단한 메모리 캐시
+private actor ImageCache {
+    static let shared = ImageCache()
+    private var cache: [String: Data] = [:]
+
+    func get(_ key: String) -> Data? {
+        return cache[key]
+    }
+
+    func set(_ key: String, data: Data) {
+        cache[key] = data
+    }
+}
+
 /// 미디어 경로를 받아 비동기로 다운로드하고 표시하는 뷰
 struct AsyncMediaImageView: View {
     let imagePath: String
@@ -68,7 +82,7 @@ struct AsyncMediaImageView: View {
             }
         }
         .frame(width: width, height: height)
-        .task {
+        .task(id: imagePath) {
             await loadMedia()
         }
     }
@@ -76,6 +90,14 @@ struct AsyncMediaImageView: View {
     // MARK: - 미디어 로드
     private func loadMedia() async {
         do {
+            // 캐시 확인 (메모리에서 즉시 조회, 매우 빠름)
+            if let cachedData = await ImageCache.shared.get(imagePath) {
+                imageData = cachedData
+                onImageLoaded?(cachedData)
+                isLoading = false
+                return
+            }
+
             let mediaData: Data
 
             // TODO: picsum 테스트용 임시 코드 - 나중에 삭제
@@ -104,11 +126,15 @@ struct AsyncMediaImageView: View {
                 if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: mediaData) {
                     imageData = thumbnailData
                     onImageLoaded?(thumbnailData)
+                    // 캐시에 저장
+                    await ImageCache.shared.set(imagePath, data: thumbnailData)
                 }
             } else {
                 // 이미지는 그대로 사용
                 imageData = mediaData
                 onImageLoaded?(mediaData)
+                // 캐시에 저장
+                await ImageCache.shared.set(imagePath, data: mediaData)
             }
 
             isLoading = false

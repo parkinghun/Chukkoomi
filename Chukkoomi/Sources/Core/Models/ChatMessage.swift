@@ -8,7 +8,7 @@
 import Foundation
 
 // MARK: - Chat Message
-struct ChatMessage {
+struct ChatMessage: Equatable {
     let chatId: String
     let roomId: String
     let content: String?
