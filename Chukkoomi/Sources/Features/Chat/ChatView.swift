@@ -11,6 +11,7 @@ import ComposableArchitecture
 struct ChatView: View {
 
     let store: StoreOf<ChatFeature>
+    @State private var opponentProfileImage: UIImage?
 
     var body: some View {
         WithViewStore(store, observe: { $0 }) { viewStore in
@@ -20,6 +21,13 @@ struct ChatView: View {
                     .frame(height: 0)
                     .onAppear {
                         viewStore.send(.onAppear)
+                    }
+                    .task {
+                        // 프로필 이미지 한 번만 로드
+                        await loadOpponentProfileImage(
+                            chatRoom: viewStore.chatRoom,
+                            myUserId: viewStore.myUserId
+                        )
                     }
 
                 // 메시지 리스트
@@ -42,7 +50,8 @@ struct ChatView: View {
 
                                 MessageRow(
                                     message: message,
-                                    isMyMessage: isMyMessage(message, myUserId: viewStore.myUserId)
+                                    isMyMessage: isMyMessage(message, myUserId: viewStore.myUserId),
+                                    opponentProfileImage: opponentProfileImage
                                 )
                                 .id(message.chatId)
                             }
@@ -124,6 +133,42 @@ struct ChatView: View {
     private func shouldShowDateSeparator(currentMessage: ChatMessage, previousMessage: ChatMessage) -> Bool {
         return DateFormatters.isDifferentDay(previousMessage.createdAt, currentMessage.createdAt)
     }
+
+    // 상대방 프로필 이미지를 한 번만 로드
+    private func loadOpponentProfileImage(chatRoom: ChatRoom, myUserId: String?) async {
+        let imagePath: String?
+
+        if let myUserId = myUserId,
+           let opponent = chatRoom.participants.first(where: { $0.userId != myUserId }) {
+            imagePath = opponent.profileImage
+        } else {
+            imagePath = chatRoom.participants.first?.profileImage
+        }
+
+        guard let path = imagePath else {
+            return
+        }
+
+        do {
+            let imageData: Data
+
+            if path.hasPrefix("http://") || path.hasPrefix("https://") {
+                guard let url = URL(string: path) else { return }
+                let (data, _) = try await URLSession.shared.data(from: url)
+                imageData = data
+            } else {
+                imageData = try await NetworkManager.shared.download(
+                    MediaRouter.getData(path: path)
+                )
+            }
+
+            if let uiImage = UIImage(data: imageData) {
+                opponentProfileImage = uiImage
+            }
+        } catch {
+            // 프로필 이미지 로드 실패 시 기본 아이콘 표시
+        }
+    }
 }
 
 // MARK: - 날짜 구분선
@@ -147,6 +192,7 @@ struct MessageRow: View {
 
     let message: ChatMessage
     let isMyMessage: Bool
+    let opponentProfileImage: UIImage?
 
     var body: some View {
         HStack(alignment: .bottom, spacing: 8) {
@@ -161,14 +207,22 @@ struct MessageRow: View {
                 messageContent
             } else {
                 // 상대방 프로필 이미지
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 36, height: 36)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.gray)
-                    )
+                if let profileImage = opponentProfileImage {
+                    Image(uiImage: profileImage)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 36, height: 36)
+                        .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 36, height: 36)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 16))
+                                .foregroundColor(.gray)
+                        )
+                }
 
                 messageContent
 
