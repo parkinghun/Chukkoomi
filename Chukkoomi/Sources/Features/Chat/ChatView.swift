@@ -103,6 +103,7 @@ struct ChatView: View {
             }
             .navigationTitle(opponentNickname(chatRoom: viewStore.chatRoom, myUserId: viewStore.myUserId))
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar(.hidden, for: .tabBar)
         }
     }
 
