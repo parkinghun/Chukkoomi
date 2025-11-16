@@ -17,24 +17,26 @@ struct EditVideoView: View {
     var body: some View {
         WithViewStore(store, observe: { $0 }) { viewStore in
             VStack(spacing: 0) {
-                // 커스텀 비디오 플레이어
-                CustomVideoPlayerView(
-                    asset: viewStore.videoAsset,
-                    isPlaying: viewStore.isPlaying,
-                    seekTrigger: viewStore.seekTrigger,
-                    selectedFilter: viewStore.editState.selectedFilter,
-                    onTimeUpdate: { time in viewStore.send(.updateCurrentTime(time)) },
-                    onDurationUpdate: { duration in viewStore.send(.updateDuration(duration)) },
-                    onSeekCompleted: { viewStore.send(.seekCompleted) },
-                    onFilterApplied: { viewStore.send(.filterApplied) }
-                )
-                .frame(maxWidth: .infinity)
-                .frame(height: 300)
-                .overlay {
-                    if viewStore.isApplyingFilter {
-                        FilterApplyingOverlayView()
+                // 커스텀 비디오 플레이어 (16:9 비율)
+                Color.black
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .overlay {
+                        CustomVideoPlayerView(
+                            asset: viewStore.videoAsset,
+                            isPlaying: viewStore.isPlaying,
+                            seekTrigger: viewStore.seekTrigger,
+                            selectedFilter: viewStore.editState.selectedFilter,
+                            onTimeUpdate: { time in viewStore.send(.updateCurrentTime(time)) },
+                            onDurationUpdate: { duration in viewStore.send(.updateDuration(duration)) },
+                            onSeekCompleted: { viewStore.send(.seekCompleted) },
+                            onFilterApplied: { viewStore.send(.filterApplied) }
+                        )
                     }
-                }
+                    .overlay {
+                        if viewStore.isApplyingFilter {
+                            FilterApplyingOverlayView()
+                        }
+                    }
 
                 // 컨트롤 UI
                 VideoControlsView(

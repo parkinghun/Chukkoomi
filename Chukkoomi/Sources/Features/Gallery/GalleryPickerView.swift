@@ -128,41 +128,49 @@ struct GalleryPickerView: View {
                         }
                 }
             } else {
-                // 게시물 모드
-                if let selectedItem = viewStore.selectedItem {
-                    if selectedItem.mediaType == .video {
-                        // 비디오 재생
-                        AssetVideoPlayerView(asset: selectedItem.asset)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 300)
-                            .id(selectedItem.id)  // asset이 바뀌면 뷰를 새로 생성
-                    } else if let image = viewStore.selectedImage {
-                        // 이미지 표시
-                        ZStack {
-                            Color.black
-                            Image(uiImage: image)
-                                .resizable()
-                                .scaledToFit()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 300)
-                        .clipped()
-                    }
-                } else {
-                    Rectangle()
-                        .fill(Color.gray.opacity(0.3))
-                        .frame(height: 300)
-                        .overlay {
-                            VStack(spacing: AppPadding.medium) {
-                                AppIcon.photo
-                                    .font(.system(size: 50))
-                                    .foregroundStyle(.gray)
-                                Text("선택된 미디어가 없습니다")
-                                    .font(.appBody)
-                                    .foregroundStyle(.gray)
+                // 게시물 모드 (16:9 비율)
+                Color.clear
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .overlay {
+                        GeometryReader { geometry in
+                            let width = geometry.size.width
+                            let height = geometry.size.height
+
+                            if let selectedItem = viewStore.selectedItem {
+                                if selectedItem.mediaType == .video {
+                                    // 비디오 재생
+                                    AssetVideoPlayerView(asset: selectedItem.asset)
+                                        .frame(width: width, height: height)
+                                        .id(selectedItem.id)  // asset이 바뀌면 뷰를 새로 생성
+                                } else if let image = viewStore.selectedImage {
+                                    // 이미지 표시
+                                    ZStack {
+                                        Color.black
+                                        Image(uiImage: image)
+                                            .resizable()
+                                            .scaledToFill()
+                                            .frame(width: width, height: height)
+                                            .clipped()
+                                    }
+                                    .frame(width: width, height: height)
+                                }
+                            } else {
+                                Rectangle()
+                                    .fill(Color.gray.opacity(0.3))
+                                    .frame(width: width, height: height)
+                                    .overlay {
+                                        VStack(spacing: AppPadding.medium) {
+                                            AppIcon.photo
+                                                .font(.system(size: 50))
+                                                .foregroundStyle(.gray)
+                                            Text("선택된 미디어가 없습니다")
+                                                .font(.appBody)
+                                                .foregroundStyle(.gray)
+                                        }
+                                    }
                             }
                         }
-                }
+                    }
             }
         }
     }
