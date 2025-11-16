@@ -19,20 +19,6 @@ enum VideoFilter: String, CaseIterable, Equatable {
     var displayName: String {
         return rawValue
     }
-
-    /// CIFilter 이름 반환
-    var ciFilterName: String? {
-        switch self {
-        case .blackAndWhite:
-            return "CIPhotoEffectMono"
-        case .warm:
-            return nil // TODO: 추후 구현
-        case .cool:
-            return nil // TODO: 추후 구현
-        case .bright:
-            return nil // TODO: 추후 구현
-        }
-    }
 }
 
 /// 비디오 필터 관리자
@@ -48,8 +34,7 @@ struct VideoFilterManager {
         filter: VideoFilter?
     ) async -> AVVideoComposition? {
         // 필터가 없으면 nil 반환
-        guard let filter = filter,
-              let filterName = filter.ciFilterName else {
+        guard let filter = filter else {
             return nil
         }
 
@@ -61,17 +46,14 @@ struct VideoFilterManager {
         let naturalSize = try? await videoTrack.load(.naturalSize)
         let preferredTransform = try? await videoTrack.load(.preferredTransform)
 
-        // CIFilter 생성
-        let ciFilter = CIFilter(name: filterName)
-
         // AVVideoComposition 생성
         let composition = AVMutableVideoComposition(
             asset: asset,
             applyingCIFiltersWithHandler: { request in
                 let source = request.sourceImage.clampedToExtent()
-                ciFilter?.setValue(source, forKey: kCIInputImageKey)
 
-                let output = ciFilter?.outputImage ?? source
+                // 필터별로 CIFilter 생성 및 적용
+                let output = applyFilter(filter, to: source)
                 request.finish(with: output, context: nil)
             }
         )
@@ -103,6 +85,52 @@ struct VideoFilterManager {
     }
 
     // MARK: - Private Helper Methods
+
+    /// CIImage에 필터 적용
+    /// - Parameters:
+    ///   - filter: 적용할 필터
+    ///   - image: 원본 이미지
+    /// - Returns: 필터가 적용된 이미지
+    private static func applyFilter(_ filter: VideoFilter, to image: CIImage) -> CIImage {
+        switch filter {
+        case .blackAndWhite:
+            return applyBlackAndWhiteFilter(to: image)
+        case .warm:
+            return applyWarmFilter(to: image)
+        case .cool:
+            return image // TODO: 추후 구현
+        case .bright:
+            return image // TODO: 추후 구현
+        }
+    }
+
+    /// 흑백 필터 적용
+    private static func applyBlackAndWhiteFilter(to image: CIImage) -> CIImage {
+        guard let filter = CIFilter(name: "CIPhotoEffectMono") else {
+            return image
+        }
+        filter.setValue(image, forKey: kCIInputImageKey)
+        return filter.outputImage ?? image
+    }
+
+    /// 따뜻한 필터 적용
+    private static func applyWarmFilter(to image: CIImage) -> CIImage {
+        guard let filter = CIFilter(name: "CITemperatureAndTint") else {
+            return image
+        }
+
+        // 색온도를 높여서 따뜻한 느낌 (오렌지/노란 톤)
+        // neutral: (6500, 0) - 일반적인 색온도
+        // warm: (8000, 0) - 따뜻한 색온도
+        let warmVector = CIVector(x: 8000, y: 0)
+        let neutralVector = CIVector(x: 6500, y: 0)
+
+        filter.setValue(image, forKey: kCIInputImageKey)
+        filter.setValue(warmVector, forKey: "inputNeutral")
+        filter.setValue(neutralVector, forKey: "inputTargetNeutral")
+
+        return filter.outputImage ?? image
+    }
 
     /// 비디오 orientation 확인 헬퍼
     private static func orientation(from transform: CGAffineTransform) -> (orientation: UIImage.Orientation, isPortrait: Bool) {
