@@ -34,35 +34,42 @@ struct PostCellView: View {
     // MARK: - Header
     private var headerView: some View {
         HStack(spacing: 12) {
-            // 프로필 이미지
-            if let profileImagePath = store.post.creator?.profileImage {
-                AsyncMediaImageView(
-                    imagePath: profileImagePath,
-                    width: 40,
-                    height: 40,
-                    onImageLoaded: { _ in }
-                )
-                .clipShape(Circle())
-            } else {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 40, height: 40)
-                    .overlay(
-                        Image(systemName: "person.fill")
-                            .foregroundColor(.gray)
+            // 프로필 영역 (이미지 + 이름/시간)
+            HStack(spacing: 12) {
+                // 프로필 이미지
+                if let profileImagePath = store.post.creator?.profileImage {
+                    AsyncMediaImageView(
+                        imagePath: profileImagePath,
+                        width: 40,
+                        height: 40,
+                        onImageLoaded: { _ in }
                     )
-            }
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(store.post.creator?.nickname ?? "사용자")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-
-                if let createdAt = store.post.createdAt {
-                    Text(timeAgoString(from: createdAt))
-                        .font(.caption)
-                        .foregroundColor(.gray)
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.gray)
+                        )
                 }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.post.creator?.nickname ?? "사용자")
+                        .foregroundStyle(.black)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+
+                    if let createdAt = store.post.createdAt {
+                        Text(timeAgoString(from: createdAt))
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .buttonWrapper {
+                store.send(.profileTapped)
             }
 
             Spacer()
@@ -144,7 +151,7 @@ struct PostCellView: View {
             HStack(spacing: 4) {
                 AppIcon.comment
                     .font(.system(size: 20))
-                Text("\(store.post.commentCount ?? 0)")
+                Text("\(store.commentCount)")
                     .font(.caption)
             }
             .buttonWrapper {

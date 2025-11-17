@@ -30,6 +30,9 @@ struct PostFeature {
         @Presents var hashtagSearch: PostFeature.State? // 해시태그 검색 화면
         @Presents var postCreate: PostCreateFeature.State? // 게시글 작성/수정 화면
         @Presents var sharePost: SharePostFeature.State? // 게시글 공유 시트
+        @Presents var comment: CommentFeature.State? // 댓글 시트
+        @Presents var myProfile: MyProfileFeature.State? // 내 프로필
+        @Presents var otherProfile: OtherProfileFeature.State? // 다른 유저 프로필
 
         // 네비게이션 타이틀
         var navigationTitle: String {
@@ -56,6 +59,9 @@ struct PostFeature {
         case hashtagSearch(PresentationAction<PostFeature.Action>)
         case postCreate(PresentationAction<PostCreateFeature.Action>)
         case sharePost(PresentationAction<SharePostFeature.Action>)
+        case comment(PresentationAction<CommentFeature.Action>)
+        case myProfile(PresentationAction<MyProfileFeature.Action>)
+        case otherProfile(PresentationAction<OtherProfileFeature.Action>)
 
         static func == (lhs: Action, rhs: Action) -> Bool {
             switch (lhs, rhs) {
@@ -79,6 +85,12 @@ struct PostFeature {
             case let (.postCreate(lhs), .postCreate(rhs)):
                 return lhs == rhs
             case let (.sharePost(lhs), .sharePost(rhs)):
+                return lhs == rhs
+            case let (.comment(lhs), .comment(rhs)):
+                return lhs == rhs
+            case let (.myProfile(lhs), .myProfile(rhs)):
+                return lhs == rhs
+            case let (.otherProfile(lhs), .otherProfile(rhs)):
                 return lhs == rhs
             default:
                 return false
@@ -220,6 +232,23 @@ struct PostFeature {
 
             case .sharePost:
                 return .none
+
+            case let .comment(.presented(.delegate(.commentCountChanged(delta)))):
+                // 댓글이 작성/삭제되면 해당 게시글의 댓글 수 업데이트
+                guard let commentState = state.comment else { return .none }
+                let postId = commentState.postId
+
+                // 해당 게시글 셀의 commentCount 업데이트
+                return .send(.postCell(.element(id: postId, action: .updateCommentCount(delta))))
+
+            case .comment:
+                return .none
+
+            case .myProfile:
+                return .none
+
+            case .otherProfile:
+                return .none
             }
         }
         .forEach(\.postCells, action: \.postCell) {
@@ -234,6 +263,15 @@ struct PostFeature {
         .ifLet(\.$sharePost, action: \.sharePost) {
             SharePostFeature()
         }
+        .ifLet(\.$comment, action: \.comment) {
+            CommentFeature()
+        }
+        .ifLet(\.$myProfile, action: \.myProfile) {
+            MyProfileFeature()
+        }
+        .ifLet(\.$otherProfile, action: \.otherProfile) {
+            OtherProfileFeature()
+        }
     }
 
     // MARK: - Delegate Handler
@@ -245,7 +283,14 @@ struct PostFeature {
 
         case let .commentPost(postId):
             print("💬 댓글 탭: \(postId)")
-            // TODO: 댓글 화면으로 이동
+            // 해당 게시글 찾기
+            guard let post = state.postCells.first(where: { $0.post.id == postId })?.post else {
+                print("❌ 댓글을 표시할 게시글을 찾을 수 없음: \(postId)")
+                return .none
+            }
+            let creatorName = post.creator?.nickname ?? "작성자"
+            // Comment 시트 표시
+            state.comment = CommentFeature.State(postId: postId, postCreatorName: creatorName)
             return .none
 
         case let .sharePost(postId):
@@ -278,6 +323,16 @@ struct PostFeature {
         case let .hashtagTapped(hashtag):
             // 새로운 PostFeature.State로 해시태그 검색 화면 push
             state.hashtagSearch = PostFeature.State(searchHashtag: hashtag)
+            return .none
+
+        case .myProfileTapped:
+            // 내 프로필 화면으로 이동
+            state.myProfile = MyProfileFeature.State()
+            return .none
+
+        case let .otherProfileTapped(userId):
+            // 다른 유저 프로필 화면으로 이동
+            state.otherProfile = OtherProfileFeature.State(userId: userId)
             return .none
         }
     }

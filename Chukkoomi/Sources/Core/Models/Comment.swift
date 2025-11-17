@@ -7,7 +7,7 @@
 
 import Foundation
 
-struct Comment: Identifiable {
+struct Comment: Identifiable, Equatable {
     let id: String
     let content: String
     let createdAt: Date

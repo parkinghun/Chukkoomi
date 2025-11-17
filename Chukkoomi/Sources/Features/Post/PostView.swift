@@ -54,11 +54,30 @@ struct PostView: View {
         ) { store in
             PostCreateView(store: store)
         }
+        .navigationDestination(
+            store: store.scope(state: \.$myProfile, action: \.myProfile)
+        ) { store in
+            MyProfileView(store: store)
+        }
+        .navigationDestination(
+            store: store.scope(state: \.$otherProfile, action: \.otherProfile)
+        ) { store in
+            OtherProfileView(store: store)
+        }
         .sheet(
             store: store.scope(state: \.$sharePost, action: \.sharePost)
         ) { store in
             NavigationStack {
                 SharePostView(store: store)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
+        }
+        .sheet(
+            store: store.scope(state: \.$comment, action: \.comment)
+        ) { store in
+            NavigationStack {
+                CommentView(store: store)
             }
             .presentationDetents([.medium, .large])
             .presentationDragIndicator(.visible)

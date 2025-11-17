@@ -16,6 +16,7 @@ struct PostCellFeature {
         let post: Post
         var isLiked: Bool
         var likeCount: Int
+        var commentCount: Int
         var isBookmarked: Bool
         var isFollowing: Bool
 
@@ -42,6 +43,7 @@ struct PostCellFeature {
         init(post: Post) {
             self.post = post
             self.likeCount = post.likes?.count ?? 0
+            self.commentCount = post.commentCount ?? 0
 
             // 본인의 userId 가져오기
             let myUserId = UserDefaultsHelper.userId
@@ -76,6 +78,7 @@ struct PostCellFeature {
     enum Action: Equatable {
         // User Actions
         case postTapped
+        case profileTapped
         case likeTapped
         case commentTapped
         case shareTapped
@@ -83,6 +86,9 @@ struct PostCellFeature {
         case followTapped
         case menuTapped
         case hashtagTapped(String)
+
+        // Comment Count Update
+        case updateCommentCount(Int) // delta: +1 or -1
 
         // Menu Actions
         case menu(PresentationAction<Menu>)
@@ -114,11 +120,14 @@ struct PostCellFeature {
             case editPost(String)
             case postDeleted(String)
             case hashtagTapped(String)
+            case myProfileTapped
+            case otherProfileTapped(String) // userId
         }
 
         static func == (lhs: Action, rhs: Action) -> Bool {
             switch (lhs, rhs) {
             case (.postTapped, .postTapped),
+                 (.profileTapped, .profileTapped),
                  (.likeTapped, .likeTapped),
                  (.commentTapped, .commentTapped),
                  (.shareTapped, .shareTapped),
@@ -127,6 +136,8 @@ struct PostCellFeature {
                  (.menuTapped, .menuTapped):
                 return true
             case let (.hashtagTapped(lhs), .hashtagTapped(rhs)):
+                return lhs == rhs
+            case let (.updateCommentCount(lhs), .updateCommentCount(rhs)):
                 return lhs == rhs
             case let (.menu(lhs), .menu(rhs)):
                 return lhs == rhs
@@ -156,6 +167,16 @@ struct PostCellFeature {
             case .postTapped:
                 guard let postId = state.postId else { return .none }
                 return .send(.delegate(.postTapped(postId)))
+
+            case .profileTapped:
+                guard let userId = state.post.creator?.userId else { return .none }
+                let myUserId = UserDefaultsHelper.userId
+
+                if userId == myUserId {
+                    return .send(.delegate(.myProfileTapped))
+                } else {
+                    return .send(.delegate(.otherProfileTapped(userId)))
+                }
 
             case .likeTapped:
                 // 낙관적 UI 업데이트 (즉시 상태 변경)
@@ -189,6 +210,10 @@ struct PostCellFeature {
             case .commentTapped:
                 guard let postId = state.postId else { return .none }
                 return .send(.delegate(.commentPost(postId)))
+
+            case let .updateCommentCount(delta):
+                state.commentCount += delta
+                return .none
 
             case .shareTapped:
                 guard let postId = state.postId else { return .none }

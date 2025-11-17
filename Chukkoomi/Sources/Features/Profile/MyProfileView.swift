@@ -10,6 +10,7 @@ import ComposableArchitecture
 
 struct MyProfileView: View {
     let store: StoreOf<MyProfileFeature>
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         WithViewStore(store, observe: { $0 }) { viewStore in
@@ -38,19 +39,30 @@ struct MyProfileView: View {
             .navigationTitle("프로필")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button {
-                        viewStore.send(.settingsButtonTapped)
-                    } label: {
-                        AppIcon.ellipsis
+                if viewStore.isPresented {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            AppIcon.xmark
+                                .foregroundStyle(.black)
+                        }
                     }
-                }
+                } else {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            viewStore.send(.settingsButtonTapped)
+                        } label: {
+                            AppIcon.ellipsis
+                        }
+                    }
 
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button {
-                        viewStore.send(.searchButtonTapped)
-                    } label: {
-                        AppIcon.searchUser
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button {
+                            viewStore.send(.searchButtonTapped)
+                        } label: {
+                            AppIcon.searchUser
+                        }
                     }
                 }
             }
