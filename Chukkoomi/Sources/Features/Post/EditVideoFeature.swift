@@ -74,6 +74,7 @@ struct EditVideoFeature {
         case exportProgressUpdated(Double)
         case exportCompleted(URL)
         case exportFailed(String)
+        case playbackEnded
     }
 
     // MARK: - Body
@@ -97,7 +98,9 @@ struct EditVideoFeature {
                 return .none
 
             case .updateCurrentTime(let time):
-                state.currentTime = time
+                // duration을 넘지 않도록 클램프
+                let clamped = min(time, state.duration)
+                state.currentTime = clamped
                 return .none
 
             case .updateDuration(let duration):
@@ -212,7 +215,14 @@ struct EditVideoFeature {
                 state.exportProgress = 0.0
                 print("❌ 영상 내보내기 실패: \(error)")
                 return .none
+
+            case .playbackEnded:
+                // 재생이 종료되면 재생 상태를 끄고, 시간을 끝으로 고정
+                state.isPlaying = false
+                state.currentTime = state.duration
+                return .none
             }
         }
     }
 }
+

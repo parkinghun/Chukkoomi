@@ -30,7 +30,8 @@ struct EditVideoView: View {
                             onTimeUpdate: { time in viewStore.send(.updateCurrentTime(time)) },
                             onDurationUpdate: { duration in viewStore.send(.updateDuration(duration)) },
                             onSeekCompleted: { viewStore.send(.seekCompleted) },
-                            onFilterApplied: { viewStore.send(.filterApplied) }
+                            onFilterApplied: { viewStore.send(.filterApplied) },
+                            onPlaybackEnded: { viewStore.send(.playbackEnded) }
                         )
                     }
                     .overlay {
@@ -658,6 +659,7 @@ struct CustomVideoPlayerView: UIViewRepresentable {
     let onDurationUpdate: (Double) -> Void
     let onSeekCompleted: () -> Void
     let onFilterApplied: () -> Void
+    let onPlaybackEnded: () -> Void
 
     func makeUIView(context: Context) -> UIView {
         let view = UIView()
@@ -721,7 +723,8 @@ struct CustomVideoPlayerView: UIViewRepresentable {
     func makeCoordinator() -> Coordinator {
         Coordinator(
             onTimeUpdate: onTimeUpdate,
-            onDurationUpdate: onDurationUpdate
+            onDurationUpdate: onDurationUpdate,
+            onPlaybackEnded: onPlaybackEnded
         )
     }
 
@@ -729,18 +732,22 @@ struct CustomVideoPlayerView: UIViewRepresentable {
         var player: AVPlayer?
         var playerLayer: AVPlayerLayer?
         var timeObserver: Any?
+        var boundaryObserver: Any?
         var currentAVAsset: AVAsset?
         var lastAppliedFilter: VideoFilter?
         var currentPreProcessedURL: URL?  // 현재 로드된 전처리 비디오 URL
         let onTimeUpdate: (Double) -> Void
         let onDurationUpdate: (Double) -> Void
+        let onPlaybackEnded: () -> Void
 
         init(
             onTimeUpdate: @escaping (Double) -> Void,
-            onDurationUpdate: @escaping (Double) -> Void
+            onDurationUpdate: @escaping (Double) -> Void,
+            onPlaybackEnded: @escaping () -> Void
         ) {
             self.onTimeUpdate = onTimeUpdate
             self.onDurationUpdate = onDurationUpdate
+            self.onPlaybackEnded = onPlaybackEnded
         }
 
         func loadVideo(for asset: PHAsset, in view: UIView) {
@@ -772,6 +779,11 @@ struct CustomVideoPlayerView: UIViewRepresentable {
             // 기존 플레이어 정리
             if let timeObserver = timeObserver {
                 player?.removeTimeObserver(timeObserver)
+                self.timeObserver = nil
+            }
+            if let boundaryObserver = boundaryObserver {
+                player?.removeTimeObserver(boundaryObserver)
+                self.boundaryObserver = nil
             }
             player?.pause()
             playerLayer?.removeFromSuperlayer()
@@ -781,6 +793,7 @@ struct CustomVideoPlayerView: UIViewRepresentable {
             let playerItem = AVPlayerItem(asset: avAsset)
 
             player = AVPlayer(playerItem: playerItem)
+            player?.actionAtItemEnd = .pause
             playerLayer = AVPlayerLayer(player: player)
             playerLayer?.frame = view.bounds
             playerLayer?.videoGravity = .resizeAspect
@@ -789,13 +802,15 @@ struct CustomVideoPlayerView: UIViewRepresentable {
                 view.layer.addSublayer(playerLayer)
             }
 
-            // Duration 업데이트
+            // Duration 업데이트 및 경계 옵저버 등록
             Task { [weak self] in
+                guard let self else { return }
                 if let duration = try? await avAsset.load(.duration) {
                     let durationSeconds = duration.seconds
                     if durationSeconds.isFinite {
                         await MainActor.run {
-                            self?.onDurationUpdate(durationSeconds)
+                            self.onDurationUpdate(durationSeconds)
+                            self.installBoundaryObserver(at: duration)
                         }
                     }
                 }
@@ -804,10 +819,37 @@ struct CustomVideoPlayerView: UIViewRepresentable {
             // 시간 업데이트 observer 추가
             let interval = CMTime(seconds: 0.1, preferredTimescale: 600)
             timeObserver = player?.addPeriodicTimeObserver(forInterval: interval, queue: .main) { [weak self] time in
+                guard let self else { return }
                 let currentTime = time.seconds
+                // 방어적으로 NaN/Infinite 방지 및 duration 클램프
                 if currentTime.isFinite {
-                    self?.onTimeUpdate(currentTime)
+                    if let duration = self.player?.currentItem?.duration.seconds, duration.isFinite {
+                        self.onTimeUpdate(min(currentTime, duration))
+                    } else {
+                        self.onTimeUpdate(currentTime)
+                    }
                 }
+            }
+        }
+
+        private func installBoundaryObserver(at duration: CMTime) {
+            guard let player else { return }
+
+            // 끝 지점 바로 직전(약간 앞)에도 한 번, 끝 지점에도 한 번 경계 설정
+            // 끝 지점만 등록하면 일부 상황에서 정밀도 이슈로 콜백이 건너뛰는 것을 방지
+            let epsilon = CMTime(seconds: 0.01, preferredTimescale: duration.timescale)
+            let almostEnd = CMTimeSubtract(duration, epsilon)
+            let times: [NSValue] = [NSValue(time: almostEnd), NSValue(time: duration)]
+
+            boundaryObserver = player.addBoundaryTimeObserver(forTimes: times, queue: .main) { [weak self] in
+                guard let self else { return }
+                self.player?.pause()
+
+                // 시간을 끝으로 고정
+                if let end = self.player?.currentItem?.duration.seconds, end.isFinite {
+                    self.onTimeUpdate(end)
+                }
+                self.onPlaybackEnded()
             }
         }
 
@@ -880,7 +922,11 @@ struct CustomVideoPlayerView: UIViewRepresentable {
             if let timeObserver = timeObserver {
                 player?.removeTimeObserver(timeObserver)
             }
+            if let boundaryObserver = boundaryObserver {
+                player?.removeTimeObserver(boundaryObserver)
+            }
             player?.pause()
         }
     }
 }
+
