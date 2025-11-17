@@ -52,10 +52,11 @@ struct EditVideoView: View {
 
                 Spacer()
 
-                // 타임라인 트리머
-                VideoTimelineTrimmer(
+                // 가로 스크롤 가능한 타임라인 편집 영역
+                VideoTimelineEditor(
                     videoAsset: viewStore.videoAsset,
                     duration: viewStore.duration,
+                    currentTime: viewStore.currentTime,
                     trimStartTime: viewStore.editState.trimStartTime,
                     trimEndTime: viewStore.editState.trimEndTime,
                     onTrimStartChanged: { time in
@@ -65,10 +66,9 @@ struct EditVideoView: View {
                         viewStore.send(.updateTrimEndTime(time))
                     }
                 )
-                .frame(height: 60)
-                .padding(.horizontal, AppPadding.large)
+                .frame(height: 100)
 
-                // 필터 선택
+                // 필터 선택 (독립 영역)
                 FilterSelectionView(
                     selectedFilter: viewStore.editState.selectedFilter,
                     onFilterSelected: { filter in
@@ -216,6 +216,212 @@ private struct VideoControlsView: View {
         let minutes = Int(time) / 60
         let seconds = Int(time) % 60
         return String(format: "%d:%02d", minutes, seconds)
+    }
+}
+
+// MARK: - Video Timeline Editor (가로 스크롤 가능)
+private struct VideoTimelineEditor: UIViewRepresentable {
+    let videoAsset: PHAsset
+    let duration: Double
+    let currentTime: Double
+    let trimStartTime: Double
+    let trimEndTime: Double
+    let onTrimStartChanged: (Double) -> Void
+    let onTrimEndChanged: (Double) -> Void
+
+    // 타임라인 확대 배율 (화면 너비의 3배)
+    private let timelineScale: CGFloat = 3.0
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.backgroundColor = .clear
+        scrollView.delegate = context.coordinator
+
+        let containerView = UIView()
+        containerView.backgroundColor = .clear
+        scrollView.addSubview(containerView)
+        context.coordinator.containerView = containerView
+
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        guard let containerView = context.coordinator.containerView else { return }
+
+        let screenWidth = scrollView.bounds.width
+        let timelineWidth = screenWidth * timelineScale
+        let playheadPosition = duration > 0 ? (currentTime / duration) * timelineWidth : 0
+
+        // Container 크기 설정
+        containerView.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: scrollView.bounds.height)
+        scrollView.contentSize = CGSize(width: timelineWidth, height: scrollView.bounds.height)
+
+        // Timeline trimmer view 업데이트 (먼저)
+        if context.coordinator.timelineHostingController == nil {
+            let hostingController = UIHostingController(rootView:
+                AnyView(
+                    VideoTimelineTrimmer(
+                        videoAsset: videoAsset,
+                        duration: duration,
+                        trimStartTime: trimStartTime,
+                        trimEndTime: trimEndTime,
+                        onTrimStartChanged: onTrimStartChanged,
+                        onTrimEndChanged: onTrimEndChanged
+                    )
+                    .frame(width: timelineWidth, height: 60)
+                )
+            )
+            hostingController.view.backgroundColor = .clear
+            hostingController.view.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: 60)
+            containerView.addSubview(hostingController.view)
+            context.coordinator.timelineHostingController = hostingController
+            context.coordinator.timelineView = hostingController.view
+        } else {
+            // Timeline이 이미 존재하면 rootView 업데이트
+            context.coordinator.timelineHostingController?.rootView = AnyView(
+                VideoTimelineTrimmer(
+                    videoAsset: videoAsset,
+                    duration: duration,
+                    trimStartTime: trimStartTime,
+                    trimEndTime: trimEndTime,
+                    onTrimStartChanged: onTrimStartChanged,
+                    onTrimEndChanged: onTrimEndChanged
+                )
+                .frame(width: timelineWidth, height: 60)
+            )
+
+            // Frame 업데이트
+            context.coordinator.timelineView?.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: 60)
+        }
+
+        // Playhead view 업데이트 (나중에 - 항상 최상위에 표시)
+        if context.coordinator.playheadView == nil {
+            let playheadView = PlayheadUIView(frame: CGRect(x: 0, y: 0, width: 12, height: scrollView.bounds.height))
+            playheadView.layer.zPosition = 1000
+            containerView.addSubview(playheadView)
+            context.coordinator.playheadView = playheadView
+            playheadView.setNeedsDisplay()
+        }
+
+        if let playheadView = context.coordinator.playheadView {
+            let oldHeight = playheadView.frame.size.height
+            let newHeight = scrollView.bounds.height
+
+            // 높이가 변경되면 다시 그리기
+            if oldHeight != newHeight {
+                playheadView.frame.size.height = newHeight
+                playheadView.setNeedsDisplay()
+            }
+
+            // playhead를 항상 맨 앞으로
+            containerView.bringSubviewToFront(playheadView)
+            playheadView.layer.zPosition = 1000
+
+            UIView.animate(withDuration: 0.1, delay: 0, options: [.curveLinear], animations: {
+                playheadView.frame.origin.x = playheadPosition - 6
+            })
+        }
+
+        // 스크롤 자동 조정 (playhead가 화면 중앙에 오도록)
+        if !context.coordinator.isUserScrolling {
+            let targetOffsetX = playheadPosition - screenWidth / 2
+            let maxOffsetX = max(0, timelineWidth - screenWidth)
+            let clampedOffsetX = max(0, min(targetOffsetX, maxOffsetX))
+
+            UIView.animate(withDuration: 0.1, delay: 0, options: [.curveLinear], animations: {
+                scrollView.contentOffset.x = clampedOffsetX
+            })
+        }
+    }
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    class Coordinator: NSObject, UIScrollViewDelegate {
+        var containerView: UIView?
+        var playheadView: PlayheadUIView?
+        var timelineView: UIView?
+        var timelineHostingController: UIHostingController<AnyView>?
+        var isUserScrolling = false
+
+        func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+            isUserScrolling = true
+        }
+
+        func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+            if !decelerate {
+                isUserScrolling = false
+            }
+        }
+
+        func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
+            isUserScrolling = false
+        }
+    }
+}
+
+// MARK: - Playhead UIView (네이티브)
+private class PlayheadUIView: UIView {
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        self.isUserInteractionEnabled = false
+        self.isOpaque = false
+        self.backgroundColor = .clear
+        self.contentMode = .redraw
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+
+        // 검정색으로 설정
+        UIColor.black.setFill()
+
+        // 상단 삼각형 그리기 (▼)
+        let trianglePath = UIBezierPath()
+        trianglePath.move(to: CGPoint(x: rect.midX, y: 8))  // 아래 꼭지점
+        trianglePath.addLine(to: CGPoint(x: 0, y: 0))       // 왼쪽 위
+        trianglePath.addLine(to: CGPoint(x: rect.width, y: 0))  // 오른쪽 위
+        trianglePath.close()
+        trianglePath.fill()
+
+        // 세로선 그리기
+        let lineRect = CGRect(x: rect.midX - 1, y: 8, width: 2, height: rect.height - 8)
+        UIBezierPath(rect: lineRect).fill()
+    }
+}
+
+// MARK: - Playhead View (SwiftUI - 사용 안 함)
+private struct PlayheadView: View {
+    var body: some View {
+        VStack(spacing: 0) {
+            // 상단 삼각형 (재생 헤드)
+            Triangle()
+                .fill(Color.black)
+                .frame(width: 12, height: 8)
+
+            // 세로선
+            Rectangle()
+                .fill(Color.black)
+                .frame(width: 2)
+        }
+    }
+}
+
+// MARK: - Triangle Shape
+private struct Triangle: Shape {
+    func path(in rect: CGRect) -> Path {
+        var path = Path()
+        path.move(to: CGPoint(x: rect.midX, y: rect.maxY))
+        path.addLine(to: CGPoint(x: rect.minX, y: rect.minY))
+        path.addLine(to: CGPoint(x: rect.maxX, y: rect.minY))
+        path.closeSubpath()
+        return path
     }
 }
 
