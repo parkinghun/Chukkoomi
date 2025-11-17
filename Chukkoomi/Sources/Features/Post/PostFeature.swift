@@ -131,7 +131,7 @@ struct PostFeature {
                 return .none
 
             case let .postCell(.element(id, .delegate(delegateAction))):
-                return handleCellDelegate(id: id, action: delegateAction)
+                return handleCellDelegate(id: id, action: delegateAction, state: &state)
 
             case .postCell:
                 return .none
@@ -143,7 +143,7 @@ struct PostFeature {
     }
 
     // MARK: - Delegate Handler
-    private func handleCellDelegate(id: PostCellFeature.State.ID, action: PostCellFeature.Action.Delegate) -> Effect<Action> {
+    private func handleCellDelegate(id: PostCellFeature.State.ID, action: PostCellFeature.Action.Delegate, state: inout State) -> Effect<Action> {
         switch action {
         case let .postTapped(postId):
             print("📄 게시글 탭: \(postId)")
@@ -164,9 +164,10 @@ struct PostFeature {
             // TODO: 게시글 수정 화면으로 이동
             return .none
 
-        case let .deletePost(postId):
-            print("🗑️ 게시글 삭제: \(postId)")
-            // TODO: 게시글 삭제 API 호출
+        case let .postDeleted(postId):
+            print("🗑️ 게시글 삭제 완료: \(postId)")
+            // 배열에서 해당 게시글 제거
+            state.postCells.remove(id: id)
             return .none
         }
     }

@@ -81,8 +81,8 @@ struct MainTabFeature {
             case .home, .search, .postCreate, .chatList, .delegate:
                 return .none
 
-            case .post:
-                return .none
+//            case .post:
+//                return .none
 
             case .myProfile(.logoutCompleted):
                 return .send(.delegate(.logout))

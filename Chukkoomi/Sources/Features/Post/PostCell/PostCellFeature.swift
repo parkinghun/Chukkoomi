@@ -20,6 +20,7 @@ struct PostCellFeature {
         var isFollowing: Bool
 
         @Presents var menu: ConfirmationDialogState<Action.Menu>?
+        @Presents var deleteAlert: AlertState<Action.DeleteAlert>?
 
         var id: String {
             post.id
@@ -85,6 +86,10 @@ struct PostCellFeature {
         // Menu Actions
         case menu(PresentationAction<Menu>)
 
+        // Delete Alert Actions
+        case deleteAlert(PresentationAction<DeleteAlert>)
+        case deleteResponse(Result<Void, Error>)
+
         // Debounced Network Actions
         case debouncedToggleRequest(ToggleType)
         case toggleResponse(ToggleType, Result<PostLikeResponseDTO, Error>)
@@ -97,12 +102,16 @@ struct PostCellFeature {
             case deletePost
         }
 
+        enum DeleteAlert: Equatable {
+            case confirmDelete
+        }
+
         enum Delegate: Equatable {
             case postTapped(String)
             case commentPost(String)
             case sharePost(String)
             case editPost(String)
-            case deletePost(String)
+            case postDeleted(String)
         }
 
         static func == (lhs: Action, rhs: Action) -> Bool {
@@ -117,6 +126,10 @@ struct PostCellFeature {
                 return true
             case let (.menu(lhs), .menu(rhs)):
                 return lhs == rhs
+            case let (.deleteAlert(lhs), .deleteAlert(rhs)):
+                return lhs == rhs
+            case (.deleteResponse, .deleteResponse):
+                return true
             case let (.debouncedToggleRequest(lhs), .debouncedToggleRequest(rhs)):
                 return lhs == rhs
             case let (.toggleResponse(lhsType, _), .toggleResponse(rhsType, _)):
@@ -203,10 +216,49 @@ struct PostCellFeature {
                 return .send(.delegate(.editPost(postId)))
 
             case .menu(.presented(.deletePost)):
-                guard let postId = state.postId else { return .none }
-                return .send(.delegate(.deletePost(postId)))
+                // 삭제 확인 Alert 띄우기
+                state.deleteAlert = AlertState {
+                    TextState("게시글을 삭제하시겠어요?")
+                } actions: {
+                    ButtonState(role: .destructive, action: .confirmDelete) {
+                        TextState("삭제하기")
+                    }
+                    ButtonState(role: .cancel) {
+                        TextState("취소")
+                    }
+                } message: {
+                    TextState("삭제한 게시글을 복구할 수 없습니다.")
+                }
+                return .none
 
             case .menu:
+                return .none
+
+            case .deleteAlert(.presented(.confirmDelete)):
+                // 삭제 확인 -> API 호출
+                guard let postId = state.postId else { return .none }
+                return .run { send in
+                    do {
+                        try await PostService.shared.deletePost(postId: postId)
+                        await send(.deleteResponse(.success(())))
+                    } catch {
+                        await send(.deleteResponse(.failure(error)))
+                    }
+                }
+
+            case .deleteAlert:
+                return .none
+
+            case .deleteResponse(.success):
+                // 삭제 성공 -> 부모에게 알림
+                print("✅ 게시글 삭제 성공")
+                guard let postId = state.postId else { return .none }
+                return .send(.delegate(.postDeleted(postId)))
+
+            case let .deleteResponse(.failure(error)):
+                // 삭제 실패
+                print("❌ 게시글 삭제 실패: \(error)")
+                // TODO: 에러 토스트 표시
                 return .none
 
             case .delegate:
@@ -214,6 +266,7 @@ struct PostCellFeature {
             }
         }
         .ifLet(\.$menu, action: \.menu)
+        .ifLet(\.$deleteAlert, action: \.deleteAlert)
     }
 
     // MARK: - Private Helper Methods

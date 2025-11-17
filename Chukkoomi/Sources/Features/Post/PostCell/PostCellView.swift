@@ -26,6 +26,9 @@ struct PostCellView: View {
         .confirmationDialog(
             store: store.scope(state: \.$menu, action: \.menu)
         )
+        .alert(
+            store: store.scope(state: \.$deleteAlert, action: \.deleteAlert)
+        )
 //        .buttonWrapper {
 //            store.send(.postTapped)
 //        }
