@@ -52,21 +52,23 @@ struct EditVideoView: View {
 
                 Spacer()
 
-                // 가로 스크롤 가능한 타임라인 편집 영역
-                VideoTimelineEditor(
-                    videoAsset: viewStore.videoAsset,
-                    duration: viewStore.duration,
-                    currentTime: viewStore.currentTime,
-                    trimStartTime: viewStore.editState.trimStartTime,
-                    trimEndTime: viewStore.editState.trimEndTime,
-                    onTrimStartChanged: { time in
-                        viewStore.send(.updateTrimStartTime(time))
-                    },
-                    onTrimEndChanged: { time in
-                        viewStore.send(.updateTrimEndTime(time))
-                    }
-                )
-                .frame(height: 100)
+                // 시간 눈금자 + 가로 스크롤 가능한 타임라인 편집 영역
+                VStack(spacing: 0) {
+                    VideoTimelineEditor(
+                        videoAsset: viewStore.videoAsset,
+                        duration: viewStore.duration,
+                        currentTime: viewStore.currentTime,
+                        trimStartTime: viewStore.editState.trimStartTime,
+                        trimEndTime: viewStore.editState.trimEndTime,
+                        onTrimStartChanged: { time in
+                            viewStore.send(.updateTrimStartTime(time))
+                        },
+                        onTrimEndChanged: { time in
+                            viewStore.send(.updateTrimEndTime(time))
+                        }
+                    )
+                    .frame(height: 120)
+                }
 
                 // 필터 선택 (독립 영역)
                 FilterSelectionView(
@@ -229,8 +231,8 @@ private struct VideoTimelineEditor: UIViewRepresentable {
     let onTrimStartChanged: (Double) -> Void
     let onTrimEndChanged: (Double) -> Void
 
-    // 타임라인 확대 배율 (화면 너비의 3배)
-    private let timelineScale: CGFloat = 3.0
+    // 1초당 픽셀 수
+    private let pixelsPerSecond: CGFloat = 100
 
     func makeUIView(context: Context) -> UIScrollView {
         let scrollView = UIScrollView()
@@ -250,14 +252,33 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         guard let containerView = context.coordinator.containerView else { return }
 
         let screenWidth = scrollView.bounds.width
-        let timelineWidth = screenWidth * timelineScale
+        let timelineWidth = CGFloat(duration) * pixelsPerSecond
         let playheadPosition = duration > 0 ? (currentTime / duration) * timelineWidth : 0
 
         // Container 크기 설정
-        containerView.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: scrollView.bounds.height)
-        scrollView.contentSize = CGSize(width: timelineWidth, height: scrollView.bounds.height)
+        let totalHeight = scrollView.bounds.height
+        let rulerHeight: CGFloat = 20
+        let timelineHeight = totalHeight - rulerHeight
 
-        // Timeline trimmer view 업데이트 (먼저)
+        containerView.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: totalHeight)
+        scrollView.contentSize = CGSize(width: timelineWidth, height: totalHeight)
+
+        // 시간 눈금자 view 업데이트
+        if context.coordinator.rulerView == nil {
+            let rulerView = TimeRulerView(frame: CGRect(x: 0, y: 0, width: timelineWidth, height: rulerHeight))
+            rulerView.duration = duration
+            rulerView.pixelsPerSecond = pixelsPerSecond
+            rulerView.backgroundColor = .clear
+            containerView.addSubview(rulerView)
+            context.coordinator.rulerView = rulerView
+        } else {
+            context.coordinator.rulerView?.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: rulerHeight)
+            context.coordinator.rulerView?.duration = duration
+            context.coordinator.rulerView?.pixelsPerSecond = pixelsPerSecond
+            context.coordinator.rulerView?.setNeedsDisplay()
+        }
+
+        // Timeline trimmer view 업데이트
         if context.coordinator.timelineHostingController == nil {
             let hostingController = UIHostingController(rootView:
                 AnyView(
@@ -269,11 +290,11 @@ private struct VideoTimelineEditor: UIViewRepresentable {
                         onTrimStartChanged: onTrimStartChanged,
                         onTrimEndChanged: onTrimEndChanged
                     )
-                    .frame(width: timelineWidth, height: 60)
+                    .frame(width: timelineWidth, height: timelineHeight)
                 )
             )
             hostingController.view.backgroundColor = .clear
-            hostingController.view.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: 60)
+            hostingController.view.frame = CGRect(x: 0, y: rulerHeight, width: timelineWidth, height: timelineHeight)
             containerView.addSubview(hostingController.view)
             context.coordinator.timelineHostingController = hostingController
             context.coordinator.timelineView = hostingController.view
@@ -288,16 +309,16 @@ private struct VideoTimelineEditor: UIViewRepresentable {
                     onTrimStartChanged: onTrimStartChanged,
                     onTrimEndChanged: onTrimEndChanged
                 )
-                .frame(width: timelineWidth, height: 60)
+                .frame(width: timelineWidth, height: timelineHeight)
             )
 
             // Frame 업데이트
-            context.coordinator.timelineView?.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: 60)
+            context.coordinator.timelineView?.frame = CGRect(x: 0, y: rulerHeight, width: timelineWidth, height: timelineHeight)
         }
 
         // Playhead view 업데이트 (나중에 - 항상 최상위에 표시)
         if context.coordinator.playheadView == nil {
-            let playheadView = PlayheadUIView(frame: CGRect(x: 0, y: 0, width: 12, height: scrollView.bounds.height))
+            let playheadView = PlayheadUIView(frame: CGRect(x: 0, y: rulerHeight, width: 12, height: timelineHeight))
             playheadView.layer.zPosition = 1000
             containerView.addSubview(playheadView)
             context.coordinator.playheadView = playheadView
@@ -306,7 +327,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
 
         if let playheadView = context.coordinator.playheadView {
             let oldHeight = playheadView.frame.size.height
-            let newHeight = scrollView.bounds.height
+            let newHeight = timelineHeight
 
             // 높이가 변경되면 다시 그리기
             if oldHeight != newHeight {
@@ -320,6 +341,34 @@ private struct VideoTimelineEditor: UIViewRepresentable {
 
             UIView.animate(withDuration: 0.1, delay: 0, options: [.curveLinear], animations: {
                 playheadView.frame.origin.x = playheadPosition - 6
+            })
+        }
+
+        // 현재 시간 텍스트 라벨 업데이트
+        if context.coordinator.timeLabel == nil {
+            let timeLabel = UILabel()
+            timeLabel.font = UIFont.systemFont(ofSize: 11, weight: .medium)
+            timeLabel.textColor = .white
+            timeLabel.backgroundColor = UIColor.black.withAlphaComponent(0.7)
+            timeLabel.textAlignment = .center
+            timeLabel.layer.cornerRadius = 4
+            timeLabel.layer.masksToBounds = true
+            timeLabel.layer.zPosition = 1001
+            containerView.addSubview(timeLabel)
+            context.coordinator.timeLabel = timeLabel
+        }
+
+        if let timeLabel = context.coordinator.timeLabel {
+            let timeText = formatTimeInSeconds(currentTime)
+            timeLabel.text = timeText
+            timeLabel.sizeToFit()
+            timeLabel.frame.size.width += 12  // 좌우 패딩
+            timeLabel.frame.size.height = 20
+
+            containerView.bringSubviewToFront(timeLabel)
+
+            UIView.animate(withDuration: 0.1, delay: 0, options: [.curveLinear], animations: {
+                timeLabel.center = CGPoint(x: playheadPosition, y: 10)
             })
         }
 
@@ -339,11 +388,18 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         Coordinator()
     }
 
+    private func formatTimeInSeconds(_ time: Double) -> String {
+        let seconds = Int(time)
+        return "\(seconds)s"
+    }
+
     class Coordinator: NSObject, UIScrollViewDelegate {
         var containerView: UIView?
         var playheadView: PlayheadUIView?
         var timelineView: UIView?
         var timelineHostingController: UIHostingController<AnyView>?
+        var rulerView: TimeRulerView?
+        var timeLabel: UILabel?
         var isUserScrolling = false
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
@@ -358,6 +414,54 @@ private struct VideoTimelineEditor: UIViewRepresentable {
 
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             isUserScrolling = false
+        }
+    }
+}
+
+// MARK: - Time Ruler View (시간 눈금자)
+private class TimeRulerView: UIView {
+    var duration: Double = 0
+    var pixelsPerSecond: CGFloat = 100
+
+    override func draw(_ rect: CGRect) {
+        guard let context = UIGraphicsGetCurrentContext() else { return }
+
+        // 배경
+        UIColor.systemGray6.setFill()
+        context.fill(rect)
+
+        // 텍스트 속성
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.alignment = .center
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: UIFont.systemFont(ofSize: 10),
+            .foregroundColor: UIColor.label,
+            .paragraphStyle: paragraphStyle
+        ]
+
+        // 1초 간격으로 눈금 그리기
+        let totalSeconds = Int(ceil(duration))
+        for second in 0...totalSeconds {
+            let xPosition = CGFloat(second) * pixelsPerSecond
+
+            // 세로선 그리기
+            UIColor.separator.setStroke()
+            let linePath = UIBezierPath()
+            linePath.move(to: CGPoint(x: xPosition, y: rect.height - 5))
+            linePath.addLine(to: CGPoint(x: xPosition, y: rect.height))
+            linePath.lineWidth = 1
+            linePath.stroke()
+
+            // 시간 텍스트 그리기
+            let timeText = "\(second)s"
+            let textSize = (timeText as NSString).size(withAttributes: attributes)
+            let textRect = CGRect(
+                x: xPosition - textSize.width / 2,
+                y: 2,
+                width: textSize.width,
+                height: textSize.height
+            )
+            (timeText as NSString).draw(in: textRect, withAttributes: attributes)
         }
     }
 }
