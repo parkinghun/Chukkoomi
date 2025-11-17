@@ -20,6 +20,7 @@ enum AppIcon {
     static let xmark = Image(systemName: "xmark")
     static let videoCircle = Image(systemName: "video.circle")
     static let ellipsis = Image(systemName: "ellipsis")
+    static let checkmark = Image(systemName: "checkmark")
 
     // Video
     static let pause = Image(systemName: "pause.fill")

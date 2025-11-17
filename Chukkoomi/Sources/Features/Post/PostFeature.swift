@@ -29,6 +29,7 @@ struct PostFeature {
 
         @Presents var hashtagSearch: PostFeature.State? // 해시태그 검색 화면
         @Presents var postCreate: PostCreateFeature.State? // 게시글 작성/수정 화면
+        @Presents var sharePost: SharePostFeature.State? // 게시글 공유 시트
 
         // 네비게이션 타이틀
         var navigationTitle: String {
@@ -54,6 +55,7 @@ struct PostFeature {
         case postCell(IdentifiedActionOf<PostCellFeature>)
         case hashtagSearch(PresentationAction<PostFeature.Action>)
         case postCreate(PresentationAction<PostCreateFeature.Action>)
+        case sharePost(PresentationAction<SharePostFeature.Action>)
 
         static func == (lhs: Action, rhs: Action) -> Bool {
             switch (lhs, rhs) {
@@ -75,6 +77,8 @@ struct PostFeature {
             case let (.hashtagSearch(lhs), .hashtagSearch(rhs)):
                 return lhs == rhs
             case let (.postCreate(lhs), .postCreate(rhs)):
+                return lhs == rhs
+            case let (.sharePost(lhs), .sharePost(rhs)):
                 return lhs == rhs
             default:
                 return false
@@ -200,6 +204,22 @@ struct PostFeature {
 
             case .postCreate:
                 return .none
+
+            case let .sharePost(.presented(.delegate(delegateAction))):
+                // SharePost에서의 delegate 액션 처리
+                switch delegateAction {
+                case .dismiss:
+                    state.sharePost = nil
+                    return .none
+                case .postShared:
+                    print("✅ 게시글 공유 완료")
+                    state.sharePost = nil
+                    // TODO: 공유 성공 토스트 표시
+                    return .none
+                }
+
+            case .sharePost:
+                return .none
             }
         }
         .forEach(\.postCells, action: \.postCell) {
@@ -210,6 +230,9 @@ struct PostFeature {
         }
         .ifLet(\.$postCreate, action: \.postCreate) {
             PostCreateFeature()
+        }
+        .ifLet(\.$sharePost, action: \.sharePost) {
+            SharePostFeature()
         }
     }
 
@@ -227,7 +250,13 @@ struct PostFeature {
 
         case let .sharePost(postId):
             print("📤 공유 탭: \(postId)")
-            // TODO: 공유 시트 표시
+            // 해당 게시글 찾기
+            guard let post = state.postCells.first(where: { $0.post.id == postId })?.post else {
+                print("❌ 공유할 게시글을 찾을 수 없음: \(postId)")
+                return .none
+            }
+            // SharePost 시트 표시
+            state.sharePost = SharePostFeature.State(post: post)
             return .none
 
         case let .editPost(postId):
