@@ -58,7 +58,7 @@ struct OtherProfileFeature {
         case profileLoaded(Profile)
         case postImagesLoaded([PostImage])
         case followToggled(Bool)
-        case chatRoomCreated(ChatRoom)
+        case chatRoomChecked(ChatRoom?)
 
         // 게시물 fetch
         case fetchPosts(postIds: [String])
@@ -110,18 +110,37 @@ struct OtherProfileFeature {
             }
 
         case .messageButtonTapped:
-            // 채팅방 생성
-            return .run { [userId = state.userId] send in
+            // 기존 채팅방이 있는지 확인하기 위해 채팅방 리스트 조회
+            guard let profile = state.profile else { return .none }
+
+            return .run { [userId = profile.userId, myUserId = state.myUser?.userId] send in
                 do {
                     let response = try await NetworkManager.shared.performRequest(
-                        ChatRouter.createChatRoom(opponentId: userId),
-                        as: ChatRoomResponseDTO.self
+                        ChatRouter.getChatRoomList,
+                        as: ChatRoomListResponseDTO.self
                     )
-                    let chatRoom = response.toDomain
-                    await send(.chatRoomCreated(chatRoom))
+                    let chatRooms = response.data.map { $0.toDomain }
+
+                    // 해당 사용자와의 기존 채팅방 찾기
+                    let existingChatRoom = chatRooms.first { chatRoom in
+                        // 1:1 채팅방만 확인
+                        guard chatRoom.participants.count == 2 else { return false }
+
+                        // 자신과의 채팅방인 경우
+                        if userId == myUserId {
+                            // 모든 participants가 자신인 채팅방
+                            return chatRoom.participants.allSatisfy { $0.userId == myUserId }
+                        }
+
+                        // 다른 사람과의 채팅방: participants에 상대방과 자신이 모두 포함
+                        return chatRoom.participants.contains { $0.userId == userId } &&
+                               chatRoom.participants.contains { $0.userId == myUserId }
+                    }
+
+                    await send(.chatRoomChecked(existingChatRoom))
                 } catch {
-                    print("채팅방 생성 실패: \(error)")
-                    // TODO: 채팅방 화면 구현되면 네비게이션으로 변경
+                    // 에러 발생 시에도 채팅방 없는 것으로 처리
+                    await send(.chatRoomChecked(nil))
                 }
             }
 
@@ -188,10 +207,21 @@ struct OtherProfileFeature {
 
             return .none
 
-        case .chatRoomCreated(let chatRoom):
-            // 채팅방 생성 성공 -> 채팅 화면으로 이동
-            print("채팅방 생성 성공: \(chatRoom.roomId)")
-            state.chat = ChatFeature.State(chatRoom: chatRoom, myUserId: state.myUser?.userId)
+        case .chatRoomChecked(let existingChatRoom):
+            // 채팅 화면으로 이동 (기존 채팅방이 있으면 사용, 없으면 첫 메시지 전송 시 생성)
+            guard let profile = state.profile else { return .none }
+
+            let opponent = ChatUser(
+                userId: profile.userId,
+                nick: profile.nickname,
+                profileImage: profile.profileImage
+            )
+
+            state.chat = ChatFeature.State(
+                chatRoom: existingChatRoom,
+                opponent: opponent,
+                myUserId: state.myUser?.userId
+            )
             return .none
 
         case .fetchPosts(let postIds):

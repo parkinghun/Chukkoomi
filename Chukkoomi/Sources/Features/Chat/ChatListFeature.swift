@@ -98,11 +98,20 @@ struct ChatListFeature: Reducer {
                 }
 
                 // myUserId가 로드되지 않았으면 기다림
-                guard state.myUserId != nil else {
+                guard let myUserId = state.myUserId else {
                     return .none
                 }
 
-                state.chat = ChatFeature.State(chatRoom: chatRoom, myUserId: state.myUserId)
+                // 상대방 정보 추출
+                let opponent: ChatUser
+                if let opponentUser = chatRoom.participants.first(where: { $0.userId != myUserId }) {
+                    opponent = opponentUser
+                } else {
+                    // 나 자신과의 채팅방이거나 상대방을 찾을 수 없는 경우 첫 번째 participant 사용
+                    opponent = chatRoom.participants.first ?? ChatUser(userId: "", nick: "Unknown", profileImage: nil)
+                }
+
+                state.chat = ChatFeature.State(chatRoom: chatRoom, opponent: opponent, myUserId: myUserId)
                 return .none
 
             case .chat(.dismiss):
@@ -114,7 +123,7 @@ struct ChatListFeature: Reducer {
                 return .none
 
             case .userSearchButtonTapped:
-                state.userSearch = UserSearchFeature.State()
+                state.userSearch = UserSearchFeature.State(excludeMyself: false)
                 return .none
 
             case .userSearch:

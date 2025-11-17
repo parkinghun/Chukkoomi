@@ -17,6 +17,7 @@ struct UserSearchFeature {
         var searchResults: [SearchResult] = []
         var isLoading: Bool = false
         var isSearching: Bool = false
+        var excludeMyself: Bool = true  // 기본값: 자신 제외 (프로필용)
 
         @PresentationState var otherProfile: OtherProfileFeature.State?
     }
@@ -54,16 +55,20 @@ struct UserSearchFeature {
                 state.isLoading = true
                 state.isSearching = true
 
-                return .run { [searchText = state.searchText] send in
+                return .run { [searchText = state.searchText, excludeMyself = state.excludeMyself] send in
                     do {
                         let myId = UserDefaultsHelper.userId
 
                         // 닉네임으로 유저 검색 API 호출
-                        let users = try await NetworkManager.shared.performRequest(
+                        var users = try await NetworkManager.shared.performRequest(
                             UserRouter.search(nickname: searchText),
                             as: UserListDTO.self
                         ).toDomain
-                            .filter { $0.userId != myId }
+
+                        // excludeMyself가 true면 자신을 제외
+                        if excludeMyself, let myId = myId {
+                            users = users.filter { $0.userId != myId }
+                        }
 
                         // User를 SearchResult로 변환
                         let searchResults = users.map { user in
