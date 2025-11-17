@@ -14,21 +14,30 @@ struct SharePostView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 검색 바
-            SearchBar(
-                text: Binding(
-                    get: { store.searchText },
-                    set: { store.send(.searchTextChanged($0)) }
-                ),
-                isFocused: $isSearchFocused,
-                placeholder: "검색",
-                onSubmit: {
-                    store.send(.searchSubmitted)
-                },
-                onClear: {
-                    store.send(.searchCleared)
+            // 검색 바 (터치 시 UserSearchView로 이동)
+            Button {
+                store.send(.searchBarTapped)
+            } label: {
+                HStack(spacing: AppPadding.small) {
+                    AppIcon.search
+                        .foregroundStyle(AppColor.textSecondary)
+
+                    Text("검색")
+                        .foregroundStyle(AppColor.textSecondary)
+                        .font(.appBody)
+
+                    Spacer()
                 }
-            )
+                .padding(.horizontal, AppPadding.medium)
+                .padding(.vertical, AppPadding.small)
+                .background(Color.white)
+                .clipShape(Capsule())
+                .overlay(
+                    Capsule()
+                        .stroke(AppColor.divider, lineWidth: 1)
+                )
+                .frame(height: 40)
+            }
             .padding(.horizontal, 16)
             .padding(.vertical, 16)
 
@@ -48,6 +57,13 @@ struct SharePostView: View {
         .onAppear {
             store.send(.onAppear)
         }
+        .fullScreenCover(
+            store: store.scope(state: \.$userSearch, action: \.userSearch)
+        ) { store in
+            NavigationStack {
+                UserSearchView(store: store)
+            }
+        }
     }
 
     // MARK: - User List Section
@@ -62,7 +78,7 @@ struct SharePostView: View {
 
         return ScrollView {
             LazyVGrid(columns: columns, spacing: 16) {
-                ForEach(store.filteredUsers, id: \.userId) { user in
+                ForEach(store.availableUsers, id: \.userId) { user in
                     userCell(user: user)
                 }
             }
@@ -72,7 +88,7 @@ struct SharePostView: View {
 
     // MARK: - User Cell
     private func userCell(user: User) -> some View {
-        let isSelected = store.selectedUsers.contains(user.userId)
+        let isSelected = store.selectedUserId == user.userId
 
         return VStack(spacing: 8) {
             ZStack {
@@ -80,18 +96,19 @@ struct SharePostView: View {
                 if let profileImage = user.profileImage {
                     AsyncMediaImageView(
                         imagePath: profileImage,
-                        width: 70,
-                        height: 70
+                        width: 50,
+                        height: 50
                     )
                     .clipShape(Circle())
                 } else {
                     Circle()
                         .fill(Color.gray.opacity(0.3))
-                        .frame(width: 70, height: 70)
-                        .overlay(
-                            Image(systemName: "person.fill")
-                                .foregroundColor(.gray)
-                        )
+                        .frame(width: 50, height: 50)
+                        .overlay {
+                            AppIcon.personFill
+                                .foregroundStyle(.gray)
+                                .font(.system(size: 24))
+                        }
                 }
 
                 // 선택 표시
@@ -104,10 +121,10 @@ struct SharePostView: View {
                                 .font(.system(size: 10, weight: .bold))
                                 .foregroundColor(.white)
                         )
-                        .offset(x: 25, y: 25)
+                        .offset(x: 20, y: 20)
                 }
             }
-            .frame(width: 70, height: 70)
+            .frame(width: 50, height: 50)
 
             Text(user.nickname)
                 .font(.appCaption)

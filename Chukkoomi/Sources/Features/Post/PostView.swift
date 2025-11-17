@@ -57,9 +57,11 @@ struct PostView: View {
         .sheet(
             store: store.scope(state: \.$sharePost, action: \.sharePost)
         ) { store in
-            SharePostView(store: store)
-                .presentationDetents([.medium, .large])
-                .presentationDragIndicator(.visible)
+            NavigationStack {
+                SharePostView(store: store)
+            }
+            .presentationDetents([.medium, .large])
+            .presentationDragIndicator(.visible)
         }
         .onAppear {
             store.send(.onAppear)
