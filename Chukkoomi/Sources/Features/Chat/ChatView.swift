@@ -324,7 +324,7 @@ struct MessageRow: View {
             if let content = message.content, !content.isEmpty {
                 Text(content)
                     .font(.system(size: 15))
-                    .foregroundColor(isMyMessage ? .white : .primary)
+                    .foregroundColor(isMyMessage ? .black : .primary)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(isMyMessage ? AppColor.disabled : Color.gray.opacity(0.2))
