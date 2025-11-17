@@ -45,11 +45,16 @@ struct MainTabView: View {
                 .tag(MainTabFeature.State.Tab.search)
 
                 // Post Tab
-                ContentView()
-                    .tabItem {
-                        tabIcon(for: .post)
-                    }
-                    .tag(MainTabFeature.State.Tab.post)
+                EmptyForVideoView(
+                    store: store.scope(
+                        state: \.post,
+                        action: \.post
+                    )
+                )
+                .tabItem {
+                    tabIcon(for: .post)
+                }
+                .tag(MainTabFeature.State.Tab.post)
 
                 // Chat Tab
                 NavigationStack {

@@ -16,6 +16,7 @@ struct MainTabFeature {
         var selectedTab: Tab = .home
         var home = HomeFeature.State()
         var search = SearchFeature.State()
+        var post = EmptyForVideoFeature.State()
         var myProfile = MyProfileFeature.State()
         var chatList = ChatListFeature.State()
         
@@ -33,6 +34,7 @@ struct MainTabFeature {
         case tabSelected(State.Tab)
         case home(HomeFeature.Action)
         case search(SearchFeature.Action)
+        case post(EmptyForVideoFeature.Action)
         case myProfile(MyProfileFeature.Action)
         case chatList(ChatListFeature.Action)
         case delegate(Delegate)
@@ -51,7 +53,11 @@ struct MainTabFeature {
         Scope(state: \.search, action: \.search) {
             SearchFeature()
         }
-        
+
+        Scope(state: \.post, action: \.post) {
+            EmptyForVideoFeature()
+        }
+
         Scope(state: \.myProfile, action: \.myProfile) {
             MyProfileFeature()
         }
@@ -70,6 +76,9 @@ struct MainTabFeature {
                 return .none
                 
             case .search:
+                return .none
+
+            case .post:
                 return .none
 
             case .myProfile(.logoutCompleted):

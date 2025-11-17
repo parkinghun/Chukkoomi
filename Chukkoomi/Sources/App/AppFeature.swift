@@ -87,6 +87,21 @@ struct AppFeature {
                 return .none
 
             case .logout:
+                // 아직 state를 변경하지 않음 - child reducer가 먼저 처리하도록
+                return .none
+            }
+        }
+        .ifLet(\.loginState, action: \.login) {
+            LoginFeature()
+        }
+        .ifLet(\.mainTabState, action: \.mainTab) {
+            MainTabFeature()
+        }
+
+        // child reducer 이후에 실행되는 parent reducer
+        Reduce { state, action in
+            switch action {
+            case .logout:
                 // 로그아웃 - LoginView로 전환
                 state.isLoggedIn = false
                 state.loginState = LoginFeature.State()
@@ -99,13 +114,10 @@ struct AppFeature {
                 UserDefaultsHelper.userId = nil
 
                 return .none
+
+            default:
+                return .none
             }
-        }
-        .ifLet(\.loginState, action: \.login) {
-            LoginFeature()
-        }
-        .ifLet(\.mainTabState, action: \.mainTab) {
-            MainTabFeature()
         }
     }
 
