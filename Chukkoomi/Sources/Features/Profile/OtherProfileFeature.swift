@@ -58,6 +58,7 @@ struct OtherProfileFeature {
         case profileLoaded(Profile)
         case postImagesLoaded([PostImage])
         case followToggled(Bool)
+        case chatRoomChecked(ChatRoom?)
 
         // 게시물 fetch
         case fetchPosts(postIds: [String])
@@ -109,21 +110,28 @@ struct OtherProfileFeature {
             }
 
         case .messageButtonTapped:
-            // 채팅 화면으로 이동 (채팅방은 첫 메시지 전송 시 생성)
+            // 기존 채팅방이 있는지 확인하기 위해 채팅방 리스트 조회
             guard let profile = state.profile else { return .none }
 
-            let opponent = ChatUser(
-                userId: profile.userId,
-                nick: profile.nickname,
-                profileImage: profile.profileImage
-            )
+            return .run { [userId = profile.userId] send in
+                do {
+                    let response = try await NetworkManager.shared.performRequest(
+                        ChatRouter.getChatRoomList,
+                        as: ChatRoomListResponseDTO.self
+                    )
+                    let chatRooms = response.data.map { $0.toDomain }
 
-            state.chat = ChatFeature.State(
-                chatRoom: nil,
-                opponent: opponent,
-                myUserId: state.myUser?.userId
-            )
-            return .none
+                    // 해당 사용자와의 기존 채팅방 찾기
+                    let existingChatRoom = chatRooms.first { chatRoom in
+                        chatRoom.participants.contains { $0.userId == userId }
+                    }
+
+                    await send(.chatRoomChecked(existingChatRoom))
+                } catch {
+                    // 에러 발생 시에도 채팅방 없는 것으로 처리
+                    await send(.chatRoomChecked(nil))
+                }
+            }
 
         case .followerButtonTapped:
             guard let profile = state.profile else { return .none }
@@ -186,6 +194,23 @@ struct OtherProfileFeature {
                 state.profile = profile
             }
 
+            return .none
+
+        case .chatRoomChecked(let existingChatRoom):
+            // 채팅 화면으로 이동 (기존 채팅방이 있으면 사용, 없으면 첫 메시지 전송 시 생성)
+            guard let profile = state.profile else { return .none }
+
+            let opponent = ChatUser(
+                userId: profile.userId,
+                nick: profile.nickname,
+                profileImage: profile.profileImage
+            )
+
+            state.chat = ChatFeature.State(
+                chatRoom: existingChatRoom,
+                opponent: opponent,
+                myUserId: state.myUser?.userId
+            )
             return .none
 
         case .fetchPosts(let postIds):
