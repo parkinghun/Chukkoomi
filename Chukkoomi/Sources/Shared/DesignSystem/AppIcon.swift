@@ -22,10 +22,8 @@ enum AppIcon {
     static let ellipsis = Image(systemName: "ellipsis")
 
     // Video
-    static let pause = Image(systemName: "pause.fill")
-    static let play = Image(systemName: "play.fill")
-    static let backward = Image(systemName: "backward.end.fill")
-    static let forward = Image(systemName: "forward.end.fill")
+    static let pause = Image(systemName: "pause.circle")
+    static let play = Image(systemName: "play.circle")
     
     // Tab Bar Icons
     static let home = Image(systemName: "house.fill")

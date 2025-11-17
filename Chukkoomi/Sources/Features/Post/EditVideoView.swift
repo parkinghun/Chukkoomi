@@ -40,35 +40,36 @@ struct EditVideoView: View {
                         }
                     }
 
-                // 컨트롤 UI
-                VideoControlsView(
-                    currentTime: viewStore.currentTime,
-                    duration: viewStore.duration,
-                    isPlaying: viewStore.isPlaying,
-                    onSeekBackward: { viewStore.send(.seekBackward) },
-                    onPlayPause: { viewStore.send(.playPauseButtonTapped) },
-                    onSeekForward: { viewStore.send(.seekForward) }
-                )
-                .padding(.top, AppPadding.medium)
-                .padding(.horizontal, AppPadding.large)
+                // 재생 버튼과 타임라인 편집 영역
+                HStack(alignment: .top, spacing: AppPadding.large) {
+                    // 재생 버튼
+                    VideoControlsView(
+                        isPlaying: viewStore.isPlaying,
+                        onPlayPause: { viewStore.send(.playPauseButtonTapped) }
+                    )
+                    .frame(width: 32, height: 32)
+                    .padding(.leading, AppPadding.large)
+
+                    // 시간 눈금자 + 가로 스크롤 가능한 타임라인 편집 영역
+                    VideoTimelineEditor(
+                        videoAsset: viewStore.videoAsset,
+                        duration: viewStore.duration,
+                        currentTime: viewStore.currentTime,
+                        trimStartTime: viewStore.editState.trimStartTime,
+                        trimEndTime: viewStore.editState.trimEndTime,
+                        onTrimStartChanged: { time in
+                            viewStore.send(.updateTrimStartTime(time))
+                        },
+                        onTrimEndChanged: { time in
+                            viewStore.send(.updateTrimEndTime(time))
+                        }
+                    )
+                    .frame(height: 120)
+                    .offset(y: 6)
+                }
+                .padding(.top, AppPadding.large)
 
                 Spacer()
-
-                // 시간 눈금자 + 가로 스크롤 가능한 타임라인 편집 영역
-                VideoTimelineEditor(
-                    videoAsset: viewStore.videoAsset,
-                    duration: viewStore.duration,
-                    currentTime: viewStore.currentTime,
-                    trimStartTime: viewStore.editState.trimStartTime,
-                    trimEndTime: viewStore.editState.trimEndTime,
-                    onTrimStartChanged: { time in
-                        viewStore.send(.updateTrimStartTime(time))
-                    },
-                    onTrimEndChanged: { time in
-                        viewStore.send(.updateTrimEndTime(time))
-                    }
-                )
-                .frame(height: 120)
                 
 
                 // 필터 선택
@@ -160,65 +161,24 @@ private struct ExportingOverlayView: View {
 
 // MARK: - Video Controls View
 private struct VideoControlsView: View {
-    let currentTime: Double
-    let duration: Double
     let isPlaying: Bool
-    let onSeekBackward: () -> Void
     let onPlayPause: () -> Void
-    let onSeekForward: () -> Void
 
     var body: some View {
-        ZStack {
-            // 현재 시간 / 전체 시간 (왼쪽)
-            HStack {
-                Text("\(formatTime(currentTime)) / \(formatTime(duration))")
-                    .font(.appBody)
-                    .foregroundStyle(.black)
-                Spacer()
-            }
-
-            // 재생 컨트롤 버튼들
-            HStack(spacing: AppPadding.large) {
-                // 10초 전
-                Button {
-                    onSeekBackward()
-                } label: {
-                    AppIcon.backward
-                        .font(.system(size: 20))
-                        .foregroundStyle(.black)
-                }
-
-                // 재생/일시정지
-                Button {
-                    onPlayPause()
-                } label: {
-                    Group {
-                        if isPlaying {
-                            AppIcon.pause
-                        } else {
-                            AppIcon.play
-                        }
-                    }
-                    .font(.system(size: 28))
-                    .foregroundStyle(.black)
-                }
-
-                // 10초 후
-                Button {
-                    onSeekForward()
-                } label: {
-                    AppIcon.forward
-                        .font(.system(size: 20))
-                        .foregroundStyle(.black)
+        // 재생/일시정지 버튼
+        Button {
+            onPlayPause()
+        } label: {
+            Group {
+                if isPlaying {
+                    AppIcon.pause
+                } else {
+                    AppIcon.play
                 }
             }
+            .font(.system(size: 28))
+            .foregroundStyle(.black)
         }
-    }
-
-    private func formatTime(_ time: Double) -> String {
-        let minutes = Int(time) / 60
-        let seconds = Int(time) % 60
-        return String(format: "%d:%02d", minutes, seconds)
     }
 }
 
@@ -247,10 +207,10 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         scrollView.backgroundColor = .clear
         scrollView.delegate = context.coordinator
 
-        // 시작/끝 여백 추가
+        // 시작/끝 여백 추가 (왼쪽 여백 제거)
         let inset = AppPadding.large
-        scrollView.contentInset = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
-        scrollView.scrollIndicatorInsets = UIEdgeInsets(top: 0, left: inset, bottom: 0, right: inset)
+        scrollView.contentInset = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: inset)
+        scrollView.scrollIndicatorInsets = UIEdgeInsets(top: 0, left: 0, bottom: 0, right: inset)
         
         let containerView = UIView()
         containerView.backgroundColor = .clear
@@ -264,7 +224,6 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         guard let containerView = context.coordinator.containerView else { return }
 
         let screenWidth = scrollView.bounds.width
-        let horizontalInset = AppPadding.large
         
         // 안전한 width/height 계산 (음수/비유한 방지)
         let safeDuration = duration.isFinite && duration >= 0 ? duration : 0
@@ -431,9 +390,8 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         // 스크롤 자동 조정 (playhead가 화면 중앙에 오도록)
         if !context.coordinator.isUserScrolling {
             let targetOffsetX = playheadPosition - screenWidth / 2
-            let minOffsetX = -horizontalInset
-            let maxOffsetX = max(minOffsetX, timelineWidth - screenWidth + horizontalInset)
-            let clampedOffsetX = max(minOffsetX, min(targetOffsetX, maxOffsetX))
+            let maxOffsetX = max(0, timelineWidth - screenWidth)
+            let clampedOffsetX = max(0, min(targetOffsetX, maxOffsetX))
 
             UIView.animate(withDuration: 0.1, delay: 0, options: [.curveLinear], animations: {
                 scrollView.contentOffset.x = clampedOffsetX
@@ -699,18 +657,6 @@ struct CustomVideoPlayerView: UIViewRepresentable {
             context.coordinator.pause()
         }
 
-        // Seek 처리
-        if let seekTrigger = seekTrigger {
-            switch seekTrigger {
-            case .backward:
-                context.coordinator.seekBackward()
-            case .forward:
-                context.coordinator.seekForward()
-            }
-            DispatchQueue.main.async {
-                onSeekCompleted()
-            }
-        }
 
         // 전처리된 비디오를 사용하는 경우 필터는 이미 적용되어 있으므로 스킵
         if preProcessedVideoURL == nil {
@@ -861,21 +807,6 @@ struct CustomVideoPlayerView: UIViewRepresentable {
             player?.pause()
         }
 
-        func seekBackward() {
-            guard let player = player else { return }
-            let currentTime = player.currentTime()
-            let newTime = CMTimeSubtract(currentTime, CMTime(seconds: 10, preferredTimescale: 600))
-            let clampedTime = max(newTime, .zero)
-            player.seek(to: clampedTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        }
-
-        func seekForward() {
-            guard let player = player, let duration = player.currentItem?.duration else { return }
-            let currentTime = player.currentTime()
-            let newTime = CMTimeAdd(currentTime, CMTime(seconds: 10, preferredTimescale: 600))
-            let clampedTime = min(newTime, duration)
-            player.seek(to: clampedTime, toleranceBefore: .zero, toleranceAfter: .zero)
-        }
 
         func updateFilter(_ filterType: VideoFilter?, onComplete: @escaping () -> Void) {
             // AnimeGAN 필터는 실시간 적용하지 않음 (전처리 방식 사용)
