@@ -107,7 +107,7 @@ struct ChatView: View {
                         viewStore.send(.sendMessageTapped)
                     }) {
                         Image(systemName: "paperplane.fill")
-                            .foregroundColor(viewStore.messageText.isEmpty ? .gray : .blue)
+                            .foregroundColor(viewStore.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : .blue)
                             .font(.system(size: 20))
                     }
                     .disabled(viewStore.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewStore.isSending)
