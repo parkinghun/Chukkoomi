@@ -189,6 +189,9 @@ struct SearchView: View {
         .onTapGesture {
             viewStore.send(.postTapped(post.id))
         }
+        .onAppear {
+            viewStore.send(.postItemAppeared(post.id))
+        }
     }
 
     // MARK: - 최근 검색어 뷰

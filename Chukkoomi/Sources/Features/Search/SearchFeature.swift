@@ -21,6 +21,10 @@ struct SearchFeature {
         var recentSearches: [FeedRecentWord] = []
         var isLoadingRecentSearches: Bool = false
 
+        // Pagination
+        var nextCursor: String? = nil
+        var isLoadingNextPage: Bool = false
+
         @PresentationState var postCell: PostCellFeature.State?
     }
     
@@ -30,7 +34,9 @@ struct SearchFeature {
         case searchTextChanged(String)
         case search
         case clearSearch
-        case postsLoaded([PostItem])
+        case postsLoaded([PostItem], String?)
+        case loadNextPage
+        case nextPageLoaded([PostItem], String?)
         case postTapped(String)
         case postLoaded(Post)
         case searchBarFocused
@@ -38,6 +44,7 @@ struct SearchFeature {
         case recentSearchTapped(String)
         case deleteRecentSearch(String)
         case recentSearchesLoaded([FeedRecentWord])
+        case postItemAppeared(String)
         case postCell(PresentationAction<PostCellFeature.Action>)
     }
     
@@ -47,30 +54,21 @@ struct SearchFeature {
             switch action {
             case .onAppear:
                 state.isLoading = true
+                // 초기 목록은 fetchPosts (limit = 12)
                 return .run { send in
                     do {
-                        // LocationQuery의 모든 프로퍼티를 nil로 설정
-                        let query = PostRouter.LocationQuery(
-                            category: nil,
-                            longitude: nil,
-                            latitude: nil,
-                            maxDistance: nil,
-                            orderBy: nil,
-                            sortBy: nil
-                        )
-                        
-                        let response = try await PostService.shared.fetchPostsByLocation(query: query)
-                        
-                        // PostResponseDTO를 PostItem으로 변환
+                        let query = PostRouter.ListQuery(next: nil, limit: 12, category: nil)
+                        let response = try await PostService.shared.fetchPosts(query: query)
+
                         let posts = response.data.compactMap { dto -> PostItem? in
                             guard let firstFile = dto.files.first else { return nil }
                             return PostItem(id: dto.postId, imagePath: firstFile)
                         }
 
-                        await send(.postsLoaded(posts))
+                        await send(.postsLoaded(posts, response.nextCursor))
                     } catch {
                         print("Failed to load posts: \(error)")
-                        await send(.postsLoaded([]))
+                        await send(.postsLoaded([], nil))
                     }
                 }
                 
@@ -205,9 +203,50 @@ struct SearchFeature {
                 state.isLoadingRecentSearches = false
                 return .none
                 
-            case .postsLoaded(let posts):
+            case .postsLoaded(let posts, let nextCursor):
                 state.posts = posts
+                state.nextCursor = nextCursor
                 state.isLoading = false
+                return .none
+
+            case .loadNextPage:
+                guard !state.isLoadingNextPage,
+                      let next = state.nextCursor,
+                      !next.isEmpty,
+                      next != "0" // "0"이면 더 이상 불러오지 않음
+                else {
+                    return .none
+                }
+                state.isLoadingNextPage = true
+                return .run { send in
+                    do {
+                        let query = PostRouter.ListQuery(next: next, limit: 12, category: nil)
+                        let response = try await PostService.shared.fetchPosts(query: query)
+
+                        let posts = response.data.compactMap { dto -> PostItem? in
+                            guard let firstFile = dto.files.first else { return nil }
+                            return PostItem(id: dto.postId, imagePath: firstFile)
+                        }
+
+                        await send(.nextPageLoaded(posts, response.nextCursor))
+                    } catch {
+                        print("Failed to load next page: \(error)")
+                        await send(.nextPageLoaded([], nil))
+                    }
+                }
+
+            case .nextPageLoaded(let newPosts, let nextCursor):
+                state.posts.append(contentsOf: newPosts)
+                state.nextCursor = nextCursor
+                state.isLoadingNextPage = false
+                return .none
+
+            case .postItemAppeared(let id):
+                // 마지막 셀이 화면에 나타났을 때만 다음 페이지 로드 트리거
+                if let index = state.posts.firstIndex(where: { $0.id == id }),
+                   index == state.posts.count - 1 {
+                    return .send(.loadNextPage)
+                }
                 return .none
                 
             case let .postTapped(postId):
@@ -221,7 +260,7 @@ struct SearchFeature {
                         let post = dto.toDomain
                         await send(.postLoaded(post))
                     } catch {
-                        print("❌ 게시글 단건 조회 실패: \(error)")
+                        print("게시글 단건 조회 실패: \(error)")
                     }
                 }
 
@@ -253,4 +292,3 @@ extension SearchFeature {
         }
     }
 }
-
