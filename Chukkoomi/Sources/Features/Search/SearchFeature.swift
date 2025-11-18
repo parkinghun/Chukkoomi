@@ -20,6 +20,8 @@ struct SearchFeature {
         var isSearching: Bool = false
         var recentSearches: [FeedRecentWord] = []
         var isLoadingRecentSearches: Bool = false
+
+        @PresentationState var postCell: PostCellFeature.State?
     }
     
     // MARK: - Action
@@ -30,11 +32,13 @@ struct SearchFeature {
         case clearSearch
         case postsLoaded([PostItem])
         case postTapped(String)
+        case postLoaded(Post)
         case searchBarFocused
         case cancelButtonTapped
         case recentSearchTapped(String)
         case deleteRecentSearch(String)
         case recentSearchesLoaded([FeedRecentWord])
+        case postCell(PresentationAction<PostCellFeature.Action>)
     }
     
     // MARK: - Body
@@ -206,10 +210,31 @@ struct SearchFeature {
                 state.isLoading = false
                 return .none
                 
-            case .postTapped:
-                // TODO: 게시물 상세 화면으로 이동
+            case let .postTapped(postId):
+                // 단건 조회 후 PostCell push
+                return .run { send in
+                    do {
+                        let dto = try await NetworkManager.shared.performRequest(
+                            PostRouter.fetchPost(postId),
+                            as: PostResponseDTO.self
+                        )
+                        let post = dto.toDomain
+                        await send(.postLoaded(post))
+                    } catch {
+                        print("❌ 게시글 단건 조회 실패: \(error)")
+                    }
+                }
+
+            case let .postLoaded(post):
+                state.postCell = PostCellFeature.State(post: post)
+                return .none
+
+            case .postCell:
                 return .none
             }
+        }
+        .ifLet(\.$postCell, action: \.postCell) {
+            PostCellFeature()
         }
     }
 }
@@ -228,3 +253,4 @@ extension SearchFeature {
         }
     }
 }
+

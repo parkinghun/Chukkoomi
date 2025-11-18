@@ -265,6 +265,15 @@ private struct SearchNavigation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            
+            .navigationDestination(
+                store: store.scope(state: \.$postCell, action: \.postCell)
+            ) { store in
+                VStack {
+                    PostCellView(store: store)
+                    Spacer()
+                }
+                .navigationTitle("게시글")
+            }
     }
 }
+
