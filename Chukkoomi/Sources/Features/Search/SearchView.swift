@@ -98,31 +98,10 @@ struct SearchView: View {
                 LazyVStack(spacing: 4) {
                     ForEach(0..<numberOfBlocks(for: posts.count), id: \.self) { blockIndex in
                         gridBlock(blockIndex: blockIndex, posts: posts, cellSize: cellSize, viewStore: viewStore)
-                            .onAppear {
-                                // 마지막 블록이 나타나면 다음 페이지 로드
-                                if blockIndex == numberOfBlocks(for: posts.count) - 1 {
-                                    viewStore.send(.loadMorePosts)
-                                }
-                            }
-                    }
-
-                    // 더 로딩 중일 때 로딩 인디케이터 표시
-                    if viewStore.isLoadingMore {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                            Spacer()
-                        }
-                        .padding(.vertical, AppPadding.medium)
                     }
                 }
                 .padding(4)
             }
-            .simultaneousGesture(
-                DragGesture().onChanged { _ in
-                    isSearchFieldFocused = false
-                }
-            )
         }
     }
 
@@ -131,7 +110,7 @@ struct SearchView: View {
         let startIndex = blockIndex * 12
         let blockPosts = Array(posts.dropFirst(startIndex).prefix(12))
 
-        return VStack(spacing: 4) {
+        return VStack(alignment: .leading, spacing: 4) {
             // Row 0-1: 큰 셀(왼쪽) + 작은 셀 2개(오른쪽)
             if !blockPosts.isEmpty {
                 HStack(spacing: 4) {
@@ -286,15 +265,6 @@ private struct SearchNavigation: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .navigationDestination(
-                store: store.scope(state: \.$searchResult, action: \.searchResult)
-            ) { store in
-                // TODO: 검색 결과 화면 구현 - 임시로 ContentView 표시
-                WithViewStore(store, observe: { $0 }) { viewStore in
-                    ContentView()
-                        .navigationTitle("#\(viewStore.searchQuery)")
-                        .navigationBarTitleDisplayMode(.inline)
-                }
-            }
+            
     }
 }
