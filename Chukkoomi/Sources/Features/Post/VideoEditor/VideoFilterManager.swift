@@ -174,29 +174,14 @@ struct VideoFilterManager {
         }
 
         do {
-
-            // 모델의 입력 크기 가져오기
-            guard let inputName = mlModel.modelDescription.inputDescriptionsByName.keys.first,
-                  let inputDescription = mlModel.modelDescription.inputDescriptionsByName[inputName],
-                  let imageConstraint = inputDescription.imageConstraint else {
-                print("[Error] AnimeGAN: Failed to get input description")
+            // 모델 입력 이름 가져오기
+            guard let inputName = mlModel.modelDescription.inputDescriptionsByName.keys.first else {
+                print("[Error] AnimeGAN: Failed to get input name")
                 return image
             }
 
-            // 모델이 허용하는 입력 크기 결정 (512 고정 필요)
-            let modelSize: CGSize
-            let width = imageConstraint.pixelsWide
-            let height = imageConstraint.pixelsHigh
-
-            if width > 0 && height > 0 {
-                // 고정 크기
-                modelSize = CGSize(width: width, height: height)
-            } else {
-                // 가변 크기인 경우 512x512 사용
-                modelSize = CGSize(width: 512, height: 512)
-            }
-
-            print("[Info] AnimeGAN: Using model input size: \(modelSize)")
+            // AnimeGAN 입력 크기는 512x512로 고정
+            let modelSize = CGSize(width: 512, height: 512)
 
             // 원본 이미지 크기 저장
             let originalSize = image.extent.size
@@ -268,8 +253,8 @@ struct VideoFilterManager {
 
     /// AnimeGAN 모델 캐시 (재사용)
     private static let animeGANModel: MLModel? = {
-        guard let modelURL = Bundle.main.url(forResource: "AnimeGANv3_Hayao_36", withExtension: "mlmodelc") else {
-            print("[Error] AnimeGANv3_Hayao_36.mlmodelc not found")
+        guard let modelURL = Bundle.main.url(forResource: "AnimeGANv3_Hayao_36_fp16", withExtension: "mlmodelc") else {
+            print("[Error] AnimeGANv3_Hayao_36_fp16.mlmodelc not found")
             return nil
         }
 

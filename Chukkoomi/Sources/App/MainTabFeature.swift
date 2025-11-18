@@ -87,6 +87,10 @@ struct MainTabFeature {
             case .myProfile(.logoutCompleted):
                 return .send(.delegate(.logout))
 
+            case .myProfile(.delegate(.switchToPostTab)):
+                state.selectedTab = .post
+                return .none
+
             case .myProfile:
                 return .none
             }

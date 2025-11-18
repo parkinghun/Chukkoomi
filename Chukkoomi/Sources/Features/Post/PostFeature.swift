@@ -27,6 +27,7 @@ struct PostFeature {
         var searchHashtag: String? // 해시태그 검색용
         var teamInfo: KLeagueTeam? // 팀 정보 (팀별 게시글 조회용)
         var currentUserProfile: Profile? // 현재 유저의 프로필 (팔로잉 상태 확인용)
+        var isDetailMode: Bool = false // 단일 게시글 상세 모드 (페이지네이션, 새로고침 비활성화)
 
         @Presents var hashtagSearch: PostFeature.State? // 해시태그 검색 화면
         @Presents var postCreate: PostCreateFeature.State? // 게시글 작성/수정 화면

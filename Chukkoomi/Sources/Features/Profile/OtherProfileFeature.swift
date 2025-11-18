@@ -21,8 +21,13 @@ struct OtherProfileFeature {
         var isFollowing: Bool = false
         var isPresented: Bool = false // fullScreenCover로 표시되었는지
 
+        // Pagination
+        var postsNextCursor: String? = nil
+        var isLoadingNextPage: Bool = false
+
         @PresentationState var followList: FollowListFeature.State?
         @PresentationState var chat: ChatFeature.State?
+        @PresentationState var postDetail: PostFeature.State?
 
         // Computed properties
         var nickname: String {
@@ -57,16 +62,23 @@ struct OtherProfileFeature {
         // API 응답
         case myProfileLoaded(Profile)
         case profileLoaded(Profile)
-        case postImagesLoaded([PostImage])
+        case postImagesLoaded([PostImage], String?)
         case followToggled(Bool)
         case chatRoomChecked(ChatRoom?)
 
         // 게시물 fetch
-        case fetchPosts(postIds: [String])
+        case fetchPosts
+        case loadNextPostsPage
+        case postItemAppeared(String)
+
+        // 게시물 상세
+        case postItemTapped(String)
+        case postLoaded(Post)
 
         // Navigation
         case followList(PresentationAction<FollowListFeature.Action>)
         case chat(PresentationAction<ChatFeature.Action>)
+        case postDetail(PresentationAction<PostFeature.Action>)
     }
 
     // MARK: - Body
@@ -180,10 +192,12 @@ struct OtherProfileFeature {
                 state.isFollowing = profile.followers.contains { $0.userId == myUser.userId }
             }
 
-            return .send(.fetchPosts(postIds: profile.posts))
+            return .send(.fetchPosts)
 
-        case .postImagesLoaded(let images):
-            state.postImages = images
+        case .postImagesLoaded(let images, let nextCursor):
+            state.postImages.append(contentsOf: images)
+            state.postsNextCursor = nextCursor
+            state.isLoadingNextPage = false
             return .none
 
         case .followToggled(let isFollowing):
@@ -225,8 +239,92 @@ struct OtherProfileFeature {
             )
             return .none
 
-        case .fetchPosts(let postIds):
-            // TODO: postIds로 게시물 데이터 fetch 후 PostImage 배열로 변환
+        case .fetchPosts:
+            let userId = state.userId
+
+            return .run { send in
+                do {
+                    let query = PostRouter.ListQuery(next: nil, limit: 12, category: nil)
+                    let response = try await NetworkManager.shared.performRequest(
+                        PostRouter.fetchUserPosts(userId: userId, query),
+                        as: PostListResponseDTO.self
+                    )
+
+                    let postImages = response.data.compactMap { dto -> PostImage? in
+                        guard let firstFile = dto.files.first else { return nil }
+                        return PostImage(id: dto.postId, imagePath: firstFile)
+                    }
+
+                    await send(.postImagesLoaded(postImages, response.nextCursor))
+                } catch {
+                    print("게시물 로드 실패: \(error)")
+                    await send(.postImagesLoaded([], nil))
+                }
+            }
+
+        case .loadNextPostsPage:
+            guard !state.isLoadingNextPage,
+                  let next = state.postsNextCursor,
+                  !next.isEmpty,
+                  next != "0" else {
+                return .none
+            }
+
+            state.isLoadingNextPage = true
+            let userId = state.userId
+
+            return .run { send in
+                do {
+                    let query = PostRouter.ListQuery(next: next, limit: 12, category: nil)
+                    let response = try await NetworkManager.shared.performRequest(
+                        PostRouter.fetchUserPosts(userId: userId, query),
+                        as: PostListResponseDTO.self
+                    )
+
+                    let postImages = response.data.compactMap { dto -> PostImage? in
+                        guard let firstFile = dto.files.first else { return nil }
+                        return PostImage(id: dto.postId, imagePath: firstFile)
+                    }
+
+                    await send(.postImagesLoaded(postImages, response.nextCursor))
+                } catch {
+                    print("다음 페이지 로드 실패: \(error)")
+                    await send(.postImagesLoaded([], nil))
+                }
+            }
+
+        case .postItemAppeared(let id):
+            if let index = state.postImages.firstIndex(where: { $0.id == id }),
+               index == state.postImages.count - 1 {
+                return .send(.loadNextPostsPage)
+            }
+            return .none
+
+        case .postItemTapped(let postId):
+            // 단건 조회 후 PostDetail push
+            return .run { send in
+                do {
+                    let dto = try await NetworkManager.shared.performRequest(
+                        PostRouter.fetchPost(postId),
+                        as: PostResponseDTO.self
+                    )
+                    let post = dto.toDomain
+                    await send(.postLoaded(post))
+                } catch {
+                    print("게시글 단건 조회 실패: \(error)")
+                }
+            }
+
+        case .postLoaded(let post):
+            // 단일 게시글을 위한 PostFeature.State 생성
+            var postFeatureState = PostFeature.State()
+            postFeatureState.postCells = [PostCellFeature.State(post: post)]
+            postFeatureState.nextCursor = "0" // 페이지네이션 비활성화
+            postFeatureState.isDetailMode = true // 상세 모드 활성화
+            state.postDetail = postFeatureState
+            return .none
+
+        case .postDetail:
             return .none
 
         case .followList:
@@ -241,6 +339,9 @@ struct OtherProfileFeature {
         }
         .ifLet(\.$chat, action: \.chat) {
             ChatFeature()
+        }
+        .ifLet(\.$postDetail, action: \.postDetail) {
+            PostFeature()
         }
     }
 }

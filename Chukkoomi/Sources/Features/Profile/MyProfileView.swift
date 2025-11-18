@@ -209,7 +209,10 @@ struct MyProfileView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 4) {
                         ForEach(items) { image in
-                            postGridItem(postImage: image)
+                            postGridItem(postImage: image, viewStore: viewStore)
+                                .onAppear {
+                                    viewStore.send(.postItemAppeared(image.id))
+                                }
                         }
 
                         // 게시글 탭일 때만 추가 버튼 표시
@@ -223,7 +226,7 @@ struct MyProfileView: View {
         }
     }
 
-    private func postGridItem(postImage: MyProfileFeature.PostImage) -> some View {
+    private func postGridItem(postImage: MyProfileFeature.PostImage, viewStore: ViewStoreOf<MyProfileFeature>) -> some View {
         GeometryReader { geometry in
             AsyncMediaImageView(
                 imagePath: postImage.imagePath,
@@ -232,6 +235,9 @@ struct MyProfileView: View {
             )
         }
         .aspectRatio(1, contentMode: .fit)
+        .onTapGesture {
+            viewStore.send(.postItemTapped(postImage.id))
+        }
     }
 
     // MARK: - 게시글 추가 버튼
@@ -274,6 +280,11 @@ private struct MyProfileNavigation: ViewModifier {
                 store: store.scope(state: \.$followList, action: \.followList)
             ) { store in
                 FollowListView(store: store)
+            }
+            .navigationDestination(
+                store: store.scope(state: \.$postDetail, action: \.postDetail)
+            ) { store in
+                PostView(store: store)
             }
     }
 }

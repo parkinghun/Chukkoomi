@@ -97,29 +97,10 @@ struct AsyncMediaImageView: View {
                 isLoading = false
                 return
             }
-
-            let mediaData: Data
-
-            // TODO: picsum 테스트용 임시 코드 - 나중에 삭제
-            if imagePath.hasPrefix("http://") || imagePath.hasPrefix("https://") {
-                // 외부 URL: URLSession으로 직접 다운로드
-                guard let url = URL(string: imagePath) else {
-                    isLoading = false
-                    return
-                }
-                let (data, _) = try await URLSession.shared.data(from: url)
-                mediaData = data
-            } else {
-                // 실제 사용 코드
-                mediaData = try await NetworkManager.shared.download(
-                    MediaRouter.getData(path: imagePath)
-                )
-            }
-
-            // 원래 코드 (picsum 테스트 후 복원)
-            // let mediaData = try await NetworkManager.shared.download(
-            //     MediaRouter.getData(path: imagePath)
-            // )
+            
+            let mediaData = try await NetworkManager.shared.download(
+                MediaRouter.getData(path: imagePath)
+            )
 
             if isVideo {
                 // 동영상이면 썸네일 추출

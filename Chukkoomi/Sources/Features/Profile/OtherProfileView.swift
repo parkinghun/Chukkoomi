@@ -170,7 +170,10 @@ struct OtherProfileView: View {
                 ScrollView {
                     LazyVGrid(columns: columns, spacing: 4) {
                         ForEach(viewStore.postImages) { image in
-                            postGridItem(postImage: image)
+                            postGridItem(postImage: image, viewStore: viewStore)
+                                .onAppear {
+                                    viewStore.send(.postItemAppeared(image.id))
+                                }
                         }
                     }
                     .padding(.horizontal, 4)
@@ -179,7 +182,7 @@ struct OtherProfileView: View {
         }
     }
 
-    private func postGridItem(postImage: OtherProfileFeature.PostImage) -> some View {
+    private func postGridItem(postImage: OtherProfileFeature.PostImage, viewStore: ViewStoreOf<OtherProfileFeature>) -> some View {
         GeometryReader { geometry in
             AsyncMediaImageView(
                 imagePath: postImage.imagePath,
@@ -188,6 +191,9 @@ struct OtherProfileView: View {
             )
         }
         .aspectRatio(1, contentMode: .fit)
+        .onTapGesture {
+            viewStore.send(.postItemTapped(postImage.id))
+        }
     }
 }
 
@@ -206,6 +212,11 @@ private struct OtherProfileNavigation: ViewModifier {
                 store: store.scope(state: \.$chat, action: \.chat)
             ) { chatStore in
                 ChatView(store: chatStore)
+            }
+            .navigationDestination(
+                store: store.scope(state: \.$postDetail, action: \.postDetail)
+            ) { store in
+                PostView(store: store)
             }
     }
 }

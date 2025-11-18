@@ -371,8 +371,8 @@ private struct GalleryPickerNavigation: ViewModifier {
             }
             .navigationDestination(
                 store: store.scope(state: \.$editPhoto, action: \.editPhoto)
-            ) { _ in
-                Text("EditPhotoView 구현 필요")
+            ) { store in
+                EditPhotoView(store: store)
             }
     }
 }

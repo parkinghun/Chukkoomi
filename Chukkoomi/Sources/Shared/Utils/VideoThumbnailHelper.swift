@@ -24,7 +24,25 @@ actor VideoThumbnailExtractor {
         do {
             try videoData.write(to: tempURL)
 
-            let asset = AVAsset(url: tempURL)
+            // URL 버전 함수 재사용
+            let thumbnailData = await generateThumbnail(from: tempURL)
+
+            // 임시 파일 삭제
+            try? FileManager.default.removeItem(at: tempURL)
+
+            return thumbnailData
+        } catch {
+            print("썸네일 생성 실패: \(error)")
+            // 임시 파일 삭제 시도
+            try? FileManager.default.removeItem(at: tempURL)
+            return nil
+        }
+    }
+
+    /// 동영상 URL에서 썸네일 이미지를 추출 (순차 처리)
+    func generateThumbnail(from videoURL: URL) async -> Data? {
+        do {
+            let asset = AVAsset(url: videoURL)
             let imageGenerator = AVAssetImageGenerator(asset: asset)
             imageGenerator.appliesPreferredTrackTransform = true
             imageGenerator.maximumSize = CGSize(width: 800, height: 800)
@@ -34,15 +52,10 @@ actor VideoThumbnailExtractor {
             let cgImage = try imageGenerator.copyCGImage(at: time, actualTime: nil)
             let uiImage = UIImage(cgImage: cgImage)
 
-            // 임시 파일 삭제
-            try? FileManager.default.removeItem(at: tempURL)
-
             // JPEG 데이터로 변환
             return uiImage.jpegData(compressionQuality: 0.8)
         } catch {
             print("썸네일 생성 실패: \(error)")
-            // 임시 파일 삭제 시도
-            try? FileManager.default.removeItem(at: tempURL)
             return nil
         }
     }
@@ -52,5 +65,10 @@ enum VideoThumbnailHelper {
     /// 동영상 데이터에서 썸네일 이미지를 추출
     static func generateThumbnail(from videoData: Data) async -> Data? {
         await VideoThumbnailExtractor.shared.generateThumbnail(from: videoData)
+    }
+
+    /// 동영상 URL에서 썸네일 이미지를 추출
+    static func generateThumbnail(from videoURL: URL) async -> Data? {
+        await VideoThumbnailExtractor.shared.generateThumbnail(from: videoURL)
     }
 }

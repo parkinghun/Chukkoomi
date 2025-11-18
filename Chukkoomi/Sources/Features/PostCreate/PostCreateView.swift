@@ -12,53 +12,55 @@ struct PostCreateView: View {
     let store: StoreOf<PostCreateFeature>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 24) {
-            mediaSelectionSection
-
-            categorySection
-
-            contentSection
-
-            Spacer()
-
-            // 에러 메시지
-            if let errorMessage = store.errorMessage {
-                Text(errorMessage)
-                    .font(.caption)
-                    .foregroundColor(.red)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 24) {
+                mediaSelectionSection
+                
+                categorySection
+                
+                contentSection
+                
+                Spacer()
+                
+                // 에러 메시지
+                if let errorMessage = store.errorMessage {
+                    Text(errorMessage)
+                        .font(.caption)
+                        .foregroundColor(.red)
+                }
+                
+                // 업로드 버튼
+                FillButton(
+                    title: buttonTitle,
+                    isLoading: store.isUploading,
+                    isEnabled: store.canUpload
+                ) {
+                    store.send(.uploadButtonTapped)
+                }
             }
-
-            // 업로드 버튼
-            FillButton(
-                title: buttonTitle,
-                isLoading: store.isUploading,
-                isEnabled: store.canUpload
-            ) {
-                store.send(.uploadButtonTapped)
+            .padding(.horizontal, AppPadding.large)
+            .padding(.vertical, 16)
+            .dismissKeyboardOnTap()
+            .keyboardDoneButton()
+            .navigationTitle(store.navigationTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .fullScreenCover(
+                store: store.scope(state: \.$galleryPicker, action: \.galleryPicker)
+            ) { store in
+                NavigationStack {
+                    GalleryPickerView(store: store)
+                }
             }
-        }
-        .padding(.horizontal, AppPadding.large)
-        .padding(.vertical, 16)
-        .dismissKeyboardOnTap()
-        .keyboardDoneButton()
-        .navigationTitle(store.navigationTitle)
-        .navigationBarTitleDisplayMode(.inline)
-        .fullScreenCover(
-            store: store.scope(state: \.$galleryPicker, action: \.galleryPicker)
-        ) { store in
-            NavigationStack {
-                GalleryPickerView(store: store)
+            .alert(alertTitle, isPresented: Binding(
+                get: { store.showSuccessAlert },
+                set: { _ in store.send(.dismissSuccessAlert) }
+            )) {
+                Button("확인", role: .cancel) {
+                    store.send(.dismissSuccessAlert)
+                }
+            } message: {
+                Text(alertMessage)
             }
-        }
-        .alert(alertTitle, isPresented: Binding(
-            get: { store.showSuccessAlert },
-            set: { _ in store.send(.dismissSuccessAlert) }
-        )) {
-            Button("확인", role: .cancel) {
-                store.send(.dismissSuccessAlert)
-            }
-        } message: {
-            Text(alertMessage)
         }
     }
 
@@ -83,8 +85,39 @@ struct PostCreateView: View {
     // MARK: - Media Selection Section
     private var mediaSelectionSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let imageData = store.selectedImageData,
-               let uiImage = UIImage(data: imageData) {
+            if let thumbnailData = store.videoThumbnailData,
+               let uiImage = UIImage(data: thumbnailData) {
+                // 영상 썸네일 표시
+                ZStack(alignment: .topTrailing) {
+                    ZStack {
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFit()
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 200)
+                            .background(Color.black)
+                            .cornerRadius(12)
+
+                        // 재생 아이콘 오버레이
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.white)
+                            .shadow(radius: 5)
+                    }
+
+                    // 제거 버튼
+                    Button {
+                        store.send(.removeImage)
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.white)
+                            .background(Circle().fill(Color.black.opacity(0.5)))
+                    }
+                    .padding(8)
+                }
+            } else if let imageData = store.selectedImageData,
+                      let uiImage = UIImage(data: imageData) {
                 // 새로 선택된 이미지 표시
                 ZStack(alignment: .topTrailing) {
                     Image(uiImage: uiImage)

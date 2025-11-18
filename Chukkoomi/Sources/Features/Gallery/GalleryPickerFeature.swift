@@ -23,11 +23,40 @@ struct GalleryPickerFeature {
         var isLoading: Bool = false
         var pickerMode: PickerMode = .profileImage
         @Presents var editVideo: EditVideoFeature.State?
-        @Presents var editPhoto: EditPhotoState?
+        @Presents var editPhoto: EditPhotoFeature.State?
     }
 
-    struct EditPhotoState: Equatable {
-        // EditPhotoView용 임시 state
+    @Reducer
+    struct EditPhotoFeature {
+        @ObservableState
+        struct State: Equatable {
+            let selectedImage: UIImage
+        }
+
+        enum Action: Equatable {
+            case completeButtonTapped
+            case delegate(Delegate)
+
+            enum Delegate: Equatable {
+                case photoEditCompleted(Data)
+            }
+        }
+
+        var body: some ReducerOf<Self> {
+            Reduce { state, action in
+                switch action {
+                case .completeButtonTapped:
+                    // 이미지를 Data로 변환하여 delegate 전송
+                    if let imageData = state.selectedImage.jpegData(compressionQuality: 0.8) {
+                        return .send(.delegate(.photoEditCompleted(imageData)))
+                    }
+                    return .none
+
+                case .delegate:
+                    return .none
+                }
+            }
+        }
     }
 
     // MARK: - PickerMode
@@ -66,12 +95,13 @@ struct GalleryPickerFeature {
         case confirmSelection
         case cancel
         case editVideo(PresentationAction<EditVideoFeature.Action>)
-        case editPhoto(PresentationAction<Never>)
+        case editPhoto(PresentationAction<EditPhotoFeature.Action>)
         case delegate(Delegate)
 
         enum Delegate: Equatable {
             case didSelectImage(Data)
             case didSelectVideo(PHAsset)
+            case didExportVideo(URL)
         }
     }
 
@@ -152,9 +182,9 @@ struct GalleryPickerFeature {
                         // 동영상 선택 시 EditVideoView로 push
                         state.editVideo = EditVideoFeature.State(videoAsset: selectedItem.asset)
                         return .none
-                    } else if state.selectedImage != nil {
+                    } else if let selectedImage = state.selectedImage {
                         // 사진 선택 시 EditPhotoView로 push
-                        state.editPhoto = EditPhotoState()
+                        state.editPhoto = EditPhotoFeature.State(selectedImage: selectedImage)
                         return .none
                     }
                     return .none
@@ -176,8 +206,25 @@ struct GalleryPickerFeature {
                     await self.dismiss()
                 }
 
+            case let .editVideo(.presented(.delegate(.videoExportCompleted(url)))):
+                // 편집 완료된 영상을 PostCreateFeature로 전달하고 fullscreen 닫기
+                // editVideo state를 먼저 nil로 설정
+                state.editVideo = nil
+                return .run { send in
+                    await send(.delegate(.didExportVideo(url)))
+                    await self.dismiss()
+                }
+
             case .editVideo:
                 return .none
+
+            case let .editPhoto(.presented(.delegate(.photoEditCompleted(imageData)))):
+                // 사진 편집 완료 - PostCreateFeature로 전달하고 fullscreen 닫기
+                state.editPhoto = nil
+                return .run { send in
+                    await send(.delegate(.didSelectImage(imageData)))
+                    await self.dismiss()
+                }
 
             case .editPhoto:
                 return .none
@@ -188,6 +235,9 @@ struct GalleryPickerFeature {
         }
         .ifLet(\.$editVideo, action: \.editVideo) {
             EditVideoFeature()
+        }
+        .ifLet(\.$editPhoto, action: \.editPhoto) {
+            EditPhotoFeature()
         }
     }
 

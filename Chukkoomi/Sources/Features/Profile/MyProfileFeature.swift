@@ -22,10 +22,16 @@ struct MyProfileFeature {
         var profileImageData: Data?
         var isPresented: Bool = false // fullScreenCover로 표시되었는지
 
+        // Pagination
+        var postsNextCursor: String? = nil
+        var bookmarksNextCursor: String? = nil
+        var isLoadingNextPage: Bool = false
+
         @PresentationState var editProfile: EditProfileFeature.State?
         @PresentationState var userSearch: UserSearchFeature.State?
         @PresentationState var followList: FollowListFeature.State?
         @PresentationState var settingsMenu: ConfirmationDialogState<Action.SettingsMenuAction>?
+        @PresentationState var postDetail: PostFeature.State?
         
         // Computed properties
         var nickname: String {
@@ -71,22 +77,37 @@ struct MyProfileFeature {
 
         // API 응답
         case profileLoaded(Profile)
-        case postImagesLoaded([PostImage])
-        case bookmarkImagesLoaded([PostImage])
+        case postImagesLoaded([PostImage], String?)
+        case bookmarkImagesLoaded([PostImage], String?)
 
         // 게시물 fetch
-        case fetchPosts(postIds: [String])
+        case fetchPosts
         case fetchBookmarks
+        case loadNextPostsPage
+        case loadNextBookmarksPage
+        case postItemAppeared(String)
+
+        // 게시물 상세
+        case postItemTapped(String)
+        case postLoaded(Post)
 
         // Navigation
         case editProfile(PresentationAction<EditProfileFeature.Action>)
         case userSearch(PresentationAction<UserSearchFeature.Action>)
         case followList(PresentationAction<FollowListFeature.Action>)
         case settingsMenu(PresentationAction<SettingsMenuAction>)
+        case postDetail(PresentationAction<PostFeature.Action>)
+
+        // Delegate
+        case delegate(Delegate)
 
         enum SettingsMenuAction: Equatable {
             case logout
             case deleteAccount
+        }
+
+        enum Delegate: Equatable {
+            case switchToPostTab
         }
     }
     
@@ -96,18 +117,30 @@ struct MyProfileFeature {
             switch action {
             case .onAppear:
                 state.isLoading = true
-                return .run { send in
-                    do {
-                        let profile = try await NetworkManager.shared.performRequest(
-                            ProfileRouter.lookupMe,
-                            as: ProfileDTO.self
-                        ).toDomain
-                        await send(.profileLoaded(profile))
-                    } catch {
-                        // TODO: 에러 처리
-                        print("프로필 로드 실패: \(error)")
-                    }
-                }
+                // 데이터 초기화 (다른 탭에서 돌아올 때 업데이트하기 위해)
+                state.postImages = []
+                state.bookmarkImages = []
+                state.postsNextCursor = nil
+                state.bookmarksNextCursor = nil
+
+                // 프로필 로드와 현재 탭 데이터 로드를 병렬로 실행
+                let currentTab = state.selectedTab
+
+                return .merge(
+                    .run { send in
+                        do {
+                            let profile = try await NetworkManager.shared.performRequest(
+                                ProfileRouter.lookupMe,
+                                as: ProfileDTO.self
+                            ).toDomain
+                            await send(.profileLoaded(profile))
+                        } catch {
+                            // TODO: 에러 처리
+                            print("프로필 로드 실패: \(error)")
+                        }
+                    },
+                    currentTab == .posts ? .send(.fetchPosts) : .send(.fetchBookmarks)
+                )
                 
             case .searchButtonTapped:
                 state.userSearch = UserSearchFeature.State()
@@ -128,8 +161,8 @@ struct MyProfileFeature {
                 return .none
                 
             case .addPostButtonTapped:
-                // TODO: 게시글 작성 화면으로 이동
-                return .none
+                // Post 탭으로 전환 요청
+                return .send(.delegate(.switchToPostTab))
                 
             case .editProfileButtonTapped:
                 guard let profile = state.profile else { return .none }
@@ -148,10 +181,10 @@ struct MyProfileFeature {
                 switch tab {
                 case .posts:
                     // 이미 로드되어 있으면 스킵
-                    guard state.postImages.isEmpty, let postIds = state.profile?.posts else {
+                    guard state.postImages.isEmpty else {
                         return .none
                     }
-                    return .send(.fetchPosts(postIds: postIds))
+                    return .send(.fetchPosts)
                 case .bookmarks:
                     // 이미 로드되어 있으면 스킵
                     guard state.bookmarkImages.isEmpty else {
@@ -159,46 +192,146 @@ struct MyProfileFeature {
                     }
                     return .send(.fetchBookmarks)
                 }
-                
+
             case .profileLoaded(let profile):
                 state.profile = profile
                 state.isLoading = false
-                return .send(.fetchPosts(postIds: profile.posts))
+                return .none
                 
-            case .postImagesLoaded(let images):
-                state.postImages = images
+            case .postImagesLoaded(let images, let nextCursor):
+                state.postImages.append(contentsOf: images)
+                state.postsNextCursor = nextCursor
+                state.isLoadingNextPage = false
                 return .none
 
-            case .bookmarkImagesLoaded(let images):
-                state.bookmarkImages = images
+            case .bookmarkImagesLoaded(let images, let nextCursor):
+                state.bookmarkImages.append(contentsOf: images)
+                state.bookmarksNextCursor = nextCursor
+                state.isLoadingNextPage = false
                 return .none
 
-            case .fetchPosts(let postIds):
-                // TODO: postIds로 게시물 데이터 fetch 후 PostImage 배열로 변환
-                // return .run { send in
-                //     do {
-                //         let posts = try await fetchPostsByIds(postIds)
-                //         let postImages = posts.map { PostImage(id: $0.id, imageURL: $0.imageURL) }
-                //         await send(.postImagesLoaded(postImages))
-                //     } catch {
-                //         print("게시물 로드 실패: \(error)")
-                //     }
-                // }
-                return .none
+            case .fetchPosts:
+                guard let userId = UserDefaultsHelper.userId else {
+                    print("User ID가 없습니다")
+                    return .none
+                }
+
+                return .run { send in
+                    do {
+                        let query = PostRouter.ListQuery(next: nil, limit: 12, category: nil)
+                        let response = try await NetworkManager.shared.performRequest(
+                            PostRouter.fetchUserPosts(userId: userId, query),
+                            as: PostListResponseDTO.self
+                        )
+
+                        let postImages = response.data.compactMap { dto -> PostImage? in
+                            guard let firstFile = dto.files.first else { return nil }
+                            return PostImage(id: dto.postId, imagePath: firstFile)
+                        }
+
+                        await send(.postImagesLoaded(postImages, response.nextCursor))
+                    } catch {
+                        print("게시물 로드 실패: \(error)")
+                        await send(.postImagesLoaded([], nil))
+                    }
+                }
                 
             case .fetchBookmarks:
-                // TODO: 북마크한 게시물 데이터 fetch
-                // return .run { send in
-                //     do {
-                //         let bookmarkedPosts = try await fetchBookmarkedPosts()
-                //         let bookmarkImages = bookmarkedPosts.map { PostImage(id: $0.id, imageURL: $0.imageURL) }
-                //         await send(.bookmarkImagesLoaded(bookmarkImages))
-                //     } catch {
-                //         print("북마크 로드 실패: \(error)")
-                //     }
-                // }
-                return .none
+                return .run { send in
+                    do {
+                        // 북마크한 게시물 조회 (페이지네이션)
+                        let response = try await NetworkManager.shared.performRequest(
+                            PostRouter.fetchBookmarkedPosts(next: nil, limit: 12),
+                            as: PostListResponseDTO.self
+                        )
+
+                        // PostImage 배열로 변환 (첫 번째 파일만)
+                        let bookmarkImages = response.data.compactMap { dto -> PostImage? in
+                            guard let firstFile = dto.files.first else { return nil }
+                            return PostImage(id: dto.postId, imagePath: firstFile)
+                        }
+
+                        await send(.bookmarkImagesLoaded(bookmarkImages, response.nextCursor))
+                    } catch {
+                        print("북마크 로드 실패: \(error)")
+                        await send(.bookmarkImagesLoaded([], nil))
+                    }
+                }
                 
+            case .loadNextPostsPage:
+                guard !state.isLoadingNextPage,
+                      let next = state.postsNextCursor,
+                      !next.isEmpty,
+                      next != "0",
+                      let userId = UserDefaultsHelper.userId else {
+                    return .none
+                }
+
+                state.isLoadingNextPage = true
+                return .run { send in
+                    do {
+                        let query = PostRouter.ListQuery(next: next, limit: 12, category: nil)
+                        let response = try await NetworkManager.shared.performRequest(
+                            PostRouter.fetchUserPosts(userId: userId, query),
+                            as: PostListResponseDTO.self
+                        )
+
+                        let postImages = response.data.compactMap { dto -> PostImage? in
+                            guard let firstFile = dto.files.first else { return nil }
+                            return PostImage(id: dto.postId, imagePath: firstFile)
+                        }
+
+                        await send(.postImagesLoaded(postImages, response.nextCursor))
+                    } catch {
+                        print("다음 페이지 로드 실패: \(error)")
+                        await send(.postImagesLoaded([], nil))
+                    }
+                }
+
+            case .loadNextBookmarksPage:
+                guard !state.isLoadingNextPage,
+                      let next = state.bookmarksNextCursor,
+                      !next.isEmpty,
+                      next != "0" else {
+                    return .none
+                }
+
+                state.isLoadingNextPage = true
+                return .run { send in
+                    do {
+                        let response = try await NetworkManager.shared.performRequest(
+                            PostRouter.fetchBookmarkedPosts(next: next, limit: 12),
+                            as: PostListResponseDTO.self
+                        )
+
+                        let bookmarkImages = response.data.compactMap { dto -> PostImage? in
+                            guard let firstFile = dto.files.first else { return nil }
+                            return PostImage(id: dto.postId, imagePath: firstFile)
+                        }
+
+                        await send(.bookmarkImagesLoaded(bookmarkImages, response.nextCursor))
+                    } catch {
+                        print("다음 페이지 로드 실패: \(error)")
+                        await send(.bookmarkImagesLoaded([], nil))
+                    }
+                }
+
+            case .postItemAppeared(let id):
+                // 현재 탭에 따라 다른 배열 체크
+                switch state.selectedTab {
+                case .posts:
+                    if let index = state.postImages.firstIndex(where: { $0.id == id }),
+                       index == state.postImages.count - 1 {
+                        return .send(.loadNextPostsPage)
+                    }
+                case .bookmarks:
+                    if let index = state.bookmarkImages.firstIndex(where: { $0.id == id }),
+                       index == state.bookmarkImages.count - 1 {
+                        return .send(.loadNextBookmarksPage)
+                    }
+                }
+                return .none
+
             case .editProfile(.presented(.profileUpdated(let updatedProfile))):
                 state.profile = updatedProfile
                 return .none
@@ -270,7 +403,38 @@ struct MyProfileFeature {
                 // MainTabFeature를 통해 AppFeature로 전달되어 로그인 화면으로 전환
                 return .none
 
+            case .postItemTapped(let postId):
+                // 단건 조회 후 PostDetail push
+                return .run { send in
+                    do {
+                        let dto = try await NetworkManager.shared.performRequest(
+                            PostRouter.fetchPost(postId),
+                            as: PostResponseDTO.self
+                        )
+                        let post = dto.toDomain
+                        await send(.postLoaded(post))
+                    } catch {
+                        print("게시글 단건 조회 실패: \(error)")
+                    }
+                }
+
+            case .postLoaded(let post):
+                // 단일 게시글을 위한 PostFeature.State 생성
+                // postCells에 해당 게시글만 포함시키고, isDetailMode를 true로 설정
+                var postFeatureState = PostFeature.State()
+                postFeatureState.postCells = [PostCellFeature.State(post: post)]
+                postFeatureState.nextCursor = "0" // 페이지네이션 비활성화
+                postFeatureState.isDetailMode = true // 상세 모드 활성화 (새로고침 비활성화)
+                state.postDetail = postFeatureState
+                return .none
+
+            case .postDetail:
+                return .none
+
             case .settingsMenu:
+                return .none
+
+            case .delegate:
                 return .none
             }
         }
@@ -284,6 +448,9 @@ struct MyProfileFeature {
             FollowListFeature()
         }
         .ifLet(\.$settingsMenu, action: \.settingsMenu)
+        .ifLet(\.$postDetail, action: \.postDetail) {
+            PostFeature()
+        }
     }
 }
 

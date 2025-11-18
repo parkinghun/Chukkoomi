@@ -21,19 +21,15 @@ struct PostView: View {
                 emptyStateView
             } else {
                 // 게시글 리스트
-                ScrollView {
-                    LazyVStack(spacing: 0) {
-                        ForEach(
-                            store.scope(state: \.postCells, action: \.postCell)
-                        ) { cellStore in
-                            PostCellView(store: cellStore)
-                            Divider()
-                                .padding(.vertical, 8)
+                if store.isDetailMode {
+                    // 상세 모드: 새로고침 비활성화
+                    scrollViewContent
+                } else {
+                    // 일반 모드: 새로고침 활성화
+                    scrollViewContent
+                        .refreshable {
+                            store.send(.loadPosts)
                         }
-                    }
-                }
-                .refreshable {
-                    store.send(.loadPosts)
                 }
             }
 
@@ -86,6 +82,21 @@ struct PostView: View {
             store.send(.onAppear)
         }
         .toolbar(.hidden, for: .tabBar)
+    }
+
+    // MARK: - Scroll View Content
+    private var scrollViewContent: some View {
+        ScrollView {
+            LazyVStack(spacing: 0) {
+                ForEach(
+                    store.scope(state: \.postCells, action: \.postCell)
+                ) { cellStore in
+                    PostCellView(store: cellStore)
+                    Divider()
+                        .padding(.vertical, 8)
+                }
+            }
+        }
     }
 
     // MARK: - Empty State
