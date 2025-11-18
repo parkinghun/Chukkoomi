@@ -19,6 +19,7 @@ struct OtherProfileFeature {
         var postImages: [PostImage] = []
         var isLoading: Bool = false
         var isFollowing: Bool = false
+        var isPresented: Bool = false // fullScreenCover로 표시되었는지
 
         @PresentationState var followList: FollowListFeature.State?
         @PresentationState var chat: ChatFeature.State?

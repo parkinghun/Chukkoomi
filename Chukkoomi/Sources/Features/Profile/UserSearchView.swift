@@ -38,6 +38,19 @@ struct UserSearchView: View {
             }
             .navigationTitle("유저 검색")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                // useDelegate가 true일 때만 닫기 버튼 표시
+                if viewStore.useDelegate {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            viewStore.send(.closeButtonTapped)
+                        } label: {
+                            AppIcon.xmark
+                                .foregroundStyle(.black)
+                        }
+                    }
+                }
+            }
             .onAppear {
                 isSearchFieldFocused = true
             }

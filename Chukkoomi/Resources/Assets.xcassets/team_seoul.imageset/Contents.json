@@ -1,8 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "team_seoul.jpeg",
-      "idiom" : "universal"
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "team_seoul.png",
+      "idiom" : "universal",
+      "scale" : "3x"
     }
   ],
   "info" : {

@@ -10,6 +10,7 @@ import ComposableArchitecture
 
 struct OtherProfileView: View {
     let store: StoreOf<OtherProfileFeature>
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         WithViewStore(store, observe: { $0 }) { viewStore in
@@ -37,6 +38,18 @@ struct OtherProfileView: View {
             .padding(.horizontal, AppPadding.large)
             .navigationTitle("프로필")
             .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                if viewStore.isPresented {
+                    ToolbarItem(placement: .navigationBarLeading) {
+                        Button {
+                            dismiss()
+                        } label: {
+                            AppIcon.xmark
+                                .foregroundStyle(.black)
+                        }
+                    }
+                }
+            }
             .onAppear {
                 viewStore.send(.onAppear)
             }

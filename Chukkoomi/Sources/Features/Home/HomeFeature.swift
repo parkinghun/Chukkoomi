@@ -150,15 +150,23 @@ struct HomeFeature {
                 return .none
 
             case let .teamTapped(teamId):
-                // PostView로 네비게이션 (일단 전체 카테고리로)
+                // PostView로 네비게이션 (팀 정보 전달)
                 print("Team tapped: \(teamId)")
-                state.postList = PostFeature.State()
+                let tappedTeam = state.teams.first(where: { $0.id == teamId })
+                state.postList = PostFeature.State(teamInfo: tappedTeam)
                 return .none
 
             case let .loadMatchesResponse(.success(matches)):
                 state.isLoadingMatches = false
-                state.matches = matches
-                print("경기 데이터 로드 완료: \(matches.count)개")
+
+                // 경기가 없으면 더미 데이터 사용
+                if matches.isEmpty {
+                    state.matches = HomeFeature.createDummyMatches()
+                    print("⚠️ 오늘 경기가 없어 더미 데이터 표시: \(state.matches.count)개")
+                } else {
+                    state.matches = matches
+                    print("경기 데이터 로드 완료: \(matches.count)개")
+                }
                 return .none
 
             case let .loadMatchesResponse(.failure(error)):
@@ -192,24 +200,24 @@ extension HomeFeature {
             Match(
                 id: -1,
                 date: calendar.date(byAdding: .hour, value: 2, to: today) ?? today,
-                homeTeamName: teams[0].koreanName, // 울산 HD FC
-                awayTeamName: teams[1].koreanName, // 전북 현대 모터스
+                homeTeamName: teams[0].englishName, // 울산 HD FC
+                awayTeamName: teams[1].englishName, // 전북 현대 모터스
                 homeScore: nil,
                 awayScore: nil
             ),
             Match(
                 id: -2,
                 date: calendar.date(byAdding: .hour, value: 5, to: today) ?? today,
-                homeTeamName: teams[2].koreanName, // 포항 스틸러스
-                awayTeamName: teams[8].koreanName, // FC 서울
+                homeTeamName: teams[2].englishName, // 포항 스틸러스
+                awayTeamName: teams[8].englishName, // FC 서울
                 homeScore: nil,
                 awayScore: nil
             ),
             Match(
                 id: -3,
                 date: calendar.date(byAdding: .hour, value: 7, to: today) ?? today,
-                homeTeamName: teams[6].koreanName, // 제주 유나이티드
-                awayTeamName: teams[3].koreanName, // 수원 FC
+                homeTeamName: teams[6].englishName, // 제주 유나이티드
+                awayTeamName: teams[3].englishName, // 수원 FC
                 homeScore: nil,
                 awayScore: nil
             )

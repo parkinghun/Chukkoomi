@@ -45,6 +45,32 @@ extension NetworkManager {
         }
     }
 
+    /// 빈 응답을 반환하는 요청 (삭제 등에 사용)
+    func performRequestWithoutResponse(_ router: Router) async throws {
+        do {
+            try await performRequestWithoutResponseAndInterception(router)
+        } catch NetworkError.statusCode(419, _) {
+            // 419 에러 (AccessToken 만료) -> 토큰 갱신 시도
+            let refreshSuccess = await TokenRefreshManager.shared.refreshTokenIfNeeded()
+
+            guard refreshSuccess else {
+                throw NetworkError.unauthorized
+            }
+
+            // 토큰 갱신 성공 -> 원래 요청 재시도
+            try await performRequestWithoutResponseAndInterception(router)
+        } catch NetworkError.statusCode(418, _) {
+            // 418 에러 (RefreshToken 만료) -> 자동 로그아웃
+            await TokenRefreshManager.shared.handleTokenExpiration()
+            throw NetworkError.refreshTokenExpired
+        }
+    }
+
+    /// 빈 응답 요청 (인터셉트 없음)
+    private func performRequestWithoutResponseAndInterception(_ router: Router) async throws {
+        _ = try await basicRequest(router)
+    }
+
     /// HTTP Method와 BodyEncoder에 따라 분기하는 내부 메서드 (인터셉트 없음)
     private func performRequestWithoutInterception<T: Decodable>(_ router: Router, as type: T.Type, progress: ((Double) -> Void)? = nil) async throws -> T {
         let data: Data

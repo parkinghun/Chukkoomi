@@ -20,6 +20,7 @@ struct MyProfileFeature {
         var bookmarkImages: [PostImage] = []
         var isLoading: Bool = false
         var profileImageData: Data?
+        var isPresented: Bool = false // fullScreenCover로 표시되었는지
 
         @PresentationState var editProfile: EditProfileFeature.State?
         @PresentationState var userSearch: UserSearchFeature.State?

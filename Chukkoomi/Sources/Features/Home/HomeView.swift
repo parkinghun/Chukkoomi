@@ -22,8 +22,15 @@ struct HomeView: View {
             }
             .padding(.top, 16)
         }
-        .navigationTitle("메인")
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .topBarLeading) {
+                    Image("Chukkoomi")
+                        .renderingMode(.original)
+                        .resizable()
+                        .frame(width: 158, height: 28)
+            }
+        }
         .onAppear {
             store.send(.onAppear)
         }
@@ -252,11 +259,13 @@ struct MatchCard: View {
 }
 
 #Preview {
-    HomeView(
-        store: Store(
-            initialState: HomeFeature.State()
-        ) {
-            HomeFeature()
-        }
-    )
+    NavigationStack {
+        HomeView(
+            store: Store(
+                initialState: HomeFeature.State()
+            ) {
+                HomeFeature()
+            }
+        )
+    }
 }

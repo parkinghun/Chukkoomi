@@ -1,8 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "team_jeju.jpeg",
-      "idiom" : "universal"
+      "idiom" : "universal",
+      "scale" : "1x"
+    },
+    {
+      "idiom" : "universal",
+      "scale" : "2x"
+    },
+    {
+      "filename" : "team_jeju.png",
+      "idiom" : "universal",
+      "scale" : "3x"
     }
   ],
   "info" : {

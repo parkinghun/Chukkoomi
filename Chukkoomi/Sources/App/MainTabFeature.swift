@@ -16,10 +16,11 @@ struct MainTabFeature {
         var selectedTab: Tab = .home
         var home = HomeFeature.State()
         var search = SearchFeature.State()
-        var post = EmptyForVideoFeature.State()
+        // var post = EmptyForVideoFeature.State()
+        var postCreate = PostCreateFeature.State()
         var myProfile = MyProfileFeature.State()
         var chatList = ChatListFeature.State()
-        
+
         enum Tab: Equatable, CaseIterable {
             case home
             case search
@@ -34,7 +35,8 @@ struct MainTabFeature {
         case tabSelected(State.Tab)
         case home(HomeFeature.Action)
         case search(SearchFeature.Action)
-        case post(EmptyForVideoFeature.Action)
+        // case post(EmptyForVideoFeature.Action)
+        case postCreate(PostCreateFeature.Action)
         case myProfile(MyProfileFeature.Action)
         case chatList(ChatListFeature.Action)
         case delegate(Delegate)
@@ -49,48 +51,43 @@ struct MainTabFeature {
         Scope(state: \.home, action: \.home) {
             HomeFeature()
         }
-        
+
         Scope(state: \.search, action: \.search) {
             SearchFeature()
         }
 
-        Scope(state: \.post, action: \.post) {
-            EmptyForVideoFeature()
+        // Scope(state: \.post, action: \.post) {
+        //     EmptyForVideoFeature()
+        // }
+
+        Scope(state: \.postCreate, action: \.postCreate) {
+            PostCreateFeature()
         }
 
         Scope(state: \.myProfile, action: \.myProfile) {
             MyProfileFeature()
         }
-        
+
         Scope(state: \.chatList, action: \.chatList) {
             ChatListFeature()
         }
-        
+
         Reduce { state, action in
             switch action {
             case .tabSelected(let tab):
                 state.selectedTab = tab
                 return .none
 
-            case .home:
-                return .none
-                
-            case .search:
+            case .home, .search, .postCreate, .chatList, .delegate:
                 return .none
 
-            case .post:
-                return .none
+//            case .post:
+//                return .none
 
             case .myProfile(.logoutCompleted):
                 return .send(.delegate(.logout))
 
             case .myProfile:
-                return .none
-                
-            case .chatList:
-                return .none
-
-            case .delegate:
                 return .none
             }
         }

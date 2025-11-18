@@ -165,9 +165,8 @@ final class PostService: PostServiceProtocol {
     // MARK: - 게시글 삭제
 
     func deletePost(postId: String) async throws {
-        let _: EmptyResponse = try await networkManager.performRequest(
-            PostRouter.deletePost(postId),
-            as: EmptyResponse.self
+        try await networkManager.performRequestWithoutResponse(
+            PostRouter.deletePost(postId)
         )
     }
 

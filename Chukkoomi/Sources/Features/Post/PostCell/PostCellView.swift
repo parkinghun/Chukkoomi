@@ -20,180 +20,114 @@ struct PostCellView: View {
 
             mediaContentView
 
-            
             actionBarView
         }
         .padding(.vertical, 8)
-//        .buttonWrapper {
-//            store.send(.postTapped)
-//        }
+        .confirmationDialog(
+            store: store.scope(state: \.$menu, action: \.menu)
+        )
+        .alert(
+            store: store.scope(state: \.$deleteAlert, action: \.deleteAlert)
+        )
     }
 
     // MARK: - Header
     private var headerView: some View {
         HStack(spacing: 12) {
-            // 프로필 이미지
-            Circle()
-                .fill(Color.gray.opacity(0.3))
-                .frame(width: 40, height: 40)
-                .overlay(
-                    Image(systemName: "person.fill")
-                        .foregroundColor(.gray)
-                )
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(store.post.creator?.nickname ?? "사용자")
-                    .font(.subheadline)
-                    .fontWeight(.semibold)
-
-                if let createdAt = store.post.createdAt {
-                    Text(timeAgoString(from: createdAt))
-                        .font(.caption)
-                        .foregroundColor(.gray)
+            // 프로필 영역 (이미지 + 이름/시간)
+            HStack(spacing: 12) {
+                // 프로필 이미지
+                if let profileImagePath = store.post.creator?.profileImage {
+                    AsyncMediaImageView(
+                        imagePath: profileImagePath,
+                        width: 40,
+                        height: 40,
+                        onImageLoaded: { _ in }
+                    )
+                    .clipShape(Circle())
+                } else {
+                    Circle()
+                        .fill(Color.gray.opacity(0.3))
+                        .frame(width: 40, height: 40)
+                        .overlay(
+                            Image(systemName: "person.fill")
+                                .foregroundColor(.gray)
+                        )
                 }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(store.post.creator?.nickname ?? "사용자")
+                        .foregroundStyle(.black)
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+
+                    if let createdAt = store.post.createdAt {
+                        Text(timeAgoString(from: createdAt))
+                            .font(.caption)
+                            .foregroundColor(.gray)
+                    }
+                }
+            }
+            .buttonWrapper {
+                store.send(.profileTapped)
             }
 
             Spacer()
 
-            // 팔로우 버튼
-            followButtonView()
+            // 본인 게시글이면 메뉴 버튼, 아니면 팔로우 버튼
+            if store.isMyPost {
+                menuButtonView()
+            } else {
+                followButtonView()
+            }
         }
         .padding(.horizontal, 16)
     }
 
     // MARK: - Title
     private var titleView: some View {
-        Text(store.post.title)
-            .font(.body)
-            .fontWeight(.medium)
-            .padding(.horizontal, 16)
+        VStack(alignment: .leading, spacing: 8) {
+            // 해시태그 제외한 본문만 표시
+            Text(extractContentWithoutHashtags(from: store.post.content))
+                .font(Font.appSubBody)
+
+            // 해시태그 표시 (버튼)
+            if !store.post.hashTags.isEmpty {
+                HashtagFlowLayout(spacing: 8) {
+                    ForEach(store.post.hashTags, id: \.self) { tag in
+                        Text("#\(tag)")
+                            .font(Font.appSubBody)
+                            .foregroundColor(.blue)
+                            .buttonWrapper {
+                                store.send(.hashtagTapped(tag))
+                            }
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 16)
     }
 
     // MARK: - Media Content (Image or Video)
     @ViewBuilder
     private var mediaContentView: some View {
         if let firstFile = store.post.files.first {
-            let fullURL = firstFile.toFullMediaURL
-            let mediaType = MediaTypeHelper.detectMediaType(from: firstFile)
+            let isVideo = MediaTypeHelper.isVideoPath(firstFile)
 
-            let _ = print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            let _ = print("🎬 원본 파일 경로: \(firstFile)")
-            let _ = print("🌐 생성된 전체 URL: \(fullURL)")
-            let _ = print("🎨 감지된 미디어 타입: \(mediaType)")
-            let _ = print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-            switch mediaType {
-            case .image:
-                // 이미지 렌더링
-                AsyncImage(url: URL(string: fullURL)) { phase in
-                    switch phase {
-                    case .empty:
-                        // 로딩 중
-                        Color.gray.opacity(0.2)
-                            .frame(height: 300)
-                            .overlay(
-                                VStack(spacing: 8) {
-                                    ProgressView()
-                                    Text("이미지 로딩 중...")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                            )
-                            .onAppear {
-                                print("⏳ 이미지 로딩 시작: \(fullURL)")
-                            }
-
-                    case .success(let image):
-                        // 이미지 로드 성공
-                        image
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(height: 300)
-                            .clipped()
-                            .onAppear {
-                                print("✅ 이미지 로딩 성공: \(fullURL)")
-                            }
-
-                    case .failure(let error):
-                        // 이미지 로드 실패
-                        Color.gray.opacity(0.2)
-                            .frame(height: 300)
-                            .overlay(
-                                VStack(spacing: 8) {
-                                    Image(systemName: "photo")
-                                        .font(.system(size: 40))
-                                        .foregroundColor(.gray)
-                                    Text("이미지를 불러올 수 없습니다")
-                                        .font(.caption)
-                                        .foregroundColor(.gray)
-                                }
-                            )
-                            .onAppear {
-                                print("❌ 이미지 로딩 실패")
-                                print("   URL: \(fullURL)")
-                                print("   에러: \(error.localizedDescription)")
-                            }
-
-                    @unknown default:
-                        EmptyView()
-                    }
-                }
-
-            case .video:
-                // 동영상 렌더링
-                if let url = URL(string: fullURL) {
-                    VideoPlayer(player: AVPlayer(url: url))
-                        .frame(height: 300)
-                        .background(Color.black)
-                        .onAppear {
-                            print("🎥 동영상 로딩: \(fullURL)")
-                        }
-                } else {
-                    // URL 생성 실패
-                    Color.gray.opacity(0.2)
-                        .frame(height: 300)
-                        .overlay(
-                            VStack(spacing: 8) {
-                                Image(systemName: "video.slash")
-                                    .font(.system(size: 40))
-                                    .foregroundColor(.gray)
-                                Text("동영상을 불러올 수 없습니다")
-                                    .font(.caption)
-                                    .foregroundColor(.gray)
-                                Text(fullURL)
-                                    .font(.system(size: 8))
-                                    .foregroundColor(.red)
-                                    .multilineTextAlignment(.center)
-                                    .padding(.horizontal, 16)
-                            }
-                        )
-                        .onAppear {
-                            print("❌ 동영상 URL 생성 실패: \(fullURL)")
-                        }
-                }
-
-            case .unknown:
-                // 알 수 없는 파일 형식
-                Color.gray.opacity(0.2)
+            if isVideo {
+                // 비디오 재생
+                URLMediaPlayerView(mediaPath: firstFile)
                     .frame(height: 300)
-                    .overlay(
-                        VStack(spacing: 8) {
-                            Image(systemName: "doc")
-                                .font(.system(size: 40))
-                                .foregroundColor(.gray)
-                            Text("지원하지 않는 파일 형식입니다")
-                                .font(.caption)
-                                .foregroundColor(.gray)
-                            Text(firstFile)
-                                .font(.system(size: 8))
-                                .foregroundColor(.orange)
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 16)
-                        }
+            } else {
+                // 이미지 표시
+                GeometryReader { geometry in
+                    AsyncMediaImageView(
+                        imagePath: firstFile,
+                        width: geometry.size.width,
+                        height: 300
                     )
-                    .onAppear {
-                        print("⚠️ 알 수 없는 파일 형식: \(firstFile)")
-                    }
+                }
+                .frame(height: 300)
             }
         }
     }
@@ -206,7 +140,7 @@ struct PostCellView: View {
                 Image(systemName: store.isLiked ? "heart.fill" : "heart")
                     .font(.system(size: 20))
                     .foregroundColor(store.isLiked ? .red : .primary)
-                Text("\(store.post.likes?.count ?? 0)")
+                Text("\(store.likeCount)")
                     .font(.caption)
             }
             .buttonWrapper {
@@ -217,7 +151,7 @@ struct PostCellView: View {
             HStack(spacing: 4) {
                 AppIcon.comment
                     .font(.system(size: 20))
-                Text("\(store.post.commentCount ?? 0)")
+                Text("\(store.commentCount)")
                     .font(.caption)
             }
             .buttonWrapper {
@@ -246,20 +180,54 @@ struct PostCellView: View {
     }
     
     private func followButtonView() -> some View {
-        Text("+ 팔로우")
-            .font(.caption)
+        Text(store.isFollowing ? "팔로잉" : "+ 팔로우")
+            .font(.appSubTitle)
             .foregroundColor(.black)
             .frame(width: 80, height: 40)
             .background(
                 Capsule()
-                .fill(.gray)
+                    .fill(AppColor.lightGray)
             )
             .buttonWrapper {
                 store.send(.followTapped)
             }
     }
 
-    // MARK: - 시간 포맷 헬퍼
+    private func menuButtonView() -> some View {
+        AppIcon.ellipsis
+            .font(.system(size: 20))
+            .frame(width: 40, height: 40)
+            .foregroundStyle(.black)
+            .buttonWrapper {
+                store.send(.menuTapped)
+            }
+    }
+
+    // MARK: - 헬퍼 메서드
+
+    /// 컨텐츠에서 해시태그를 제거하고 본문만 추출
+    private func extractContentWithoutHashtags(from fullContent: String) -> String {
+        // 정규식으로 해시태그 패턴 제거 (#으로 시작하고 공백이나 #이 아닌 문자들)
+        let pattern = "#[^\\s#]+"
+        guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
+            return fullContent
+        }
+
+        let range = NSRange(location: 0, length: fullContent.utf16.count)
+        let result = regex.stringByReplacingMatches(
+            in: fullContent,
+            options: [],
+            range: range,
+            withTemplate: ""
+        )
+
+        // 여러 개의 연속된 공백을 하나로 줄이고 양쪽 공백 제거
+        return result
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// 시간 포맷 헬퍼
     private func timeAgoString(from date: Date) -> String {
         let now = Date()
         let calendar = Calendar.current
@@ -273,6 +241,156 @@ struct PostCellView: View {
             return "\(minute)분전"
         } else {
             return "방금"
+        }
+    }
+}
+
+// MARK: - URLMediaPlayerView
+struct URLMediaPlayerView: View {
+    let mediaPath: String
+    @State private var player: AVPlayer?
+    @State private var isLoading = true
+
+    var body: some View {
+        ZStack {
+            Color.black
+
+            if let player = player {
+                VideoPlayer(player: player)
+                    .onAppear {
+                        player.play()
+                    }
+                    .onDisappear {
+                        player.pause()
+                    }
+            } else if isLoading {
+                ProgressView()
+                    .tint(.white)
+            } else {
+                // 로드 실패
+                VStack(spacing: 8) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 40))
+                        .foregroundColor(.white)
+                    Text("동영상을 불러올 수 없습니다")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                }
+            }
+        }
+        .task(id: mediaPath) {
+            await loadVideo()
+        }
+    }
+
+    private func loadVideo() async {
+        isLoading = true
+
+        do {
+            let videoData: Data
+
+            // TODO: picsum 테스트용 임시 코드 - 나중에 삭제
+            if mediaPath.hasPrefix("http://") || mediaPath.hasPrefix("https://") {
+                // 외부 URL: URLSession으로 직접 다운로드
+                guard let url = URL(string: mediaPath) else {
+                    isLoading = false
+                    return
+                }
+                let (data, _) = try await URLSession.shared.data(from: url)
+                videoData = data
+            } else {
+                // 실제 사용 코드: 서버에서 다운로드
+                videoData = try await NetworkManager.shared.download(
+                    MediaRouter.getData(path: mediaPath)
+                )
+            }
+
+            // 임시 파일로 저장 (AVPlayer는 URL이 필요)
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("mp4")
+
+            try videoData.write(to: tempURL)
+
+            // AVPlayer 생성
+            let playerItem = AVPlayerItem(url: tempURL)
+            let avPlayer = AVPlayer(playerItem: playerItem)
+
+            await MainActor.run {
+                self.player = avPlayer
+                self.isLoading = false
+            }
+        } catch is CancellationError {
+            // Task가 취소되었을 때는 로그를 남기지 않음
+            await MainActor.run {
+                self.isLoading = false
+            }
+        } catch {
+            print("동영상 로드 실패: \(error)")
+            await MainActor.run {
+                self.isLoading = false
+            }
+        }
+    }
+}
+
+// MARK: - HashtagFlowLayout for Hashtags
+struct HashtagFlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let result = HashtagFlowLayoutResult(
+            in: proposal.replacingUnspecifiedDimensions().width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        return result.size
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        let result = HashtagFlowLayoutResult(
+            in: bounds.width,
+            subviews: subviews,
+            spacing: spacing
+        )
+        for (index, subview) in subviews.enumerated() {
+            let position = CGPoint(
+                x: bounds.minX + result.positions[index].x,
+                y: bounds.minY + result.positions[index].y
+            )
+            subview.place(at: position, proposal: .unspecified)
+        }
+    }
+
+    struct HashtagFlowLayoutResult {
+        var size: CGSize = .zero
+        var positions: [CGPoint] = []
+
+        init(in maxWidth: CGFloat, subviews: Subviews, spacing: CGFloat) {
+            var currentX: CGFloat = 0
+            var currentY: CGFloat = 0
+            var lineHeight: CGFloat = 0
+
+            for subview in subviews {
+                let size = subview.sizeThatFits(.unspecified)
+
+                if currentX + size.width > maxWidth && currentX > 0 {
+                    // 다음 줄로
+                    currentX = 0
+                    currentY += lineHeight + spacing
+                    lineHeight = 0
+                }
+
+                positions.append(CGPoint(x: currentX, y: currentY))
+
+                currentX += size.width + spacing
+                lineHeight = max(lineHeight, size.height)
+            }
+
+            self.size = CGSize(
+                width: maxWidth,
+                height: currentY + lineHeight
+            )
         }
     }
 }
