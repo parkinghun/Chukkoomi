@@ -63,7 +63,10 @@ extension ChatMessageResponseDTO {
             content: content,
             createdAt: createdAt,
             sender: sender.toDomain,
-            files: files
+            files: files,
+            sendStatus: .sent,  // 서버에서 받은 메시지는 전송 완료 상태
+            localId: nil,  // 서버에서 받은 메시지는 localId 없음
+            localImages: nil  // 서버에서 받은 메시지는 로컬 이미지 없음
         )
     }
 }

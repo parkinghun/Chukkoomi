@@ -44,7 +44,7 @@ struct ChatView: View {
                             }
 
                             // 메시지 목록
-                            ForEach(Array(viewStore.messages.enumerated()), id: \.element.chatId) { index, message in
+                            ForEach(Array(viewStore.messages.enumerated()), id: \.element.uniqueId) { index, message in
                                 let isAfterDateSeparator = index == 0 || shouldShowDateSeparator(currentMessage: message, previousMessage: viewStore.messages[index - 1])
 
                                 // 날짜 구분선 표시 (첫 메시지이거나 이전 메시지와 날짜가 다를 때)
@@ -62,9 +62,15 @@ struct ChatView: View {
                                     isMyMessage: isMyMessage(message, myUserId: viewStore.myUserId),
                                     opponentProfileImage: opponentProfileImage,
                                     showProfile: shouldShowProfile(currentMessage: message, previousMessage: previousMessage, myUserId: viewStore.myUserId),
-                                    showTime: shouldShowTime(currentMessage: message, nextMessage: nextMessage, myUserId: viewStore.myUserId)
+                                    showTime: shouldShowTime(currentMessage: message, nextMessage: nextMessage, myUserId: viewStore.myUserId),
+                                    onRetry: { localId in
+                                        viewStore.send(.retryMessage(localId: localId))
+                                    },
+                                    onCancel: { localId in
+                                        viewStore.send(.cancelMessage(localId: localId))
+                                    }
                                 )
-                                .id(message.chatId)
+                                .id(message.uniqueId)
                                 .padding(.top, isAfterDateSeparator ? 0 : (isNewMessageGroup(currentMessage: message, previousMessage: previousMessage) ? 8 : 2))
                                 .padding(.bottom, index == viewStore.messages.count - 1 ? 8 : 0)
                             }
@@ -76,14 +82,14 @@ struct ChatView: View {
                         // 새 메시지가 추가되면 스크롤을 최하단으로
                         if let lastMessage = viewStore.messages.last {
                             withAnimation {
-                                scrollProxy.scrollTo(lastMessage.chatId, anchor: .bottom)
+                                scrollProxy.scrollTo(lastMessage.uniqueId, anchor: .bottom)
                             }
                         }
                     }
                     .onAppear {
                         // 초기 로드 후 스크롤을 최하단으로
                         if let lastMessage = viewStore.messages.last {
-                            scrollProxy.scrollTo(lastMessage.chatId, anchor: .bottom)
+                            scrollProxy.scrollTo(lastMessage.uniqueId, anchor: .bottom)
                         }
                     }
                 }
@@ -397,6 +403,8 @@ struct MessageRow: View {
     let opponentProfileImage: UIImage?
     let showProfile: Bool
     let showTime: Bool
+    let onRetry: ((String) -> Void)?
+    let onCancel: ((String) -> Void)?
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -404,12 +412,41 @@ struct MessageRow: View {
                 Spacer(minLength: 60)
 
                 HStack(alignment: .bottom, spacing: 8) {
-                    // 내 메시지: 시간이 왼쪽
+                    // 내 메시지: 시간이 왼쪽 (실패 시 재전송/취소 버튼)
                     if showTime {
-                        Text(DateFormatters.formatChatMessageTime(message.createdAt))
-                            .font(.system(size: 11))
-                            .foregroundColor(.gray)
-                            .fixedSize()
+                        if message.sendStatus == .failed {
+                            // 실패 시 재전송/취소 버튼
+                            HStack(spacing: 0) {
+                                Button(action: {
+                                    if let localId = message.localId {
+                                        onRetry?(localId)
+                                    }
+                                }) {
+                                    Image(systemName: "arrow.clockwise")
+                                        .font(.system(size: 11, weight: .semibold))
+                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                        .frame(width: 24, height: 24)
+                                }
+
+                                Button(action: {
+                                    if let localId = message.localId {
+                                        onCancel?(localId)
+                                    }
+                                }) {
+                                    Image(systemName: "xmark")
+                                        .font(.system(size: 10, weight: .semibold))
+                                        .foregroundColor(.red)
+                                        .frame(width: 24, height: 24)
+                                }
+                            }
+                            .background(Color(red: 0.95, green: 0.95, blue: 0.95))
+                            .cornerRadius(6)
+                        } else {
+                            Text(DateFormatters.formatChatMessageTime(message.createdAt))
+                                .font(.system(size: 11))
+                                .foregroundColor(.gray)
+                                .fixedSize()
+                        }
                     }
 
                     messageContent
@@ -480,7 +517,11 @@ struct MessageRow: View {
             }
 
             // 이미지 파일
-            if !message.files.isEmpty {
+            if let localImages = message.localImages, !localImages.isEmpty {
+                // 업로드 중인 로컬 이미지 표시
+                localImageGridView(imagesData: localImages)
+            } else if !message.files.isEmpty {
+                // 서버 이미지 표시
                 imageGridView(files: message.files)
             }
         }
@@ -573,6 +614,188 @@ struct MessageRow: View {
                         height: 200
                     )
                     .cornerRadius(8)
+                }
+            }
+        }
+    }
+
+    // 로컬 이미지 그리드 레이아웃 (업로드 중)
+    @ViewBuilder
+    private func localImageGridView(imagesData: [Data]) -> some View {
+        let count = imagesData.count
+        let images = imagesData.compactMap { UIImage(data: $0) }
+
+        Group {
+            switch count {
+            case 1:
+                // 1개: 단일 이미지
+                if let image = images.first {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 200, height: 200)
+                        .clipped()
+                        .cornerRadius(8)
+                        .opacity(0.7)  // 업로드 중 표시
+                }
+
+            case 2:
+                // 2개: 한 줄에 표시
+                HStack(spacing: 2) {
+                    ForEach(Array(images.enumerated()), id: \.offset) { index, image in
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 98, height: 98)
+                            .clipped()
+                            .cornerRadius(6)
+                            .opacity(0.7)
+                    }
+                }
+
+            case 3:
+                // 3개: 윗줄 2개, 아랫줄 1개
+                VStack(spacing: 2) {
+                    HStack(spacing: 2) {
+                        if images.count > 0 {
+                            Image(uiImage: images[0])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                        if images.count > 1 {
+                            Image(uiImage: images[1])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                    }
+                    if images.count > 2 {
+                        Image(uiImage: images[2])
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 198, height: 98)
+                            .clipped()
+                            .cornerRadius(6)
+                            .opacity(0.7)
+                    }
+                }
+
+            case 4:
+                // 4개: 2x2 그리드
+                VStack(spacing: 2) {
+                    HStack(spacing: 2) {
+                        if images.count > 0 {
+                            Image(uiImage: images[0])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                        if images.count > 1 {
+                            Image(uiImage: images[1])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                    }
+                    HStack(spacing: 2) {
+                        if images.count > 2 {
+                            Image(uiImage: images[2])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                        if images.count > 3 {
+                            Image(uiImage: images[3])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                    }
+                }
+
+            case 5:
+                // 5개: 윗줄 2개, 아랫줄 3개
+                VStack(spacing: 2) {
+                    HStack(spacing: 2) {
+                        if images.count > 0 {
+                            Image(uiImage: images[0])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                        if images.count > 1 {
+                            Image(uiImage: images[1])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                    }
+                    HStack(spacing: 2) {
+                        if images.count > 2 {
+                            Image(uiImage: images[2])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 64, height: 64)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                        if images.count > 3 {
+                            Image(uiImage: images[3])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 64, height: 64)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                        if images.count > 4 {
+                            Image(uiImage: images[4])
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 64, height: 64)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
+                    }
+                }
+
+            default:
+                // 그 외: 기본 처리
+                ForEach(Array(images.enumerated()), id: \.offset) { index, image in
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 200, height: 200)
+                        .clipped()
+                        .cornerRadius(8)
+                        .opacity(0.7)
                 }
             }
         }

@@ -22,6 +22,7 @@ struct ChatFeature: Reducer {
         var isUploadingFiles: Bool = false
         var cursorDate: String?
         var hasMoreMessages: Bool = true
+        var pendingFileUploads: [String: [Data]] = [:]  // localId: filesData
     }
 
     // MARK: - Action
@@ -31,16 +32,21 @@ struct ChatFeature: Reducer {
         case messagesLoaded([ChatMessage], hasMore: Bool)
         case messageTextChanged(String)
         case sendMessageTapped
-        case messageSent(ChatMessage)
+        case messageSent(ChatMessage, localId: String?)
         case chatRoomCreated(ChatRoom)
         case loadMoreMessages
         case messageLoadFailed(String)
-        case messageSendFailed(String)
+        case messageSendFailed(String, localId: String)
 
         // 파일 업로드
         case uploadAndSendFiles([Data])
-        case filesUploaded([String])
-        case fileUploadFailed(String)
+        case filesUploaded([String], localId: String)
+        case fileUploadFailed(String, localId: String?)
+        case uploadTimeout(localId: String)
+
+        // 메시지 재전송 및 취소
+        case retryMessage(localId: String)
+        case cancelMessage(localId: String)
     }
 
     // MARK: - Reducer
@@ -103,6 +109,25 @@ struct ChatFeature: Reducer {
             let messageContent = state.messageText
             state.messageText = "" // 즉시 입력창 클리어
 
+            // 로컬 임시 메시지 생성 (낙관적 업데이트)
+            let localId = UUID().uuidString
+            let tempMessage = ChatMessage(
+                chatId: "",  // 서버 응답 후 업데이트
+                roomId: state.chatRoom?.roomId ?? "",
+                content: messageContent,
+                createdAt: ISO8601DateFormatter().string(from: Date()),
+                sender: ChatUser(
+                    userId: state.myUserId ?? "",
+                    nick: "",  // UI에서는 내 메시지는 닉네임을 표시하지 않음
+                    profileImage: nil
+                ),
+                files: [],
+                sendStatus: .sending,
+                localId: localId,
+                localImages: nil
+            )
+            state.messages.append(tempMessage)
+
             // 채팅방이 아직 생성되지 않은 경우 (첫 메시지)
             if state.chatRoom == nil {
                 return .run { [opponentId = state.opponent.userId] send in
@@ -120,9 +145,9 @@ struct ChatFeature: Reducer {
                             ChatRouter.sendMessage(roomId: chatRoom.roomId, content: messageContent, files: nil),
                             as: ChatMessageResponseDTO.self
                         )
-                        await send(.messageSent(messageResponse.toDomain))
+                        await send(.messageSent(messageResponse.toDomain, localId: localId))
                     } catch {
-                        await send(.messageSendFailed(error.localizedDescription))
+                        await send(.messageSendFailed(error.localizedDescription, localId: localId))
                     }
                 }
             } else {
@@ -133,16 +158,25 @@ struct ChatFeature: Reducer {
                             ChatRouter.sendMessage(roomId: roomId, content: messageContent, files: nil),
                             as: ChatMessageResponseDTO.self
                         )
-                        await send(.messageSent(response.toDomain))
+                        await send(.messageSent(response.toDomain, localId: localId))
                     } catch {
-                        await send(.messageSendFailed(error.localizedDescription))
+                        await send(.messageSendFailed(error.localizedDescription, localId: localId))
                     }
                 }
             }
 
-        case .messageSent(let message):
+        case .messageSent(let message, let localId):
             state.isSending = false
-            state.messages.append(message)
+
+            // localId가 있으면 임시 메시지를 교체, 없으면 새로 추가 (페이지네이션으로 로드된 메시지)
+            if let localId = localId,
+               let index = state.messages.firstIndex(where: { $0.localId == localId }) {
+                state.messages[index] = message
+                // 파일 Data 정리
+                state.pendingFileUploads.removeValue(forKey: localId)
+            } else {
+                state.messages.append(message)
+            }
             return .none
 
         case .chatRoomCreated(let chatRoom):
@@ -162,13 +196,42 @@ struct ChatFeature: Reducer {
             // TODO: 에러 알림 표시
             return .none
 
-        case .messageSendFailed:
+        case .messageSendFailed(_, let localId):
             state.isSending = false
-            // TODO: 에러 알림 표시
+
+            // localId로 메시지를 찾아서 상태를 .failed로 변경
+            if let index = state.messages.firstIndex(where: { $0.localId == localId }) {
+                var failedMessage = state.messages[index]
+                failedMessage.sendStatus = .failed
+                state.messages[index] = failedMessage
+            }
             return .none
 
         case .uploadAndSendFiles(let filesData):
             state.isUploadingFiles = true
+
+            // 로컬 임시 메시지 생성 (낙관적 업데이트)
+            let localId = UUID().uuidString
+            let fileCount = filesData.count
+            let tempMessage = ChatMessage(
+                chatId: "",
+                roomId: state.chatRoom?.roomId ?? "",
+                content: nil,  // 파일 메시지는 content를 nil로
+                createdAt: ISO8601DateFormatter().string(from: Date()),
+                sender: ChatUser(
+                    userId: state.myUserId ?? "",
+                    nick: "",
+                    profileImage: nil
+                ),
+                files: ["uploading"],  // 업로드 중 표시를 위한 placeholder
+                sendStatus: .sending,
+                localId: localId,
+                localImages: filesData  // 로컬 이미지 Data 저장
+            )
+            state.messages.append(tempMessage)
+
+            // 파일 Data 저장 (재전송 시 사용)
+            state.pendingFileUploads[localId] = filesData
 
             // 채팅방이 아직 생성되지 않은 경우 (첫 메시지)
             if state.chatRoom == nil {
@@ -185,34 +248,45 @@ struct ChatFeature: Reducer {
                         // 2. 파일 업로드 재시도
                         await send(.uploadAndSendFiles(filesData))
                     } catch {
-                        await send(.fileUploadFailed(error.localizedDescription))
+                        await send(.fileUploadFailed(error.localizedDescription, localId: localId))
                     }
                 }
             }
 
-            return .run { [roomId = state.chatRoom!.roomId] send in
-                do {
-                    // Data를 MultipartFile 배열로 변환
-                    let multipartFiles = filesData.enumerated().map { index, data in
-                        // 파일 확장자 결정 (간단하게 JPEG로 가정, 실제로는 MIME 타입 체크 필요)
-                        let fileName = "image_\(index)_\(UUID().uuidString).jpg"
-                        return MultipartFile(data: data, fileName: fileName, mimeType: "image/jpeg")
+            return .merge(
+                // 실제 파일 업로드
+                .run { [roomId = state.chatRoom!.roomId] send in
+                    do {
+                        // Data를 MultipartFile 배열로 변환
+                        let multipartFiles = filesData.enumerated().map { index, data in
+                            // 파일 확장자 결정 (간단하게 JPEG로 가정, 실제로는 MIME 타입 체크 필요)
+                            let fileName = "image_\(index)_\(UUID().uuidString).jpg"
+                            return MultipartFile(data: data, fileName: fileName, mimeType: "image/jpeg")
+                        }
+
+                        // 파일 업로드 (ChatRouter 사용)
+                        let response = try await NetworkManager.shared.performRequest(
+                            ChatRouter.uploadFiles(roomId: roomId, files: multipartFiles),
+                            as: UploadFileResponseDTO.self
+                        )
+
+                        // 업로드된 파일 URL로 메시지 전송
+                        await send(.filesUploaded(response.files, localId: localId))
+                    } catch {
+                        await send(.fileUploadFailed(error.localizedDescription, localId: localId))
                     }
-
-                    // 파일 업로드 (ChatRouter 사용)
-                    let response = try await NetworkManager.shared.performRequest(
-                        ChatRouter.uploadFiles(roomId: roomId, files: multipartFiles),
-                        as: UploadFileResponseDTO.self
-                    )
-
-                    // 업로드된 파일 URL로 메시지 전송
-                    await send(.filesUploaded(response.files))
-                } catch {
-                    await send(.fileUploadFailed(error.localizedDescription))
                 }
-            }
+                .cancellable(id: localId, cancelInFlight: true),
 
-        case .filesUploaded(let fileUrls):
+                // 5초 타임아웃
+                .run { send in
+                    try await Task.sleep(nanoseconds: 5_000_000_000)
+                    await send(.uploadTimeout(localId: localId))
+                }
+                .cancellable(id: "\(localId)-timeout", cancelInFlight: true)
+            )
+
+        case .filesUploaded(let fileUrls, let localId):
             state.isUploadingFiles = false
 
             // 파일 URL로 메시지 전송
@@ -220,21 +294,98 @@ struct ChatFeature: Reducer {
                 return .none
             }
 
-            return .run { send in
-                do {
-                    let response = try await NetworkManager.shared.performRequest(
-                        ChatRouter.sendMessage(roomId: roomId, content: nil, files: fileUrls),
-                        as: ChatMessageResponseDTO.self
-                    )
-                    await send(.messageSent(response.toDomain))
-                } catch {
-                    await send(.messageSendFailed(error.localizedDescription))
+            // 타임아웃 취소
+            return .merge(
+                .cancel(id: localId),
+                .cancel(id: "\(localId)-timeout"),
+                .run { send in
+                    do {
+                        let response = try await NetworkManager.shared.performRequest(
+                            ChatRouter.sendMessage(roomId: roomId, content: nil, files: fileUrls),
+                            as: ChatMessageResponseDTO.self
+                        )
+                        await send(.messageSent(response.toDomain, localId: localId))
+                    } catch {
+                        await send(.messageSendFailed(error.localizedDescription, localId: localId))
+                    }
+                }
+            )
+
+        case .fileUploadFailed(_, let localId):
+            state.isUploadingFiles = false
+
+            // localId로 메시지를 찾아서 상태를 .failed로 변경
+            if let localId = localId,
+               let index = state.messages.firstIndex(where: { $0.localId == localId }) {
+                var failedMessage = state.messages[index]
+                failedMessage.sendStatus = .failed
+                state.messages[index] = failedMessage
+
+                // 타임아웃 취소
+                return .merge(
+                    .cancel(id: localId),
+                    .cancel(id: "\(localId)-timeout")
+                )
+            }
+            return .none
+
+        case .uploadTimeout(let localId):
+            state.isUploadingFiles = false
+
+            // localId로 메시지를 찾아서 상태를 .failed로 변경
+            if let index = state.messages.firstIndex(where: { $0.localId == localId }) {
+                var failedMessage = state.messages[index]
+                failedMessage.sendStatus = .failed
+                state.messages[index] = failedMessage
+            }
+
+            // 업로드 태스크 취소
+            return .cancel(id: localId)
+
+        case .retryMessage(let localId):
+            // localId로 실패한 메시지를 찾아서 재전송
+            guard let index = state.messages.firstIndex(where: { $0.localId == localId }),
+                  let roomId = state.chatRoom?.roomId else {
+                return .none
+            }
+
+            let failedMessage = state.messages[index]
+
+            // 상태를 .sending으로 변경
+            var retryingMessage = failedMessage
+            retryingMessage.sendStatus = .sending
+            state.messages[index] = retryingMessage
+
+            // 파일 업로드가 실패한 경우 (pendingFileUploads에 Data가 있음)
+            if let filesData = state.pendingFileUploads[localId] {
+                return .run { send in
+                    await send(.uploadAndSendFiles(filesData))
+                    // 기존 실패 메시지 삭제
+                    await send(.cancelMessage(localId: localId))
                 }
             }
 
-        case .fileUploadFailed:
-            state.isUploadingFiles = false
-            // TODO: 에러 알림 표시
+            // 텍스트 메시지 재전송
+            let content = failedMessage.content
+            let files = failedMessage.files
+
+            return .run { send in
+                do {
+                    let response = try await NetworkManager.shared.performRequest(
+                        ChatRouter.sendMessage(roomId: roomId, content: content, files: files.isEmpty ? nil : files),
+                        as: ChatMessageResponseDTO.self
+                    )
+                    await send(.messageSent(response.toDomain, localId: localId))
+                } catch {
+                    await send(.messageSendFailed(error.localizedDescription, localId: localId))
+                }
+            }
+
+        case .cancelMessage(let localId):
+            // localId로 실패한 메시지를 찾아서 삭제
+            state.messages.removeAll { $0.localId == localId }
+            // 파일 Data도 정리
+            state.pendingFileUploads.removeValue(forKey: localId)
             return .none
         }
     }
