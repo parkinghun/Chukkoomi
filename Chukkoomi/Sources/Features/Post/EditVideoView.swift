@@ -203,7 +203,13 @@ private struct VideoTimelineEditor: UIViewRepresentable {
 
     // 눈금자와 썸네일 타임라인 사이 간격 (삼각형이 들어갈 공간)
     private let gapBetweenRulerAndTimeline: CGFloat = 16
-    
+
+    // 핸들 너비 (VideoTimelineTrimmer와 동일)
+    private let handleWidth: CGFloat = 12
+
+    // 추가 왼쪽 여백 (레이블이 잘리지 않도록)
+    private let extraLeftPadding: CGFloat = 4
+
     // 시간 Font
     private let timeFont = UIFont.systemFont(ofSize: 16, weight: .regular)
 
@@ -241,14 +247,18 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         let timelineOriginY = rulerHeight + gapBetweenRulerAndTimeline
         let timelineHeight = max(0, totalHeight - timelineOriginY)
 
-        // 현재 재생 헤드 위치
-        let playheadPosition = (safeDuration > 0 && timelineWidth > 0)
-            ? (currentTime / safeDuration) * timelineWidth
-            : 0
+        // 핸들이 좌우로 빠져있으므로 컨테이너 너비에 핸들 공간 + 추가 여백 추가
+        let leftOffset = handleWidth + extraLeftPadding
+        let containerWidth = timelineWidth + (handleWidth * 2) + extraLeftPadding
 
-        // Container 크기 설정
-        containerView.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: totalHeight)
-        scrollView.contentSize = CGSize(width: timelineWidth, height: totalHeight)
+        // 현재 재생 헤드 위치 (leftOffset 고려)
+        let playheadPosition = (safeDuration > 0 && timelineWidth > 0)
+            ? (currentTime / safeDuration) * timelineWidth + leftOffset
+            : leftOffset
+
+        // Container 크기 설정 (핸들 영역 포함)
+        containerView.frame = CGRect(x: 0, y: 0, width: containerWidth, height: totalHeight)
+        scrollView.contentSize = CGSize(width: containerWidth, height: totalHeight)
 
         // 시간 표시 컨테이너 뷰 (눈금자 + 현재 시간 라벨)
         if context.coordinator.timeDisplayContainer == nil {
@@ -259,22 +269,28 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         }
 
         if let timeContainer = context.coordinator.timeDisplayContainer {
-            timeContainer.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: rulerHeight)
+            // 눈금자 전체 너비 (좌우 핸들 공간 포함)
+            let rulerTotalWidth = timelineWidth + (handleWidth * 2)
+
+            // 컨테이너를 왼쪽 끝에서 시작
+            timeContainer.frame = CGRect(x: extraLeftPadding, y: 0, width: rulerTotalWidth, height: rulerHeight)
 
             // 시간 눈금자 view 업데이트
             if context.coordinator.rulerView == nil {
-                let rulerView = TimeRulerView(frame: CGRect(x: 0, y: 0, width: timelineWidth, height: rulerHeight))
+                let rulerView = TimeRulerView(frame: CGRect(x: 0, y: 0, width: rulerTotalWidth, height: rulerHeight))
                 rulerView.duration = safeDuration
                 rulerView.pixelsPerSecond = pixelsPerSecond
                 rulerView.backgroundColor = .clear
                 rulerView.onSeek = onSeek
+                rulerView.handleWidth = handleWidth
                 timeContainer.addSubview(rulerView)
                 context.coordinator.rulerView = rulerView
             } else {
-                context.coordinator.rulerView?.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: rulerHeight)
+                context.coordinator.rulerView?.frame = CGRect(x: 0, y: 0, width: rulerTotalWidth, height: rulerHeight)
                 context.coordinator.rulerView?.duration = safeDuration
                 context.coordinator.rulerView?.pixelsPerSecond = pixelsPerSecond
                 context.coordinator.rulerView?.onSeek = onSeek
+                context.coordinator.rulerView?.handleWidth = handleWidth
                 context.coordinator.rulerView?.setNeedsDisplay()
             }
         }
@@ -288,7 +304,8 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         }
 
         if let trimmerContainer = context.coordinator.trimmerContainer {
-            trimmerContainer.frame = CGRect(x: 0, y: timelineOriginY, width: timelineWidth, height: timelineHeight)
+            // leftOffset만큼 오른쪽으로 이동하여 핸들 공간 확보
+            trimmerContainer.frame = CGRect(x: leftOffset, y: timelineOriginY, width: timelineWidth, height: timelineHeight)
 
             // Timeline trimmer view 업데이트
             if context.coordinator.timelineHostingController == nil {
@@ -394,12 +411,15 @@ private struct VideoTimelineEditor: UIViewRepresentable {
 
                 timeContainer.bringSubviewToFront(timeLabel)
 
+                // timeContainer가 extraLeftPadding에서 시작하므로 상대 위치 조정
+                let labelX = playheadPosition - extraLeftPadding
+
                 // seek 중이면 애니메이션 없이 바로 이동
                 if context.coordinator.isSeeking {
-                    timeLabel.center = CGPoint(x: playheadPosition, y: 10)
+                    timeLabel.center = CGPoint(x: labelX, y: 10)
                 } else {
                     UIView.animate(withDuration: 0.1, delay: 0, options: [.curveLinear], animations: {
-                        timeLabel.center = CGPoint(x: playheadPosition, y: 10)
+                        timeLabel.center = CGPoint(x: labelX, y: 10)
                     })
                 }
             }
@@ -408,7 +428,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         // 스크롤 자동 조정 (playhead가 화면 중앙에 오도록)
         if !context.coordinator.isUserScrolling {
             let targetOffsetX = playheadPosition - screenWidth / 2
-            let maxOffsetX = max(0, timelineWidth - screenWidth)
+            let maxOffsetX = max(0, containerWidth - screenWidth)
             let clampedOffsetX = max(0, min(targetOffsetX, maxOffsetX))
 
             // seek 중이면 애니메이션 없이 바로 이동
@@ -473,6 +493,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
 private class TimeRulerView: UIView {
     var duration: Double = 0
     var pixelsPerSecond: CGFloat = 50
+    var handleWidth: CGFloat = 12
     var onSeek: ((Double) -> Void)?
     private let timeFont = UIFont.systemFont(ofSize: 14, weight: .regular)
 
@@ -494,7 +515,9 @@ private class TimeRulerView: UIView {
 
     @objc private func handleTap(_ gesture: UITapGestureRecognizer) {
         let location = gesture.location(in: self)
-        let tappedTime = Double(location.x) / Double(pixelsPerSecond)
+        // handleWidth 오프셋 제거
+        let adjustedX = location.x - handleWidth
+        let tappedTime = Double(adjustedX) / Double(pixelsPerSecond)
         let clampedTime = min(max(tappedTime, 0), duration)
         onSeek?(clampedTime)
     }
@@ -518,7 +541,8 @@ private class TimeRulerView: UIView {
         // 1초 간격으로 눈금 그리기
         let totalSeconds = Int(ceil(duration))
         for second in 0...totalSeconds {
-            let xPosition = CGFloat(second) * pixelsPerSecond
+            // handleWidth만큼 오프셋 추가
+            let xPosition = CGFloat(second) * pixelsPerSecond + handleWidth
 
             // 세로선 그리기
             UIColor.separator.setStroke()
@@ -531,8 +555,8 @@ private class TimeRulerView: UIView {
             // 시간 텍스트 그리기
             let timeText = "\(second)s"
             let textSize = (timeText as NSString).size(withAttributes: attributes)
-            // x 좌표가 음수가 되지 않도록 max(0, ...) 사용
-            let textX = max(0, xPosition - textSize.width / 2)
+            // 중앙 정렬
+            let textX = xPosition - textSize.width / 2
             let textRect = CGRect(
                 x: textX,
                 y: 2,

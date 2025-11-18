@@ -57,17 +57,17 @@ struct VideoTimelineTrimmer: View {
                     totalWidth: totalWidth
                 )
 
-                // 왼쪽 핸들 (시작 시간)
+                // 왼쪽 핸들 (시작 시간) - 썸네일 왼쪽 밖에 위치
                 TrimHandleView(
                     handleWidth: handleWidth,
                     height: geometry.size.height,
-                    offset: startPosition
+                    offset: startPosition - handleWidth
                 )
                 .gesture(
                     DragGesture()
                         .onChanged { value in
                             isDraggingStart = true
-                            let newPosition = max(0, min(value.location.x, endPosition - handleWidth))
+                            let newPosition = max(0, min(value.location.x + handleWidth, endPosition - handleWidth))
                             let newTime = (newPosition / totalWidth) * duration
                             onTrimStartChanged(newTime)
                         }
@@ -76,17 +76,17 @@ struct VideoTimelineTrimmer: View {
                         }
                 )
 
-                // 오른쪽 핸들 (종료 시간)
+                // 오른쪽 핸들 (종료 시간) - 썸네일 오른쪽 밖에 위치
                 TrimHandleView(
                     handleWidth: handleWidth,
                     height: geometry.size.height,
-                    offset: endPosition - handleWidth
+                    offset: endPosition
                 )
                 .gesture(
                     DragGesture()
                         .onChanged { value in
                             isDraggingEnd = true
-                            let newPosition = min(totalWidth, max(value.location.x, startPosition + handleWidth))
+                            let newPosition = min(totalWidth, max(value.location.x - handleWidth, startPosition + handleWidth))
                             let newTime = (newPosition / totalWidth) * duration
                             onTrimEndChanged(newTime)
                         }
@@ -155,21 +155,16 @@ private struct TrimHandleView: View {
     let offset: CGFloat
 
     var body: some View {
-        VStack(spacing: 0) {
-            Rectangle()
-                .fill(Color.blue)
-                .frame(width: handleWidth)
-                .overlay(
-                    // 핸들 그립 라인
-                    VStack(spacing: 2) {
-                        Rectangle()
-                            .fill(Color.white)
-                            .frame(width: 2, height: 12)
-                    }
-                )
-        }
-        .frame(height: height)
-        .offset(x: offset)
+        RoundedRectangle(cornerRadius: 4)
+            .fill(Color.blue)
+            .frame(width: handleWidth, height: height)
+            .overlay(
+                // 핸들 그립 라인
+                Rectangle()
+                    .fill(Color.white)
+                    .frame(width: 2, height: 12)
+            )
+            .offset(x: offset)
     }
 }
 
