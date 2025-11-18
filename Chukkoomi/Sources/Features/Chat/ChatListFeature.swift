@@ -7,6 +7,7 @@
 
 import ComposableArchitecture
 import Foundation
+import RealmSwift
 
 struct ChatListFeature: Reducer {
 
@@ -27,6 +28,8 @@ struct ChatListFeature: Reducer {
         case myProfileLoaded(String)
         case loadChatRooms
         case chatRoomsLoaded([ChatRoom])
+        case chatRoomsLoadedFromRealm([ChatRoom])
+        case chatRoomsLoadFailed
         case chatRoomTapped(ChatRoom)
         case userSearchButtonTapped
         case chat(PresentationAction<ChatFeature.Action>)
@@ -50,7 +53,31 @@ struct ChatListFeature: Reducer {
                     // myUserId 먼저 로드 (순차 실행)
                     return .send(.loadMyProfile)
                 } else {
-                    return .send(.loadChatRooms)
+                    // myUserId가 이미 있으면 Realm에서 먼저 로드
+                    let userId = state.myUserId!
+                    return .run { send in
+                        _ = await MainActor.run {
+                            do {
+                                let realm = try Realm()
+                                let chatRoomDTOs = realm.objects(ChatRoomRealmDTO.self)
+                                    .filter("myUserId == %@", userId)
+                                    .sorted(byKeyPath: "updatedAt", ascending: false)
+                                let chatRooms = Array(chatRoomDTOs.map { $0.toDomain })
+
+                                Task {
+                                    send(.chatRoomsLoadedFromRealm(chatRooms))
+                                    // Realm 로드 후 HTTP로 동기화
+                                    send(.loadChatRooms)
+                                }
+                            } catch {
+                                print("Realm 채팅방 로드 실패: \(error)")
+                                // Realm 실패 시 HTTP로 직접 로드
+                                Task {
+                                    send(.loadChatRooms)
+                                }
+                            }
+                        }
+                    }
                 }
 
             case .loadMyProfile:
@@ -68,8 +95,31 @@ struct ChatListFeature: Reducer {
 
             case .myProfileLoaded(let userId):
                 state.myUserId = userId
-                // myUserId 로드 완료 후 chatRooms 로드
-                return .send(.loadChatRooms)
+
+                // 1. Realm에서 먼저 로드 (빠른 UI 표시)
+                return .run { send in
+                    _ = await MainActor.run {
+                        do {
+                            let realm = try Realm()
+                            let chatRoomDTOs = realm.objects(ChatRoomRealmDTO.self)
+                                .filter("myUserId == %@", userId)
+                                .sorted(byKeyPath: "updatedAt", ascending: false)
+                            let chatRooms = Array(chatRoomDTOs.map { $0.toDomain })
+
+                            Task {
+                                send(.chatRoomsLoadedFromRealm(chatRooms))
+                                // 2. Realm 로드 후 HTTP로 동기화
+                                send(.loadChatRooms)
+                            }
+                        } catch {
+                            print("Realm 채팅방 로드 실패: \(error)")
+                            // Realm 실패 시 HTTP로 직접 로드
+                            Task {
+                                send(.loadChatRooms)
+                            }
+                        }
+                    }
+                }
 
             case .loadChatRooms:
                 return .run { send in
@@ -81,15 +131,46 @@ struct ChatListFeature: Reducer {
                         let chatRooms = response.data.map { $0.toDomain }
                         await send(.chatRoomsLoaded(chatRooms))
                     } catch {
-                        // TODO: 에러 처리
-                        await send(.chatRoomsLoaded([]))
+                        // HTTP 실패 시 Realm 데이터를 유지 (덮어쓰지 않음)
+                        await send(.chatRoomsLoadFailed)
                     }
                 }
+
+            case .chatRoomsLoadedFromRealm(let realmChatRooms):
+                // Realm에서 로드한 채팅방을 먼저 표시 (빠른 UX)
+                state.chatRooms = realmChatRooms
+                state.isLoading = true  // HTTP 동기화 중임을 표시
+                return .none
+
+            case .chatRoomsLoadFailed:
+                // HTTP 실패 시 기존 Realm 데이터 유지하고 로딩만 종료
+                state.isLoading = false
+                return .none
 
             case .chatRoomsLoaded(let chatRooms):
                 state.chatRooms = chatRooms
                 state.isLoading = false
-                return .none
+
+                // Realm에 저장
+                guard let myUserId = state.myUserId else {
+                    return .none
+                }
+
+                return .run { send in
+                    _ = await MainActor.run {
+                        do {
+                            let realm = try Realm()
+                            try realm.write {
+                                for chatRoom in chatRooms {
+                                    let chatRoomDTO = chatRoom.toRealmDTO(myUserId: myUserId)
+                                    realm.add(chatRoomDTO, update: .modified)
+                                }
+                            }
+                        } catch {
+                            print("Realm 채팅방 저장 실패: \(error)")
+                        }
+                    }
+                }
 
             case .chatRoomTapped(let chatRoom):
                 // 이미 채팅 화면이 열려있으면 무시 (중복 push 방지)

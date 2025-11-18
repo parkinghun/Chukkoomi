@@ -90,20 +90,6 @@ extension UploadFileResponseDTO {
 
 // MARK: - Realm Objects
 
-/// Realm Object for ChatUser (Embedded)
-final class ChatUserRealmDTO: EmbeddedObject {
-    @Persisted var userId: String
-    @Persisted var nick: String
-    @Persisted var profileImage: String?
-
-    convenience init(userId: String, nick: String, profileImage: String?) {
-        self.init()
-        self.userId = userId
-        self.nick = nick
-        self.profileImage = profileImage
-    }
-}
-
 /// Realm Object for ChatMessage
 final class ChatMessageRealmDTO: Object {
     @Persisted(primaryKey: true) var chatId: String
@@ -135,16 +121,6 @@ final class ChatMessageRealmDTO: Object {
 }
 
 // MARK: - Realm DTO -> Domain
-extension ChatUserRealmDTO {
-    var toDomain: ChatUser {
-        return ChatUser(
-            userId: userId,
-            nick: nick,
-            profileImage: profileImage
-        )
-    }
-}
-
 extension ChatMessageRealmDTO {
     var toDomain: ChatMessage {
         let status: MessageSendStatus
@@ -172,16 +148,6 @@ extension ChatMessageRealmDTO {
 }
 
 // MARK: - Domain -> Realm DTO
-extension ChatUser {
-    func toRealmDTO() -> ChatUserRealmDTO {
-        return ChatUserRealmDTO(
-            userId: userId,
-            nick: nick,
-            profileImage: profileImage
-        )
-    }
-}
-
 extension ChatMessage {
     func toRealmDTO() -> ChatMessageRealmDTO {
         let statusString: String

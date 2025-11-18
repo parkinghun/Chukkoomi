@@ -62,7 +62,7 @@ struct ChatFeature: Reducer {
 
             // 1. Realm에서 먼저 로드 (빠른 UI 표시)
             return .run { send in
-                await MainActor.run {
+                _ = await MainActor.run {
                     do {
                         let realm = try Realm()
                         let messageDTOs = realm.objects(ChatMessageRealmDTO.self)
@@ -71,15 +71,15 @@ struct ChatFeature: Reducer {
                         let messages = Array(messageDTOs.map { $0.toDomain })
 
                         Task {
-                            await send(.messagesLoadedFromRealm(messages))
+                            send(.messagesLoadedFromRealm(messages))
                             // 2. Realm 로드 후 HTTP로 동기화
-                            await send(.loadMessages)
+                            send(.loadMessages)
                         }
                     } catch {
                         print("Realm 메시지 로드 실패: \(error)")
                         // Realm 실패 시 HTTP로 직접 로드
                         Task {
-                            await send(.loadMessages)
+                            send(.loadMessages)
                         }
                     }
                 }
@@ -140,7 +140,7 @@ struct ChatFeature: Reducer {
 
             // Realm에 저장
             return .run { send in
-                await MainActor.run {
+                _ = await MainActor.run {
                     do {
                         let realm = try Realm()
                         try realm.write {
@@ -239,7 +239,7 @@ struct ChatFeature: Reducer {
 
             // Realm에 저장
             return .run { send in
-                await MainActor.run {
+                _ = await MainActor.run {
                     do {
                         let realm = try Realm()
                         let messageDTO = message.toRealmDTO()
@@ -285,7 +285,6 @@ struct ChatFeature: Reducer {
 
             // 로컬 임시 메시지 생성 (낙관적 업데이트)
             let localId = UUID().uuidString
-            let fileCount = filesData.count
             let tempMessage = ChatMessage(
                 chatId: "",
                 roomId: state.chatRoom?.roomId ?? "",
