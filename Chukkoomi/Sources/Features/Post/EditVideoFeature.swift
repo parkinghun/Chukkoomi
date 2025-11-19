@@ -46,9 +46,22 @@ struct EditVideoFeature {
         var trimStartTime: Double = 0.0
         var trimEndTime: Double = 0.0
         var selectedFilter: VideoFilter? = nil
-        // TODO: 추후 추가될 편집 옵션들
-        // var subtitles: [Subtitle] = []
-        // var audioAdjustments: AudioSettings?
+        var subtitles: [Subtitle] = []
+    }
+
+    // MARK: - Subtitle
+    struct Subtitle: Equatable, Identifiable {
+        let id: UUID
+        var startTime: Double
+        var endTime: Double
+        var text: String
+
+        init(id: UUID = UUID(), startTime: Double, endTime: Double = 0.0, text: String = "") {
+            self.id = id
+            self.startTime = startTime
+            self.endTime = endTime > 0 ? endTime : startTime + 5.0 // 기본 5초
+            self.text = text
+        }
     }
 
     enum SeekDirection: Equatable {
@@ -77,6 +90,8 @@ struct EditVideoFeature {
         case exportCompleted(URL)
         case exportFailed(String)
         case playbackEnded
+        case addSubtitle
+        case removeSubtitle(UUID)
 
         // Delegate
         case delegate(Delegate)
@@ -234,6 +249,22 @@ struct EditVideoFeature {
                 // 재생이 종료되면 재생 상태를 끄고, 시간을 끝으로 고정
                 state.isPlaying = false
                 state.currentTime = state.duration
+                return .none
+
+            case .addSubtitle:
+                // 현재 playhead 위치에서 5초 자막 추가
+                let startTime = state.currentTime
+                let endTime = min(startTime + 5.0, state.duration)
+                let newSubtitle = Subtitle(startTime: startTime, endTime: endTime)
+                state.editState.subtitles.append(newSubtitle)
+                // 시작 시간 기준으로 정렬
+                state.editState.subtitles.sort { $0.startTime < $1.startTime }
+                print("✅ 자막 추가: \(startTime)s ~ \(endTime)s")
+                return .none
+
+            case .removeSubtitle(let id):
+                // 자막 제거
+                state.editState.subtitles.removeAll { $0.id == id }
                 return .none
 
             case .delegate:
