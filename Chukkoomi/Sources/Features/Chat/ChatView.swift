@@ -363,7 +363,7 @@ struct ChatView: View {
             var videoData: [Data] = []
 
 
-            for (index, item) in itemsToProcess.enumerated() {
+            for item in itemsToProcess {
                 // 영상인지 이미지인지 확인
                 let isVideo = item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) })
 

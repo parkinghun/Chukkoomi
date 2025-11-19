@@ -393,7 +393,7 @@ struct ChatFeature: Reducer {
                 }
             )
 
-        case .fileUploadFailed(let error, let localId):
+        case .fileUploadFailed(_, let localId):
             state.isUploadingFiles = false
 
             // localId로 메시지를 찾아서 상태를 .failed로 변경
