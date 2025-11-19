@@ -281,10 +281,12 @@ struct ChatFeature: Reducer {
             return .none
 
         case .uploadAndSendFiles(let filesData):
+            print("📤 uploadAndSendFiles 액션 수신: \(filesData.count)개 파일, 총 \(filesData.reduce(0) { $0 + $1.count }) bytes")
             state.isUploadingFiles = true
 
             // 로컬 임시 메시지 생성 (낙관적 업데이트)
             let localId = UUID().uuidString
+            print("📤 임시 메시지 생성: localId = \(localId)")
             let tempMessage = ChatMessage(
                 chatId: "",
                 roomId: state.chatRoom?.roomId ?? "",
@@ -301,12 +303,14 @@ struct ChatFeature: Reducer {
                 localImages: filesData  // 로컬 이미지 Data 저장
             )
             state.messages.append(tempMessage)
+            print("📤 임시 메시지 추가됨: 전체 메시지 수 = \(state.messages.count)")
 
             // 파일 Data 저장 (재전송 시 사용)
             state.pendingFileUploads[localId] = filesData
 
             // 채팅방이 아직 생성되지 않은 경우 (첫 메시지)
             if state.chatRoom == nil {
+                print("⚠️ 채팅방이 없음. 채팅방 생성 먼저 진행")
                 return .run { [opponentId = state.opponent.userId] send in
                     do {
                         // 1. 채팅방 생성
@@ -328,23 +332,41 @@ struct ChatFeature: Reducer {
             return .merge(
                 // 실제 파일 업로드
                 .run { [roomId = state.chatRoom!.roomId] send in
+                    print("📤 파일 업로드 시작: roomId = \(roomId)")
                     do {
                         // Data를 MultipartFile 배열로 변환
                         let multipartFiles = filesData.enumerated().map { index, data in
-                            // 파일 확장자 결정 (간단하게 JPEG로 가정, 실제로는 MIME 타입 체크 필요)
-                            let fileName = "image_\(index)_\(UUID().uuidString).jpg"
-                            return MultipartFile(data: data, fileName: fileName, mimeType: "image/jpeg")
+                            // 파일 타입 감지 (이미지 vs 영상)
+                            let isVideo = isVideoData(data)
+                            let fileName: String
+                            let mimeType: String
+
+                            if isVideo {
+                                fileName = "video_\(index)_\(UUID().uuidString).mp4"
+                                mimeType = "video/mp4"
+                                print("📤 영상 파일 감지: \(fileName)")
+                            } else {
+                                fileName = "image_\(index)_\(UUID().uuidString).jpg"
+                                mimeType = "image/jpeg"
+                                print("📤 이미지 파일 감지: \(fileName)")
+                            }
+
+                            return MultipartFile(data: data, fileName: fileName, mimeType: mimeType)
                         }
 
                         // 파일 업로드 (ChatRouter 사용)
+                        print("📤 서버에 파일 업로드 요청 중...")
                         let response = try await NetworkManager.shared.performRequest(
                             ChatRouter.uploadFiles(roomId: roomId, files: multipartFiles),
                             as: UploadFileResponseDTO.self
                         )
 
+                        print("✅ 파일 업로드 성공: \(response.files.count)개 파일")
+                        print("✅ 파일 URLs: \(response.files)")
                         // 업로드된 파일 URL로 메시지 전송
                         await send(.filesUploaded(response.files, localId: localId))
                     } catch {
+                        print("❌ 파일 업로드 실패: \(error.localizedDescription)")
                         await send(.fileUploadFailed(error.localizedDescription, localId: localId))
                     }
                 }
@@ -359,12 +381,15 @@ struct ChatFeature: Reducer {
             )
 
         case .filesUploaded(let fileUrls, let localId):
+            print("✅ filesUploaded 액션 수신: \(fileUrls.count)개 파일, localId = \(localId)")
             state.isUploadingFiles = false
 
             // 파일 URL로 메시지 전송
             guard let roomId = state.chatRoom?.roomId else {
+                print("⚠️ roomId가 없음")
                 return .none
             }
+            print("✅ 메시지 전송 시작: roomId = \(roomId)")
 
             // 타임아웃 취소
             return .merge(
@@ -383,12 +408,14 @@ struct ChatFeature: Reducer {
                 }
             )
 
-        case .fileUploadFailed(_, let localId):
+        case .fileUploadFailed(let error, let localId):
+            print("❌ fileUploadFailed 액션 수신: error = \(error), localId = \(String(describing: localId))")
             state.isUploadingFiles = false
 
             // localId로 메시지를 찾아서 상태를 .failed로 변경
             if let localId = localId,
                let index = state.messages.firstIndex(where: { $0.localId == localId }) {
+                print("❌ 메시지 상태를 failed로 변경: index = \(index)")
                 var failedMessage = state.messages[index]
                 failedMessage.sendStatus = .failed
                 state.messages[index] = failedMessage
@@ -467,4 +494,37 @@ struct ChatFeature: Reducer {
             self.reduce(into: &state, action: action)
         }
     }
+}
+
+// MARK: - Helper Functions
+/// Data의 첫 바이트를 확인하여 영상 파일인지 판단
+private func isVideoData(_ data: Data) -> Bool {
+    guard data.count > 12 else { return false }
+
+    // MP4 시그니처 확인 (ftyp)
+    let mp4Signature: [UInt8] = [0x66, 0x74, 0x79, 0x70]  // "ftyp"
+    if data.count >= 8 {
+        let bytes = [UInt8](data[4..<8])
+        if bytes == mp4Signature {
+            return true
+        }
+    }
+
+    // MOV 시그니처 확인 (moov, mdat 등)
+    let movSignatures: [[UInt8]] = [
+        [0x6D, 0x6F, 0x6F, 0x76],  // "moov"
+        [0x6D, 0x64, 0x61, 0x74],  // "mdat"
+        [0x77, 0x69, 0x64, 0x65],  // "wide"
+    ]
+
+    for signature in movSignatures {
+        if data.count >= 8 {
+            let bytes = [UInt8](data[4..<8])
+            if bytes == signature {
+                return true
+            }
+        }
+    }
+
+    return false
 }

@@ -10,6 +10,21 @@ import ComposableArchitecture
 import PhotosUI
 import UniformTypeIdentifiers
 
+// MARK: - Movie Transferable for PhotosPicker
+struct Movie: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { movie in
+            SentTransferredFile(movie.url)
+        } importing: { received in
+            let copiedURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mov")
+            try FileManager.default.copyItem(at: received.file, to: copiedURL)
+            return Self(url: copiedURL)
+        }
+    }
+}
+
 struct ChatView: View {
 
     let store: StoreOf<ChatFeature>
@@ -142,8 +157,8 @@ struct ChatView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .overlay {
-                    // 업로드 중 로딩 표시
-                    if viewStore.isUploadingFiles {
+                    // 업로드 중 또는 사진 처리 중 로딩 표시
+                    if viewStore.isUploadingFiles || isProcessingPhotos {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -347,18 +362,41 @@ struct ChatView: View {
             var imageData: [Data] = []
             var videoData: [Data] = []
 
-            for item in itemsToProcess {
+            print("📸 사진/영상 선택 처리 시작: \(itemsToProcess.count)개 아이템")
+
+            for (index, item) in itemsToProcess.enumerated() {
                 // 영상인지 이미지인지 확인
                 let isVideo = item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) })
+                print("📸 아이템 \(index + 1): isVideo = \(isVideo), contentTypes = \(item.supportedContentTypes)")
 
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    if isVideo {
-                        videoData.append(data)
+                if isVideo {
+                    // 영상은 URL로 로드 후 Data로 변환
+                    print("🎬 영상 로드 시작...")
+                    if let movie = try? await item.loadTransferable(type: Movie.self) {
+                        print("🎬 영상 URL 획득: \(movie.url)")
+                        let data = try? Data(contentsOf: movie.url)
+                        if let data = data {
+                            print("🎬 영상 Data 변환 성공: \(data.count) bytes")
+                            videoData.append(data)
+                        } else {
+                            print("❌ 영상 Data 변환 실패")
+                        }
                     } else {
+                        print("❌ 영상 로드 실패")
+                    }
+                } else {
+                    // 이미지는 Data로 직접 로드
+                    print("🖼️ 이미지 로드 시작...")
+                    if let data = try? await item.loadTransferable(type: Data.self) {
+                        print("🖼️ 이미지 로드 성공: \(data.count) bytes")
                         imageData.append(data)
+                    } else {
+                        print("❌ 이미지 로드 실패")
                     }
                 }
             }
+
+            print("📸 로드 완료 - 이미지: \(imageData.count)개, 영상: \(videoData.count)개")
 
             // 메인 스레드에서 상태 업데이트
             await MainActor.run {
@@ -370,6 +408,7 @@ struct ChatView: View {
                 if index > 0 {
                     try? await Task.sleep(nanoseconds: 300_000_000) // 0.3초 간격
                 }
+                print("🎬 영상 \(index + 1) 전송 시작: \(video.count) bytes")
                 _ = await MainActor.run {
                     viewStore.send(.uploadAndSendFiles([video]))
                 }
@@ -377,6 +416,7 @@ struct ChatView: View {
 
             // 이미지는 한 번에 묶어서 전송
             if !imageData.isEmpty {
+                print("🖼️ 이미지 \(imageData.count)개 전송 시작")
                 _ = await MainActor.run {
                     viewStore.send(.uploadAndSendFiles(imageData))
                 }
@@ -541,6 +581,23 @@ struct MessageRow: View {
         }
     }
 
+    // 미디어 뷰 헬퍼 (이미지 or 영상)
+    @ViewBuilder
+    private func mediaView(filePath: String, width: CGFloat, height: CGFloat) -> some View {
+        if MediaTypeHelper.isVideoPath(filePath) {
+            ChatVideoPlayerView(
+                mediaPath: filePath,
+                maxWidth: width
+            )
+        } else {
+            AsyncMediaImageView(
+                imagePath: filePath,
+                width: width,
+                height: height
+            )
+        }
+    }
+
     // 이미지 그리드 레이아웃
     @ViewBuilder
     private func imageGridView(files: [String]) -> some View {
@@ -549,24 +606,16 @@ struct MessageRow: View {
         Group {
             switch count {
             case 1:
-                // 1개: 단일 이미지
-                AsyncMediaImageView(
-                    imagePath: files[0],
-                    width: 200,
-                    height: 200
-                )
-                .cornerRadius(8)
+                // 1개: 단일 이미지/영상
+                mediaView(filePath: files[0], width: 260, height: 260)
+                    .cornerRadius(8)
 
             case 2:
                 // 2개: 한 줄에 표시
                 HStack(spacing: 2) {
                     ForEach(Array(files.enumerated()), id: \.offset) { index, filePath in
-                        AsyncMediaImageView(
-                            imagePath: filePath,
-                            width: 98,
-                            height: 98
-                        )
-                        .cornerRadius(6)
+                        mediaView(filePath: filePath, width: 98, height: 98)
+                            .cornerRadius(6)
                     }
                 }
 
@@ -574,12 +623,12 @@ struct MessageRow: View {
                 // 3개: 윗줄 2개, 아랫줄 1개 (꽉 차게)
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[0], width: 98, height: 98)
+                        mediaView(filePath: files[0], width: 98, height: 98)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[1], width: 98, height: 98)
+                        mediaView(filePath: files[1], width: 98, height: 98)
                             .cornerRadius(6)
                     }
-                    AsyncMediaImageView(imagePath: files[2], width: 198, height: 98)
+                    mediaView(filePath: files[2], width: 198, height: 98)
                         .cornerRadius(6)
                 }
 
@@ -587,15 +636,15 @@ struct MessageRow: View {
                 // 4개: 2x2 그리드
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[0], width: 98, height: 98)
+                        mediaView(filePath: files[0], width: 98, height: 98)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[1], width: 98, height: 98)
+                        mediaView(filePath: files[1], width: 98, height: 98)
                             .cornerRadius(6)
                     }
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[2], width: 98, height: 98)
+                        mediaView(filePath: files[2], width: 98, height: 98)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[3], width: 98, height: 98)
+                        mediaView(filePath: files[3], width: 98, height: 98)
                             .cornerRadius(6)
                     }
                 }
@@ -604,17 +653,17 @@ struct MessageRow: View {
                 // 5개: 윗줄 2개, 아랫줄 3개
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[0], width: 98, height: 98)
+                        mediaView(filePath: files[0], width: 98, height: 98)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[1], width: 98, height: 98)
+                        mediaView(filePath: files[1], width: 98, height: 98)
                             .cornerRadius(6)
                     }
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[2], width: 64, height: 64)
+                        mediaView(filePath: files[2], width: 64, height: 64)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[3], width: 64, height: 64)
+                        mediaView(filePath: files[3], width: 64, height: 64)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[4], width: 64, height: 64)
+                        mediaView(filePath: files[4], width: 64, height: 64)
                             .cornerRadius(6)
                     }
                 }
@@ -622,35 +671,50 @@ struct MessageRow: View {
             default:
                 // 그 외: 기본 처리 (1개씩 표시)
                 ForEach(files, id: \.self) { filePath in
-                    AsyncMediaImageView(
-                        imagePath: filePath,
-                        width: 200,
-                        height: 200
-                    )
-                    .cornerRadius(8)
+                    mediaView(filePath: filePath, width: 260, height: 260)
+                        .cornerRadius(8)
                 }
             }
         }
     }
 
-    // 로컬 이미지 그리드 레이아웃 (업로드 중)
+    // 로컬 이미지/영상 그리드 레이아웃 (업로드 중)
     @ViewBuilder
     private func localImageGridView(imagesData: [Data]) -> some View {
         let count = imagesData.count
-        let images = imagesData.compactMap { UIImage(data: $0) }
+
+        // 영상 플레이스홀더 이미지 (업로드 중 표시용)
+        let videoPlaceholder = UIImage(systemName: "video.fill")
+
+        // 이미지는 직접 변환, 영상은 플레이스홀더 사용
+        let images: [UIImage] = imagesData.compactMap { data in
+            // 먼저 이미지로 변환 시도
+            if let image = UIImage(data: data) {
+                return image
+            }
+            // 이미지 변환 실패 시 (영상일 경우) 플레이스홀더 반환
+            return videoPlaceholder
+        }
 
         Group {
             switch count {
             case 1:
-                // 1개: 단일 이미지
+                // 1개: 단일 이미지/영상
                 if let image = images.first {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 200, height: 200)
-                        .clipped()
-                        .cornerRadius(8)
-                        .opacity(0.7)  // 업로드 중 표시
+                    ZStack {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 200, height: 200)
+                            .clipped()
+                            .cornerRadius(8)
+                            .opacity(0.7)  // 업로드 중 표시
+
+                        // 업로드 중 스피너
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.5)
+                    }
                 }
 
             case 2:
