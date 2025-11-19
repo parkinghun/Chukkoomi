@@ -57,17 +57,17 @@ struct VideoTimelineTrimmer: View {
                     totalWidth: totalWidth
                 )
 
-                // 왼쪽 핸들 (시작 시간) - 썸네일 왼쪽 밖에 위치
+                // 왼쪽 핸들 (시작 시간) - 썸네일 안쪽 왼쪽에 위치
                 TrimHandleView(
                     handleWidth: handleWidth,
                     height: geometry.size.height,
-                    offset: startPosition - handleWidth
+                    offset: startPosition
                 )
                 .gesture(
                     DragGesture()
                         .onChanged { value in
                             isDraggingStart = true
-                            let newPosition = max(0, min(value.location.x + handleWidth, endPosition - handleWidth))
+                            let newPosition = max(0, min(value.location.x, endPosition - handleWidth))
                             let newTime = (newPosition / totalWidth) * duration
                             onTrimStartChanged(newTime)
                         }
@@ -76,17 +76,17 @@ struct VideoTimelineTrimmer: View {
                         }
                 )
 
-                // 오른쪽 핸들 (종료 시간) - 썸네일 오른쪽 밖에 위치
+                // 오른쪽 핸들 (종료 시간) - 썸네일 안쪽 오른쪽에 위치
                 TrimHandleView(
                     handleWidth: handleWidth,
                     height: geometry.size.height,
-                    offset: endPosition
+                    offset: endPosition - handleWidth
                 )
                 .gesture(
                     DragGesture()
                         .onChanged { value in
                             isDraggingEnd = true
-                            let newPosition = min(totalWidth, max(value.location.x - handleWidth, startPosition + handleWidth))
+                            let newPosition = min(totalWidth, max(value.location.x, startPosition + handleWidth))
                             let newTime = (newPosition / totalWidth) * duration
                             onTrimEndChanged(newTime)
                         }
