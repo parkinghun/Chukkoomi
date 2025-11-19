@@ -36,4 +36,8 @@ enum AppIcon {
     static let share = Image(systemName: "paperplane")
     static let bookmark = Image(systemName: "bookmark")
     static let bookmarkFill = Image(systemName: "bookmark.fill")
+
+    // Chat Message Icons
+    static let retry = Image(systemName: "arrow.clockwise")
+    static let cancel = Image(systemName: "xmark.circle")
 }

@@ -42,6 +42,7 @@ struct ChatListView: View {
                                         ChatRoomRow(chatRoom: chatRoom, myUserId: viewStore.myUserId)
                                     }
                                     .buttonStyle(.plain)
+                                    .contentShape(Rectangle())
                                 }
                             }
                         }
@@ -159,8 +160,10 @@ struct ChatRoomRow: View {
 //                }
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
+        .contentShape(Rectangle())
     }
 
     // 나 자신과의 대화인지 확인
