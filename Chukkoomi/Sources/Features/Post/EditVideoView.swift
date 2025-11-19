@@ -51,6 +51,7 @@ struct EditVideoView: View {
                             onPlayPause: { viewStore.send(.playPauseButtonTapped) }
                         )
                         .frame(width: 32, height: 32)
+                        .offset(y: -6)
 
                         // 자막 추가 버튼
                         Button {
@@ -861,9 +862,6 @@ private struct VideoTimelineEditor: UIViewRepresentable {
     // 눈금자와 썸네일 타임라인 사이 간격 (삼각형이 들어갈 공간)
     private let gapBetweenRulerAndTimeline: CGFloat = 16
 
-    // 추가 왼쪽 여백 (레이블이 잘리지 않도록)
-    private let extraLeftPadding: CGFloat = 4
-
     // 시간 Font
     private let timeFont = UIFont.systemFont(ofSize: 16, weight: .regular)
 
@@ -911,18 +909,14 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         // 자막 영역 Y 위치 (타임라인 아래 + 간격)
         let subtitleOriginY = timelineOriginY + timelineHeight + gapBetweenTrimmerAndSubtitle
 
-        // 핸들이 타임라인 안쪽에 있으므로 추가 여백만 사용
-        let leftOffset = extraLeftPadding
-        let containerWidth = timelineWidth + extraLeftPadding
-
         // 현재 재생 헤드 위치 (leftOffset 고려)
         let playheadPosition = (safeDuration > 0 && timelineWidth > 0)
-            ? (currentTime / safeDuration) * timelineWidth + leftOffset
-            : leftOffset
+            ? (currentTime / safeDuration) * timelineWidth
+            : 0
 
         // Container 크기 설정 (핸들 영역 포함)
-        containerView.frame = CGRect(x: 0, y: 0, width: containerWidth, height: totalHeight)
-        scrollView.contentSize = CGSize(width: containerWidth, height: totalHeight)
+        containerView.frame = CGRect(x: 0, y: 0, width: timelineWidth, height: totalHeight)
+        scrollView.contentSize = CGSize(width: timelineWidth, height: totalHeight)
 
         // 시간 표시 컨테이너 뷰 (눈금자 + 현재 시간 라벨)
         if context.coordinator.timeDisplayContainer == nil {
@@ -937,7 +931,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
             let rulerTotalWidth = timelineWidth
 
             // 컨테이너를 왼쪽 끝에서 시작
-            timeContainer.frame = CGRect(x: extraLeftPadding, y: 0, width: rulerTotalWidth, height: rulerHeight)
+            timeContainer.frame = CGRect(x: 0, y: 0, width: rulerTotalWidth, height: rulerHeight)
 
             // 시간 눈금자 view 업데이트
             if context.coordinator.rulerView == nil {
@@ -967,7 +961,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
 
         if let trimmerContainer = context.coordinator.trimmerContainer {
             // leftOffset만큼 오른쪽으로 이동하여 핸들 공간 확보
-            trimmerContainer.frame = CGRect(x: leftOffset, y: timelineOriginY, width: timelineWidth, height: timelineHeight)
+            trimmerContainer.frame = CGRect(x: 0, y: timelineOriginY, width: timelineWidth, height: timelineHeight)
 
             // Timeline trimmer view 업데이트
             if context.coordinator.timelineHostingController == nil {
@@ -1018,7 +1012,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         }
 
         if let subtitleContainer = context.coordinator.subtitleContainer {
-            subtitleContainer.frame = CGRect(x: leftOffset, y: subtitleOriginY, width: timelineWidth, height: subtitleHeight)
+            subtitleContainer.frame = CGRect(x: 0, y: subtitleOriginY, width: timelineWidth, height: subtitleHeight)
 
             // 자막 블록들 업데이트
             // 현재 자막 ID 목록
@@ -1128,15 +1122,12 @@ private struct VideoTimelineEditor: UIViewRepresentable {
 
                 timeContainer.bringSubviewToFront(timeLabel)
 
-                // timeContainer가 extraLeftPadding에서 시작하므로 상대 위치 조정
-                let labelX = playheadPosition - extraLeftPadding
-
                 // seek 중이면 애니메이션 없이 바로 이동
                 if context.coordinator.isSeeking {
-                    timeLabel.center = CGPoint(x: labelX, y: 10)
+                    timeLabel.center = CGPoint(x: playheadPosition, y: 10)
                 } else {
                     UIView.animate(withDuration: 0.1, delay: 0, options: [.curveLinear], animations: {
-                        timeLabel.center = CGPoint(x: labelX, y: 10)
+                        timeLabel.center = CGPoint(x: playheadPosition, y: 10)
                     })
                 }
             }
@@ -1145,7 +1136,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         // 스크롤 자동 조정 (playhead가 화면 중앙에 오도록)
         if !context.coordinator.isUserScrolling {
             let targetOffsetX = playheadPosition - screenWidth / 2
-            let maxOffsetX = max(0, containerWidth - screenWidth)
+            let maxOffsetX = max(0, timelineWidth - screenWidth)
             let clampedOffsetX = max(0, min(targetOffsetX, maxOffsetX))
 
             // seek 중이면 애니메이션 없이 바로 이동
