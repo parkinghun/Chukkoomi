@@ -8,6 +8,7 @@
 import UIKit
 import Photos
 import AVFoundation
+import CoreText
 
 /// 비디오 편집을 적용하고 최종 영상을 내보냄
 struct VideoExporter {
@@ -35,36 +36,23 @@ struct VideoExporter {
         }
     }
 
-    /// 비디오를 편집하고 내보내기
-    /// - Parameters:
-    ///   - asset: 원본 비디오 PHAsset
-    ///   - editState: 적용할 편집 정보
-    ///   - progressHandler: 진행률 콜백 (0.0 ~ 1.0)
-    /// - Returns: 내보낸 비디오의 임시 파일 URL
     func export(
         asset: PHAsset,
         editState: EditVideoFeature.EditState,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        // 1. PHAsset에서 AVAsset 가져오기
         let avAsset = try await loadAVAsset(from: asset)
-
-        // 2. 편집 적용하여 AVAsset Composition 생성
         let (composition, videoComposition) = try await applyEdits(to: avAsset, editState: editState)
-
-        // 3. 최종 영상 내보내기
         let exportedURL = try await exportComposition(
             composition,
             videoComposition: videoComposition,
             progressHandler: progressHandler
         )
-
         return exportedURL
     }
 
     // MARK: - Private Methods
 
-    /// PHAsset에서 AVAsset 로드
     private func loadAVAsset(from asset: PHAsset) async throws -> AVAsset {
         return try await withCheckedThrowingContinuation { continuation in
             let options = PHVideoRequestOptions()
@@ -81,36 +69,37 @@ struct VideoExporter {
         }
     }
 
-    /// 편집 적용 (Trim, Filters, Subtitles 등)
     private func applyEdits(
         to asset: AVAsset,
         editState: EditVideoFeature.EditState
     ) async throws -> (AVAsset, AVVideoComposition?) {
-        // AVMutableComposition 생성
         let composition = AVMutableComposition()
 
-        // 1. Trim 적용
+        // 1) Trim
         let trimmedAsset = try await applyTrim(to: asset, editState: editState, composition: composition)
 
-        // 2. Filters 적용
-        let videoComposition = try await applyFilter(to: trimmedAsset, filterType: editState.selectedFilter)
+        // 2) Filter
+        var videoComposition = try await applyFilter(to: trimmedAsset, filterType: editState.selectedFilter)
 
-        // TODO: 3. Subtitles 적용
-        // let subtitledAsset = try await applySubtitles(to: filteredAsset, subtitles: editState.subtitles)
+        // 3) Subtitles
+        if !editState.subtitles.isEmpty {
+//            videoComposition = try await applySubtitles(
+//                to: trimmedAsset,
+//                editState: editState,
+//                baseVideoComposition: videoComposition
+//            )
+        }
 
         return (trimmedAsset, videoComposition)
     }
 
-    /// Trim 적용
     private func applyTrim(
         to asset: AVAsset,
         editState: EditVideoFeature.EditState,
         composition: AVMutableComposition
     ) async throws -> AVAsset {
-        // 시간 범위 설정
         let startTime = CMTime(seconds: editState.trimStartTime, preferredTimescale: 600)
 
-        // endTime이 infinity이거나 비정상적으로 큰 경우 asset의 실제 duration 사용
         let assetDuration = try await asset.load(.duration)
         let actualEndTime: CMTime
         if editState.trimEndTime.isInfinite || editState.trimEndTime > assetDuration.seconds {
@@ -121,7 +110,6 @@ struct VideoExporter {
 
         let timeRange = CMTimeRange(start: startTime, end: actualEndTime)
 
-        // 비디오 트랙 추가
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
             return composition
         }
@@ -139,7 +127,6 @@ struct VideoExporter {
             at: .zero
         )
 
-        // 오디오 트랙 추가 (있는 경우)
         if let audioTrack = try await asset.loadTracks(withMediaType: .audio).first {
             if let compositionAudioTrack = composition.addMutableTrack(
                 withMediaType: .audio,
@@ -156,25 +143,186 @@ struct VideoExporter {
         return composition
     }
 
-    /// Filter 적용
     private func applyFilter(
         to asset: AVAsset,
         filterType: VideoFilter?
     ) async throws -> AVVideoComposition? {
-        // VideoFilterManager를 사용하여 필터 적용
         return await VideoFilterManager.createVideoComposition(
             for: asset,
             filter: filterType
         )
     }
 
-    /// Composition을 파일로 내보내기
+//    @MainActor
+//    private func applySubtitles(
+//        to asset: AVAsset,
+//        editState: EditVideoFeature.EditState,
+//        baseVideoComposition: AVVideoComposition?
+//    ) async throws -> AVVideoComposition {
+//        guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
+//            return baseVideoComposition ?? AVMutableVideoComposition()
+//        }
+//
+//        let totalDuration = try await asset.load(.duration).seconds
+//
+//        let naturalSize = try await videoTrack.load(.naturalSize)
+//        let preferredTransform = try await videoTrack.load(.preferredTransform)
+//
+//        // 회전 고려한 크기
+//        let computedSize: CGSize = (preferredTransform.a == 0 && preferredTransform.d == 0)
+//            ? CGSize(width: naturalSize.height, height: naturalSize.width)
+//            : naturalSize
+//
+//        // 사용할 renderSize
+//        var targetRenderSize = baseVideoComposition?.renderSize ?? computedSize
+//
+//        func isValidSize(_ s: CGSize) -> Bool {
+//            s.width.isFinite && s.height.isFinite && s.width > 0 && s.height > 0
+//        }
+//        if !isValidSize(targetRenderSize) {
+//            if isValidSize(naturalSize) {
+//                targetRenderSize = naturalSize
+//            } else {
+//                let isPortraitGuess = computedSize.height > computedSize.width
+//                targetRenderSize = isPortraitGuess ? CGSize(width: 1080, height: 1920)
+//                                                   : CGSize(width: 1920, height: 1080)
+//            }
+//        }
+//
+//        // videoComposition 준비
+//        let mutableVideoComposition: AVMutableVideoComposition
+//        if let base = baseVideoComposition?.mutableCopy() as? AVMutableVideoComposition {
+//            mutableVideoComposition = base
+//            mutableVideoComposition.renderSize = targetRenderSize
+//            if mutableVideoComposition.frameDuration == .invalid {
+//                mutableVideoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+//            }
+//            if mutableVideoComposition.instructions.isEmpty {
+//                let instruction = AVMutableVideoCompositionInstruction()
+//                instruction.timeRange = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
+//                let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+//                layerInstruction.setTransform(preferredTransform, at: .zero)
+//                instruction.layerInstructions = [layerInstruction]
+//                mutableVideoComposition.instructions = [instruction]
+//            }
+//        } else {
+//            mutableVideoComposition = AVMutableVideoComposition()
+//            mutableVideoComposition.renderSize = targetRenderSize
+//            mutableVideoComposition.frameDuration = CMTime(value: 1, timescale: 30)
+//
+//            let instruction = AVMutableVideoCompositionInstruction()
+//            instruction.timeRange = CMTimeRange(start: .zero, duration: try await asset.load(.duration))
+//
+//            let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+//            layerInstruction.setTransform(preferredTransform, at: .zero)
+//            instruction.layerInstructions = [layerInstruction]
+//            mutableVideoComposition.instructions = [instruction]
+//        }
+//
+//        // 레이어 트리 생성 (동기적으로)
+//        CATransaction.begin()
+//        CATransaction.setDisableActions(true)
+//
+//        let parentLayer = CALayer()
+//        let videoLayer = CALayer()
+//
+//        parentLayer.frame = CGRect(origin: .zero, size: targetRenderSize)
+//        parentLayer.isGeometryFlipped = true
+//        videoLayer.frame = CGRect(origin: .zero, size: targetRenderSize)
+//        parentLayer.addSublayer(videoLayer)
+//
+//        // 자막 레이어 추가
+//        for subtitle in editState.subtitles {
+//            let textLayer = createSubtitleLayer(
+//                subtitle: subtitle,
+//                videoSize: targetRenderSize,
+//                trimStartTime: editState.trimStartTime,
+//                totalDuration: totalDuration
+//            )
+//            parentLayer.addSublayer(textLayer)
+//        }
+//
+//        // CoreAnimationTool 설정
+//        mutableVideoComposition.animationTool = AVVideoCompositionCoreAnimationTool(
+//            postProcessingAsVideoLayer: videoLayer,
+//            in: parentLayer
+//        )
+//
+//        CATransaction.commit()
+//
+//        return mutableVideoComposition
+//    }
+//
+//    @MainActor
+//    private func createSubtitleLayer(
+//        subtitle: EditVideoFeature.Subtitle,
+//        videoSize: CGSize,
+//        trimStartTime: Double,
+//        totalDuration: Double
+//    ) -> CALayer {
+//        // UIImage로 텍스트 렌더링
+//        let font = UIFont.boldSystemFont(ofSize: 50)
+//        let attributes: [NSAttributedString.Key: Any] = [
+//            .font: font,
+//            .foregroundColor: UIColor.white,
+//            .strokeColor: UIColor.black,
+//            .strokeWidth: -5.0
+//        ]
+//
+//        let attributedString = NSAttributedString(string: subtitle.text, attributes: attributes)
+//        let textSize = attributedString.size()
+//
+//        // 이미지 생성
+//        let renderer = UIGraphicsImageRenderer(size: CGSize(width: textSize.width + 20, height: textSize.height + 20))
+//        let image = renderer.image { context in
+//            attributedString.draw(at: CGPoint(x: 10, y: 10))
+//        }
+//
+//        // 이미지 레이어
+//        let imageLayer = CALayer()
+//        imageLayer.contents = image.cgImage
+//        imageLayer.frame = CGRect(
+//            x: (videoSize.width - image.size.width) / 2,
+//            y: 20,
+//            width: image.size.width,
+//            height: image.size.height
+//        )
+//        imageLayer.contentsGravity = .center
+//
+//        // 시간 보정
+//        let rawStart = subtitle.startTime - trimStartTime
+//        let rawEnd = subtitle.endTime - trimStartTime
+//        var startTime = max(0, rawStart)
+//        var endTime = max(0, rawEnd)
+//        if endTime < startTime { swap(&startTime, &endTime) }
+//
+//        if totalDuration.isFinite && totalDuration > 0 {
+//            startTime = min(max(0, startTime), totalDuration)
+//            endTime = min(max(0, endTime), totalDuration)
+//        }
+//
+//        let minDuration: Double = 0.001
+//        let duration = max(endTime - startTime, minDuration)
+//
+//        // 애니메이션
+//        let animation = CAKeyframeAnimation(keyPath: "opacity")
+//        animation.values = [0, 1, 1, 0]
+//        animation.keyTimes = [0.0, 0.05, 0.95, 1.0].map { NSNumber(value: $0) }
+//        animation.duration = duration
+//        animation.beginTime = AVCoreAnimationBeginTimeAtZero + startTime
+//        animation.isRemovedOnCompletion = false
+//        animation.fillMode = .both
+//
+//        imageLayer.add(animation, forKey: "subtitleOpacity")
+//
+//        return imageLayer
+//    }
+
     private func exportComposition(
         _ composition: AVAsset,
         videoComposition: AVVideoComposition?,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
-        // Export Session 생성
         guard let exportSession = AVAssetExportSession(
             asset: composition,
             presetName: AVAssetExportPresetHighestQuality
@@ -182,22 +330,17 @@ struct VideoExporter {
             throw ExportError.failedToCreateExportSession
         }
 
-        // 하드웨어 가속 활성화
-        exportSession.shouldOptimizeForNetworkUse = false  // 로컬 재생 최적화
+        exportSession.shouldOptimizeForNetworkUse = false
 
-        // 비디오 컴포지션 설정 (필터가 있는 경우)
         if let videoComposition = videoComposition {
             exportSession.videoComposition = videoComposition
         }
 
-        // 출력 파일 URL 설정 (Caches 디렉토리 사용)
         guard let cachesDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
             throw ExportError.failedToCreateExportSession
         }
 
         let videosCacheDirectory = cachesDirectory.appendingPathComponent("ExportedVideos", isDirectory: true)
-
-        // 디렉토리가 없으면 생성
         if !FileManager.default.fileExists(atPath: videosCacheDirectory.path) {
             try? FileManager.default.createDirectory(at: videosCacheDirectory, withIntermediateDirectories: true)
         }
@@ -206,7 +349,6 @@ struct VideoExporter {
             .appendingPathComponent(UUID().uuidString)
             .appendingPathExtension("mp4")
 
-        // 기존 파일이 있으면 삭제
         if FileManager.default.fileExists(atPath: outputURL.path) {
             try? FileManager.default.removeItem(at: outputURL)
         }
@@ -214,27 +356,18 @@ struct VideoExporter {
         exportSession.outputURL = outputURL
         exportSession.outputFileType = .mp4
 
-        // 진행률 관찰 Task
         nonisolated(unsafe) let session = exportSession
         let progressTask = Task {
             while !Task.isCancelled {
-                let progress = session.progress
-                progressHandler(Double(progress))
-
-                if progress >= 1.0 {
-                    break
-                }
-
-                try? await Task.sleep(nanoseconds: 100_000_000) // 0.1초
+                progressHandler(Double(session.progress))
+                if session.progress >= 1.0 { break }
+                try? await Task.sleep(nanoseconds: 100_000_000)
             }
         }
 
-        // 내보내기 실행
         await exportSession.export()
-
         progressTask.cancel()
 
-        // 결과 확인
         switch exportSession.status {
         case .completed:
             return outputURL

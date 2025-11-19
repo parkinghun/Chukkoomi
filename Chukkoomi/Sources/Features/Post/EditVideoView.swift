@@ -36,6 +36,13 @@ struct EditVideoView: View {
                         )
                     }
                     .overlay {
+                        // 자막 오버레이
+                        SubtitleOverlayView(
+                            currentTime: viewStore.currentTime,
+                            subtitles: viewStore.editState.subtitles
+                        )
+                    }
+                    .overlay {
                         if viewStore.isApplyingFilter {
                             FilterApplyingOverlayView()
                         }
@@ -405,17 +412,53 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
     }
 }
 
+// MARK: - Subtitle Overlay View
+private struct SubtitleOverlayView: View {
+    let currentTime: Double
+    let subtitles: [EditVideoFeature.Subtitle]
+
+    var body: some View {
+        VStack {
+            Spacer()
+
+            // 현재 시간에 표시할 자막 찾기
+            if let currentSubtitle = subtitles.first(where: { subtitle in
+                currentTime >= subtitle.startTime && currentTime <= subtitle.endTime
+            }) {
+                ZStack {
+                    // 검정 테두리 (여러 겹)
+                    ForEach(0..<8) { i in
+                        Text(currentSubtitle.text)
+                            .font(.system(size: 20, weight: .bold))
+                            .foregroundStyle(.black)
+                            .offset(
+                                x: CGFloat(i % 3 - 1) * 2,
+                                y: CGFloat(i / 3 - 1) * 2
+                            )
+                    }
+
+                    // 흰색 텍스트
+                    Text(currentSubtitle.text)
+                        .font(.system(size: 20, weight: .bold))
+                        .foregroundStyle(.white)
+                }
+                .padding(.bottom, 12)
+            }
+        }
+    }
+}
+
 // MARK: - Filter Applying Overlay View
 private struct FilterApplyingOverlayView: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.5)
-            
+
             VStack(spacing: AppPadding.medium) {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.white)
-                
+
                 Text("필터 적용 중...")
                     .font(.appBody)
                     .foregroundStyle(.white)
@@ -1368,7 +1411,7 @@ private class SubtitleBlockUIView: UIView {
 
         // 텍스트 라벨
         textLabel = UILabel()
-        textLabel.font = UIFont.systemFont(ofSize: 12, weight: .medium)
+        textLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
         textLabel.textColor = .white
         textLabel.textAlignment = .center
         textLabel.numberOfLines = 2
