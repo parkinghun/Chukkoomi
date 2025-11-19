@@ -93,6 +93,16 @@ struct ChatView: View {
                         }
                     }
                     .scrollDismissesKeyboard(.immediately)
+                    .background(
+                        GeometryReader { geometry in
+                            Image("기본 테마")
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .clipped()
+                        }
+                        .ignoresSafeArea()
+                    )
                 }
 
                 Divider()
@@ -467,14 +477,11 @@ struct MessageRow: View {
                             .frame(width: 36, height: 36)
                             .clipShape(Circle())
                     } else {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
+                        Image("기본 프로필")
+                            .resizable()
+                            .scaledToFill()
                             .frame(width: 36, height: 36)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.gray)
-                            )
+                            .clipShape(Circle())
                     }
                 } else {
                     // 프로필 이미지 자리 확보 (투명 공간)

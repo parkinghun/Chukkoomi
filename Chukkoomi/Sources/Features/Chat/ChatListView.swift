@@ -93,14 +93,11 @@ struct ChatRoomRow: View {
                 )
                 .clipShape(Circle())
             } else {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
+                Image("기본 프로필")
+                    .resizable()
+                    .scaledToFill()
                     .frame(width: 56, height: 56)
-                    .overlay {
-                        AppIcon.personFill
-                            .foregroundColor(.gray)
-                            .font(.system(size: 28))
-                    }
+                    .clipShape(Circle())
             }
 
             // 닉네임 + 마지막 메시지
