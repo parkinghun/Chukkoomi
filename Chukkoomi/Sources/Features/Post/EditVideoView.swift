@@ -85,6 +85,12 @@ struct EditVideoView: View {
                             },
                             onRemoveSubtitle: { id in
                                 viewStore.send(.removeSubtitle(id))
+                            },
+                            onUpdateSubtitleStartTime: { id, time in
+                                viewStore.send(.updateSubtitleStartTime(id, time))
+                            },
+                            onUpdateSubtitleEndTime: { id, time in
+                                viewStore.send(.updateSubtitleEndTime(id, time))
                             }
                         )
                         .frame(height: 20 + 16 + 80 + 12 + 80) // 눈금자(20) + gap(16) + 타임라인(80) + 간격(12) + 자막(80)
@@ -629,6 +635,194 @@ private class PlayheadUIView: UIView {
     }
 }
 
+// MARK: - Subtitle Block UIView (핸들 포함)
+private class SubtitleBlockUIView: UIView {
+    private let handleWidth: CGFloat = 12
+    var subtitle: EditVideoFeature.Subtitle
+    var duration: Double
+    var timelineWidth: CGFloat
+    var pixelsPerSecond: CGFloat
+    var onStartTimeChanged: ((UUID, Double) -> Void)?
+    var onEndTimeChanged: ((UUID, Double) -> Void)?
+    var onRemove: ((UUID) -> Void)?
+
+    private var leftHandle: UIView!
+    private var rightHandle: UIView!
+    private var removeButton: UIButton!
+
+    init(
+        subtitle: EditVideoFeature.Subtitle,
+        duration: Double,
+        timelineWidth: CGFloat,
+        pixelsPerSecond: CGFloat,
+        onStartTimeChanged: @escaping (UUID, Double) -> Void,
+        onEndTimeChanged: @escaping (UUID, Double) -> Void,
+        onRemove: @escaping (UUID) -> Void
+    ) {
+        self.subtitle = subtitle
+        self.duration = duration
+        self.timelineWidth = timelineWidth
+        self.pixelsPerSecond = pixelsPerSecond
+        self.onStartTimeChanged = onStartTimeChanged
+        self.onEndTimeChanged = onEndTimeChanged
+        self.onRemove = onRemove
+
+        super.init(frame: .zero)
+        setupViews()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func setupViews() {
+        backgroundColor = UIColor.systemBlue.withAlphaComponent(0.6)
+        layer.cornerRadius = 4
+        clipsToBounds = true
+
+        // 왼쪽 핸들 (VideoTimelineTrimmer 스타일)
+        leftHandle = UIView()
+        leftHandle.backgroundColor = UIColor.systemBlue
+        leftHandle.layer.cornerRadius = 4
+        addSubview(leftHandle)
+
+        // 왼쪽 핸들 그립 라인
+        let leftGrip = UIView()
+        leftGrip.backgroundColor = .white
+        leftGrip.layer.cornerRadius = 1
+        leftHandle.addSubview(leftGrip)
+        leftGrip.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            leftGrip.centerXAnchor.constraint(equalTo: leftHandle.centerXAnchor),
+            leftGrip.centerYAnchor.constraint(equalTo: leftHandle.centerYAnchor),
+            leftGrip.widthAnchor.constraint(equalToConstant: 2),
+            leftGrip.heightAnchor.constraint(equalToConstant: 12)
+        ])
+
+        let leftPan = UIPanGestureRecognizer(target: self, action: #selector(handleLeftPan(_:)))
+        leftHandle.addGestureRecognizer(leftPan)
+        leftHandle.isUserInteractionEnabled = true
+
+        // 오른쪽 핸들 (VideoTimelineTrimmer 스타일)
+        rightHandle = UIView()
+        rightHandle.backgroundColor = UIColor.systemBlue
+        rightHandle.layer.cornerRadius = 4
+        addSubview(rightHandle)
+
+        // 오른쪽 핸들 그립 라인
+        let rightGrip = UIView()
+        rightGrip.backgroundColor = .white
+        rightGrip.layer.cornerRadius = 1
+        rightHandle.addSubview(rightGrip)
+        rightGrip.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            rightGrip.centerXAnchor.constraint(equalTo: rightHandle.centerXAnchor),
+            rightGrip.centerYAnchor.constraint(equalTo: rightHandle.centerYAnchor),
+            rightGrip.widthAnchor.constraint(equalToConstant: 2),
+            rightGrip.heightAnchor.constraint(equalToConstant: 12)
+        ])
+
+        let rightPan = UIPanGestureRecognizer(target: self, action: #selector(handleRightPan(_:)))
+        rightHandle.addGestureRecognizer(rightPan)
+        rightHandle.isUserInteractionEnabled = true
+
+        // 제거 버튼
+        removeButton = UIButton(type: .custom)
+        removeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        removeButton.tintColor = .white
+        removeButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        removeButton.layer.cornerRadius = 8
+        removeButton.addTarget(self, action: #selector(handleRemove), for: .touchUpInside)
+        addSubview(removeButton)
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+
+        // 왼쪽 핸들
+        leftHandle.frame = CGRect(x: 0, y: 0, width: handleWidth, height: bounds.height)
+
+        // 오른쪽 핸들
+        rightHandle.frame = CGRect(x: bounds.width - handleWidth, y: 0, width: handleWidth, height: bounds.height)
+
+        // 제거 버튼
+        removeButton.frame = CGRect(x: bounds.width - 20, y: 4, width: 16, height: 16)
+    }
+
+    func updatePosition() {
+        // 프레임 업데이트 (외부에서 호출)
+        let startPosition = duration > 0 ? (subtitle.startTime / duration) * timelineWidth : 0
+        let endPosition = duration > 0 ? (subtitle.endTime / duration) * timelineWidth : 0
+        let blockWidth = max(endPosition - startPosition, 20)
+
+        self.frame = CGRect(x: startPosition, y: self.frame.origin.y, width: blockWidth, height: self.frame.height)
+    }
+
+    @objc private func handleLeftPan(_ gesture: UIPanGestureRecognizer) {
+        guard let superview = superview else { return }
+
+        if gesture.state == .changed {
+            // superview 내에서의 터치 위치
+            let location = gesture.location(in: superview)
+
+            // 새로운 시작 위치
+            let newStartPosition = max(0, location.x)
+
+            // 끝 위치 계산
+            let endPosition = (subtitle.endTime / duration) * timelineWidth
+
+            // 최소 너비 유지 (0.5초에 해당하는 픽셀)
+            let minWidth = (0.5 / duration) * timelineWidth
+            let clampedPosition = min(newStartPosition, endPosition - minWidth)
+
+            // 시간으로 변환
+            let newStartTime = (clampedPosition / timelineWidth) * duration
+            let clampedTime = max(0, min(newStartTime, subtitle.endTime - 0.5))
+
+            // 즉시 프레임 업데이트 (드래그 중에는 애니메이션 없음)
+            let blockWidth = endPosition - clampedPosition
+            self.frame = CGRect(x: clampedPosition, y: self.frame.origin.y, width: blockWidth, height: self.frame.height)
+
+            // 상태 업데이트 콜백
+            onStartTimeChanged?(subtitle.id, clampedTime)
+        }
+    }
+
+    @objc private func handleRightPan(_ gesture: UIPanGestureRecognizer) {
+        guard let superview = superview else { return }
+
+        if gesture.state == .changed {
+            // superview 내에서의 터치 위치
+            let location = gesture.location(in: superview)
+
+            // 새로운 끝 위치
+            let newEndPosition = min(timelineWidth, location.x)
+
+            // 시작 위치 계산
+            let startPosition = (subtitle.startTime / duration) * timelineWidth
+
+            // 최소 너비 유지 (0.5초에 해당하는 픽셀)
+            let minWidth = (0.5 / duration) * timelineWidth
+            let clampedPosition = max(newEndPosition, startPosition + minWidth)
+
+            // 시간으로 변환
+            let newEndTime = (clampedPosition / timelineWidth) * duration
+            let clampedTime = min(duration, max(newEndTime, subtitle.startTime + 0.5))
+
+            // 즉시 프레임 업데이트 (드래그 중에는 애니메이션 없음)
+            let blockWidth = clampedPosition - startPosition
+            self.frame = CGRect(x: startPosition, y: self.frame.origin.y, width: blockWidth, height: self.frame.height)
+
+            // 상태 업데이트 콜백
+            onEndTimeChanged?(subtitle.id, clampedTime)
+        }
+    }
+
+    @objc private func handleRemove() {
+        onRemove?(subtitle.id)
+    }
+}
+
 // MARK: - Filter Selection View
 private struct FilterSelectionView: View {
     let selectedFilter: VideoFilter?
@@ -967,6 +1161,8 @@ private struct VideoTimelineWithSubtitlesEditor: UIViewRepresentable {
     let onTrimEndChanged: (Double) -> Void
     let onSeek: (Double) -> Void
     let onRemoveSubtitle: (UUID) -> Void
+    let onUpdateSubtitleStartTime: (UUID, Double) -> Void
+    let onUpdateSubtitleEndTime: (UUID, Double) -> Void
 
     // 1초당 픽셀 수
     private let pixelsPerSecond: CGFloat = 50
@@ -1129,7 +1325,7 @@ private struct VideoTimelineWithSubtitlesEditor: UIViewRepresentable {
         // 자막 영역 컨테이너
         if context.coordinator.subtitleContainer == nil {
             let subtitleContainer = UIView()
-            subtitleContainer.backgroundColor = UIColor.systemGray6.withAlphaComponent(0.3)
+            subtitleContainer.backgroundColor = UIColor.systemGray4
             subtitleContainer.layer.cornerRadius = 4
             containerView.addSubview(subtitleContainer)
             context.coordinator.subtitleContainer = subtitleContainer
@@ -1139,34 +1335,45 @@ private struct VideoTimelineWithSubtitlesEditor: UIViewRepresentable {
             subtitleContainer.frame = CGRect(x: leftOffset, y: subtitleOriginY, width: timelineWidth, height: subtitleHeight)
 
             // 자막 블록들 업데이트
-            // 기존 자막 뷰들 제거
-            subtitleContainer.subviews.forEach { $0.removeFromSuperview() }
+            // 현재 자막 ID 목록
+            let currentSubtitleIds = Set(subtitles.map { $0.id })
+            let cachedSubtitleIds = Set(context.coordinator.subtitleBlocks.keys)
 
-            // 새로운 자막 블록들 추가
+            // 제거된 자막 블록 삭제
+            for id in cachedSubtitleIds where !currentSubtitleIds.contains(id) {
+                if let blockView = context.coordinator.subtitleBlocks[id] {
+                    blockView.removeFromSuperview()
+                    context.coordinator.subtitleBlocks.removeValue(forKey: id)
+                }
+            }
+
+            // 자막 블록 업데이트 또는 생성
             for subtitle in subtitles {
                 let startPosition = safeDuration > 0 ? (subtitle.startTime / safeDuration) * timelineWidth : 0
                 let endPosition = safeDuration > 0 ? (subtitle.endTime / safeDuration) * timelineWidth : 0
                 let blockWidth = max(endPosition - startPosition, 20) // 최소 너비 20
 
-                let blockView = UIView()
-                blockView.frame = CGRect(x: startPosition, y: 0, width: blockWidth, height: subtitleHeight)
-                blockView.backgroundColor = UIColor.systemBlue.withAlphaComponent(0.6)
-                blockView.layer.cornerRadius = 4
-
-                // 제거 버튼
-                let removeButton = UIButton(type: .custom)
-                removeButton.frame = CGRect(x: blockWidth - 20, y: 4, width: 16, height: 16)
-                removeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-                removeButton.tintColor = .white
-                removeButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
-                removeButton.layer.cornerRadius = 8
-                let subtitleId = subtitle.id
-                removeButton.addAction(UIAction { _ in
-                    onRemoveSubtitle(subtitleId)
-                }, for: .touchUpInside)
-
-                blockView.addSubview(removeButton)
-                subtitleContainer.addSubview(blockView)
+                if let existingBlock = context.coordinator.subtitleBlocks[subtitle.id] {
+                    // 기존 블록 업데이트
+                    existingBlock.subtitle = subtitle
+                    existingBlock.duration = safeDuration
+                    existingBlock.timelineWidth = timelineWidth
+                    existingBlock.frame = CGRect(x: startPosition, y: 0, width: blockWidth, height: subtitleHeight)
+                } else {
+                    // 새 블록 생성
+                    let blockView = SubtitleBlockUIView(
+                        subtitle: subtitle,
+                        duration: safeDuration,
+                        timelineWidth: timelineWidth,
+                        pixelsPerSecond: pixelsPerSecond,
+                        onStartTimeChanged: onUpdateSubtitleStartTime,
+                        onEndTimeChanged: onUpdateSubtitleEndTime,
+                        onRemove: onRemoveSubtitle
+                    )
+                    blockView.frame = CGRect(x: startPosition, y: 0, width: blockWidth, height: subtitleHeight)
+                    subtitleContainer.addSubview(blockView)
+                    context.coordinator.subtitleBlocks[subtitle.id] = blockView
+                }
             }
         }
 
@@ -1297,6 +1504,7 @@ private struct VideoTimelineWithSubtitlesEditor: UIViewRepresentable {
         var timeLabel: UILabel?
         var isUserScrolling = false
         var isSeeking = false  // seek 중인지 추적
+        var subtitleBlocks: [UUID: SubtitleBlockUIView] = [:]  // 자막 블록 캐시
 
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             isUserScrolling = true

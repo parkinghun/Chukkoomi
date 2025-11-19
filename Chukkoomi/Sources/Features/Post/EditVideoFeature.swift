@@ -92,6 +92,8 @@ struct EditVideoFeature {
         case playbackEnded
         case addSubtitle
         case removeSubtitle(UUID)
+        case updateSubtitleStartTime(UUID, Double)
+        case updateSubtitleEndTime(UUID, Double)
 
         // Delegate
         case delegate(Delegate)
@@ -265,6 +267,24 @@ struct EditVideoFeature {
             case .removeSubtitle(let id):
                 // 자막 제거
                 state.editState.subtitles.removeAll { $0.id == id }
+                return .none
+
+            case .updateSubtitleStartTime(let id, let time):
+                // 자막 시작 시간 업데이트
+                if let index = state.editState.subtitles.firstIndex(where: { $0.id == id }) {
+                    let endTime = state.editState.subtitles[index].endTime
+                    let clampedTime = max(0, min(time, endTime - 0.5)) // 최소 0.5초 길이 유지
+                    state.editState.subtitles[index].startTime = clampedTime
+                }
+                return .none
+
+            case .updateSubtitleEndTime(let id, let time):
+                // 자막 종료 시간 업데이트
+                if let index = state.editState.subtitles.firstIndex(where: { $0.id == id }) {
+                    let startTime = state.editState.subtitles[index].startTime
+                    let clampedTime = min(state.duration, max(time, startTime + 0.5)) // 최소 0.5초 길이 유지
+                    state.editState.subtitles[index].endTime = clampedTime
+                }
                 return .none
 
             case .delegate:
