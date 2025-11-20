@@ -493,7 +493,7 @@ struct MessageRow: View {
                         // 성공 시 시간 표시
                         Text(DateFormatters.formatChatMessageTime(message.createdAt))
                             .font(.system(size: 11))
-                            .foregroundColor(.gray)
+                            .foregroundColor(.white)
                             .fixedSize()
                     }
 
@@ -536,7 +536,7 @@ struct MessageRow: View {
                         if showTime {
                             Text(DateFormatters.formatChatMessageTime(message.createdAt))
                                 .font(.system(size: 11))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.white)
                                 .fixedSize()
                         }
                     }
