@@ -112,7 +112,6 @@ enum CompressHelper {
 
         // AVMutableVideoComposition 생성
         let composition = AVMutableVideoComposition()
-        composition.renderSize = finalTargetSize
         if let frameDuration = frameDuration {
             composition.frameDuration = frameDuration
         }
@@ -127,20 +126,36 @@ enum CompressHelper {
         // LayerInstruction에 스케일 transform 적용
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
 
-        // 스케일 계산
-        let scaleX = finalTargetSize.width / naturalSize.width
-        let scaleY = finalTargetSize.height / naturalSize.height
-        var transform = CGAffineTransform(scaleX: scaleX, y: scaleY)
+        // 원본 preferredTransform 적용하여 화면 기준 정렬
+        let correctedTransform = preferredTransform ?? .identity
 
-        // preferredTransform 적용 (회전 정보 유지)
-        if let preferredTransform = preferredTransform {
-            transform = preferredTransform.concatenating(transform)
+        // 회전 보정 후 프레임 기준 변경되는 경우 보정
+        let videoAngleInDegree = atan2(correctedTransform.b, correctedTransform.a) * 180 / .pi
+        var renderSize = finalTargetSize
+
+        switch Int(videoAngleInDegree) {
+        case 90, -270:
+            // 세로 영상의 경우 width/height 뒤집기
+            renderSize = CGSize(width: finalTargetSize.height, height: finalTargetSize.width)
+        case 180, -180:
+            break
+        default:
+            break
         }
 
-        layerInstruction.setTransform(transform, at: .zero)
+        // 이제 리사이즈 스케일 적용
+        let scaleX = renderSize.width / naturalSize.width
+        let scaleY = renderSize.height / naturalSize.height
+        let scaleTransform = CGAffineTransform(scaleX: scaleX, y: scaleY)
+
+        // 최종 변환 = 스케일 → 회전 보정
+        let finalTransform = scaleTransform.concatenating(correctedTransform)
+
+        layerInstruction.setTransform(finalTransform, at: .zero)
         instruction.layerInstructions = [layerInstruction]
 
         composition.instructions = [instruction]
+        composition.renderSize = renderSize
 
         return composition
     }

@@ -97,6 +97,7 @@ struct VideoExporter {
             return (trimmedAsset, nil)
         }
         let naturalSize = try await videoTrack.load(.naturalSize)
+        let preferredTransform = try await videoTrack.load(.preferredTransform)
 
         // 전처리 영상을 사용하는 경우, 이미 리사이징되어 있으므로 naturalSize를 그대로 사용
         let targetSize: CGSize
@@ -104,11 +105,22 @@ struct VideoExporter {
             // 전처리 영상은 이미 리사이징되어 있음
             targetSize = naturalSize
         } else {
-            // 새로 처리하는 경우 목표 크기 계산
-            targetSize = CompressHelper.resizedSizeForiPhoneMax(
+            // 새로 처리하는 경우 목표 크기 계산 (회전 고려)
+            let baseTargetSize = CompressHelper.resizedSizeForiPhoneMax(
                 originalWidth: naturalSize.width,
                 originalHeight: naturalSize.height
             )
+
+            // 회전 각도 확인하여 세로 영상이면 width/height swap
+            let videoAngleInDegree = atan2(preferredTransform.b, preferredTransform.a) * 180 / .pi
+
+            switch Int(videoAngleInDegree) {
+            case 90, -270:
+                // 세로 영상: width/height swap
+                targetSize = CGSize(width: baseTargetSize.height, height: baseTargetSize.width)
+            default:
+                targetSize = baseTargetSize
+            }
         }
 
         // 3) Filter와 Subtitles 처리

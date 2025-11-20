@@ -193,7 +193,7 @@ final class VideoCompositorWithSubtitles: NSObject, AVVideoCompositing {
             .foregroundColor: UIColor.white,
             .paragraphStyle: paragraphStyle,
             .strokeColor: UIColor.black,
-            .strokeWidth: -3.0 // 음수 = 외곽선 + 내부 채움
+            .strokeWidth: -3.0
         ]
 
         let attributedString = NSAttributedString(string: text, attributes: attributes)
@@ -212,15 +212,9 @@ final class VideoCompositorWithSubtitles: NSObject, AVVideoCompositing {
         // 텍스트 이미지의 실제 크기 가져오기
         let textExtent = textImage.extent
 
-        // 비디오 크기에 맞게 스케일 조정 (필요시)
-        let scale: CGFloat = 1.0
-        if scale != 1.0 {
-            textImage = textImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        }
-
         // 텍스트를 비디오 중앙 하단에 배치
         // Core Image는 좌하단이 (0,0)
-        let xPosition = (videoSize.width - textExtent.width * scale) / 2
+        let xPosition = (videoSize.width - textExtent.width) / 2
         let yPosition = videoSize.height * 0.1 // 하단에서 10% 위치
 
         textImage = textImage.transformed(by: CGAffineTransform(
