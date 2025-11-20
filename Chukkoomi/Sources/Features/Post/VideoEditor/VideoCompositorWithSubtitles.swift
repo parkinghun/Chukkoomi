@@ -51,14 +51,15 @@ final class VideoCompositorWithSubtitles: NSObject, AVVideoCompositing {
 
     // MARK: - AVVideoCompositing Required Properties
 
-    var sourcePixelBufferAttributes: [String : Any]? {
+    nonisolated var sourcePixelBufferAttributes: [String : any Sendable]? {
         return [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferMetalCompatibilityKey as String: true
         ]
+
     }
 
-    var requiredPixelBufferAttributesForRenderContext: [String : Any] {
+    nonisolated var requiredPixelBufferAttributesForRenderContext: [String : any Sendable] {
         return [
             kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA,
             kCVPixelBufferMetalCompatibilityKey as String: true
