@@ -204,43 +204,105 @@ final class VideoCompositorWithSubtitles: NSObject, AVVideoCompositing {
         }
     }
 
-    /// 자막 이미지 생성 (Core Image 사용)
+    /// 자막 이미지 생성 (미리보기와 동일한 스타일)
     private func createSubtitleImage(text: String, videoSize: CGSize) -> CIImage? {
-        // NSAttributedString으로 텍스트 스타일링
-        let fontSize: CGFloat = videoSize.height * 0.06 // 비디오 높이의 6%
+        // 매우 높은 해상도로 렌더링하여 리사이징 후에도 선명도 유지
+        let renderScale: CGFloat = 4.0
+
+        // 자막 크기를 고정 (iPhone Max 세로 기준: 1320px)
+        let baseWidth: CGFloat = 1320.0
+        let baseFontSize: CGFloat = baseWidth * 0.06  // 약 79pt
+        let fontSize = baseFontSize * renderScale
+
         let font = UIFont.boldSystemFont(ofSize: fontSize)
 
         let paragraphStyle = NSMutableParagraphStyle()
         paragraphStyle.alignment = .center
 
-        let attributes: [NSAttributedString.Key: Any] = [
+        // 흰색 텍스트 속성
+        let whiteAttributes: [NSAttributedString.Key: Any] = [
             .font: font,
             .foregroundColor: UIColor.white,
-            .paragraphStyle: paragraphStyle,
-            .strokeColor: UIColor.black,
-            .strokeWidth: -3.0
+            .paragraphStyle: paragraphStyle
         ]
 
-        let attributedString = NSAttributedString(string: text, attributes: attributes)
+        // 검정 테두리 속성
+        let blackAttributes: [NSAttributedString.Key: Any] = [
+            .font: font,
+            .foregroundColor: UIColor.black,
+            .paragraphStyle: paragraphStyle
+        ]
 
-        // CIAttributedTextImageGenerator 필터 사용
-        guard let filter = CIFilter(name: "CIAttributedTextImageGenerator") else {
+        let whiteString = NSAttributedString(string: text, attributes: whiteAttributes)
+        let blackString = NSAttributedString(string: text, attributes: blackAttributes)
+
+        // 텍스트 크기 계산
+        let maxWidth = baseWidth * renderScale * 0.9
+        let textSize = whiteString.boundingRect(
+            with: CGSize(width: maxWidth, height: .greatestFiniteMagnitude),
+            options: [.usesLineFragmentOrigin, .usesFontLeading],
+            context: nil
+        ).size
+
+        // 여백 추가 (테두리 offset을 고려하여 더 크게)
+        let outlineOffset: CGFloat = 2.0 * renderScale
+        let padding: CGFloat = 20.0 * renderScale + outlineOffset
+        let imageSize = CGSize(
+            width: textSize.width + padding * 2,
+            height: textSize.height + padding * 2
+        )
+
+        // UIGraphicsImageRenderer로 고해상도 텍스트 렌더링
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1.0
+        format.opaque = false
+
+        let renderer = UIGraphicsImageRenderer(size: imageSize, format: format)
+        let image = renderer.image { context in
+            UIColor.clear.setFill()
+            context.fill(CGRect(origin: .zero, size: imageSize))
+
+            let textRect = CGRect(
+                x: padding,
+                y: padding,
+                width: textSize.width,
+                height: textSize.height
+            )
+
+            // 미리보기와 동일하게 8방향 검정 테두리 그리기
+            for i in 0..<8 {
+                let offsetX = CGFloat(i % 3 - 1) * outlineOffset
+                let offsetY = CGFloat(i / 3 - 1) * outlineOffset
+
+                let outlineRect = textRect.offsetBy(dx: offsetX, dy: offsetY)
+                blackString.draw(in: outlineRect)
+            }
+
+            // 흰색 텍스트 (중앙)
+            whiteString.draw(in: textRect)
+        }
+
+        // UIImage를 CIImage로 변환
+        guard let cgImage = image.cgImage else {
             return nil
         }
 
-        filter.setValue(attributedString, forKey: "inputText")
+        var textImage = CIImage(cgImage: cgImage)
 
-        guard var textImage = filter.outputImage else {
-            return nil
-        }
+        // 기준 크기로 스케일 다운 (renderScale 배수만큼)
+        let scaleDown = CGAffineTransform(scaleX: 1.0 / renderScale, y: 1.0 / renderScale)
+        textImage = textImage.transformed(by: scaleDown)
 
-        // 텍스트 이미지의 실제 크기 가져오기
-        let textExtent = textImage.extent
+        // 실제 비디오 크기에 맞게 자막 크기 조정
+        let videoScale = videoSize.width / baseWidth
+        let finalScale = CGAffineTransform(scaleX: videoScale, y: videoScale)
+        textImage = textImage.transformed(by: finalScale)
 
         // 텍스트를 비디오 중앙 하단에 배치
         // Core Image는 좌하단이 (0,0)
+        let textExtent = textImage.extent
         let xPosition = (videoSize.width - textExtent.width) / 2
-        let yPosition = videoSize.height * 0.1 // 하단에서 10% 위치
+        let yPosition = videoSize.height * 0.05 // 하단에서 5% 위치 (더 아래로)
 
         textImage = textImage.transformed(by: CGAffineTransform(
             translationX: xPosition,

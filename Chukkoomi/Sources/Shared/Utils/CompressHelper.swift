@@ -61,9 +61,9 @@ enum CompressHelper {
         return imageData
     }
     
-    /// 원본 픽셀 크기를 받아, 가로 440px 기준으로 비율 유지하여 리사이즈된 사이즈를 반환
+    /// 원본 픽셀 크기를 받아, 가로 880px 기준으로 비율 유지하여 리사이즈된 사이즈를 반환
     static func resizedSizeForiPhoneMax(originalWidth: CGFloat, originalHeight: CGFloat) -> CGSize {
-        let maxWidthPx: CGFloat = 440
+        let maxWidthPx: CGFloat = 880
 
         // 원본이 이미 더 작으면 리사이즈할 필요 없음
         guard originalWidth > maxWidthPx else {
