@@ -36,68 +36,64 @@ struct EditVideoView: View {
                         )
                     }
                     .overlay {
-                        // 자막 오버레이
-                        SubtitleOverlayView(
-                            currentTime: viewStore.currentTime,
-                            subtitles: viewStore.editState.subtitles
-                        )
-                    }
-                    .overlay {
                         if viewStore.isApplyingFilter {
                             FilterApplyingOverlayView()
                         }
                     }
                 
                 // 편집 영역
-                HStack(alignment: .top, spacing: 28) {
-                    EditControlsView(viewStore: viewStore)
-                        .padding(.leading, AppPadding.large)
-                    
-                    VStack(spacing: 16) {
-                        // 시간 눈금자 + 가로 스크롤 가능한 타임라인 편집 영역 + 자막 영역 (통합)
-                        VideoTimelineEditor(
-                            videoAsset: viewStore.videoAsset,
-                            duration: viewStore.duration,
-                            currentTime: viewStore.currentTime,
-                            seekTarget: viewStore.seekTarget,
-                            trimStartTime: viewStore.editState.trimStartTime,
-                            trimEndTime: viewStore.editState.trimEndTime,
-                            subtitles: viewStore.editState.subtitles,
-                            onTrimStartChanged: { time in
-                                viewStore.send(.updateTrimStartTime(time))
-                            },
-                            onTrimEndChanged: { time in
-                                viewStore.send(.updateTrimEndTime(time))
-                            },
-                            onSeek: { time in
-                                viewStore.send(.seekToTime(time))
-                            },
-                            onRemoveSubtitle: { id in
-                                viewStore.send(.removeSubtitle(id))
-                            },
-                            onUpdateSubtitleStartTime: { id, time in
-                                viewStore.send(.updateSubtitleStartTime(id, time))
-                            },
-                            onUpdateSubtitleEndTime: { id, time in
-                                viewStore.send(.updateSubtitleEndTime(id, time))
-                            }
-                        )
-                        .frame(height: 20 + 16 + 80 + 16 + 80) // 눈금자(20) + 간격(16) + 타임라인(80) + 간격(16) + 자막(80)
+                ScrollView {
+                    HStack(alignment: .top, spacing: 28) {
+                        EditControlsView(viewStore: viewStore)
+                            .padding(.leading, AppPadding.large)
                         
-                        // 필터 선택
-                        FilterSelectionView(
-                            selectedFilter: viewStore.editState.selectedFilter,
-                            onFilterSelected: { filter in
-                                viewStore.send(.filterSelected(filter))
-                            }
-                        )
+                        VStack(spacing: 16) {
+                            // 시간 눈금자 + 가로 스크롤 가능한 타임라인 편집 영역 + 자막 영역 (통합)
+                            VideoTimelineEditor(
+                                videoAsset: viewStore.videoAsset,
+                                duration: viewStore.duration,
+                                currentTime: viewStore.currentTime,
+                                seekTarget: viewStore.seekTarget,
+                                trimStartTime: viewStore.editState.trimStartTime,
+                                trimEndTime: viewStore.editState.trimEndTime,
+                                subtitles: viewStore.editState.subtitles,
+                                onTrimStartChanged: { time in
+                                    viewStore.send(.updateTrimStartTime(time))
+                                },
+                                onTrimEndChanged: { time in
+                                    viewStore.send(.updateTrimEndTime(time))
+                                },
+                                onSeek: { time in
+                                    viewStore.send(.seekToTime(time))
+                                },
+                                onRemoveSubtitle: { id in
+                                    viewStore.send(.removeSubtitle(id))
+                                },
+                                onUpdateSubtitleStartTime: { id, time in
+                                    viewStore.send(.updateSubtitleStartTime(id, time))
+                                },
+                                onUpdateSubtitleEndTime: { id, time in
+                                    viewStore.send(.updateSubtitleEndTime(id, time))
+                                }
+                            )
+                            .frame(height: 20 + 16 + 80 + 16 + 80) // 눈금자(20) + 간격(16) + 타임라인(80) + 간격(16) + 자막(80)
+                            
+                            // 필터 선택
+                            FilterSelectionView(
+                                selectedFilter: viewStore.editState.selectedFilter,
+                                onFilterSelected: { filter in
+                                    viewStore.send(.filterSelected(filter))
+                                }
+                            )
+                        }
                     }
+                    .padding(.top, AppPadding.large)
+                    
+                    Spacer()
                 }
-                .padding(.top, AppPadding.large)
-                
-                Spacer()
                 
             }
+            .ignoresSafeArea(.keyboard)
             .navigationTitle("영상 편집")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
@@ -129,6 +125,7 @@ struct EditVideoView: View {
                         onConfirm: { viewStore.send(.confirmSubtitleInput) },
                         onCancel: { viewStore.send(.cancelSubtitleInput) }
                     )
+                    .ignoresSafeArea()
                 }
             }
             .alert(store: store.scope(state: \.$alert, action: \.alert))
@@ -416,11 +413,11 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
 private struct SubtitleOverlayView: View {
     let currentTime: Double
     let subtitles: [EditVideoFeature.Subtitle]
-
+    
     var body: some View {
         VStack {
             Spacer()
-
+            
             // 현재 시간에 표시할 자막 찾기
             if let currentSubtitle = subtitles.first(where: { subtitle in
                 currentTime >= subtitle.startTime && currentTime <= subtitle.endTime
@@ -436,7 +433,7 @@ private struct SubtitleOverlayView: View {
                                 y: CGFloat(i / 3 - 1) * 2
                             )
                     }
-
+                    
                     // 흰색 텍스트
                     Text(currentSubtitle.text)
                         .font(.system(size: 20, weight: .bold))
@@ -453,12 +450,12 @@ private struct FilterApplyingOverlayView: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.5)
-
+            
             VStack(spacing: AppPadding.medium) {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.white)
-
+                
                 Text("필터 적용 중...")
                     .font(.appBody)
                     .foregroundStyle(.white)
@@ -1408,7 +1405,7 @@ private class SubtitleBlockUIView: UIView {
         removeButton.layer.cornerRadius = 8
         removeButton.addTarget(self, action: #selector(handleRemove), for: .touchUpInside)
         addSubview(removeButton)
-
+        
         // 텍스트 라벨
         textLabel = UILabel()
         textLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
@@ -1422,22 +1419,22 @@ private class SubtitleBlockUIView: UIView {
     
     override func layoutSubviews() {
         super.layoutSubviews()
-
+        
         // 왼쪽 핸들
         leftHandle.frame = CGRect(x: 0, y: 0, width: handleWidth, height: bounds.height)
-
+        
         // 오른쪽 핸들
         rightHandle.frame = CGRect(x: bounds.width - handleWidth, y: 0, width: handleWidth, height: bounds.height)
-
+        
         // 제거 버튼
         removeButton.frame = CGRect(x: bounds.width - handleWidth - 4 - 16, y: 4, width: 16, height: 16)
-
+        
         // 텍스트 라벨 (핸들과 제거 버튼 사이 영역)
         let textX = handleWidth + 4
         let textWidth = bounds.width - handleWidth * 2 - 8
         textLabel.frame = CGRect(x: textX, y: 0, width: textWidth, height: bounds.height)
     }
-
+    
     func updateTextLabel() {
         textLabel.text = subtitle.text.isEmpty ? "" : subtitle.text
     }
@@ -1568,21 +1565,21 @@ private struct FilterButton: View {
 // MARK: - Exporting Overlay View
 private struct ExportingOverlayView: View {
     let progress: Double
-
+    
     var body: some View {
         ZStack {
             Color.black.opacity(0.5)
                 .ignoresSafeArea()
-
+            
             VStack(spacing: AppPadding.large) {
                 ProgressView()
                     .scaleEffect(1.5)
                     .tint(.white)
-
+                
                 Text("영상 내보내는 중...")
                     .font(.appSubTitle)
                     .foregroundStyle(.white)
-
+                
                 Text("\(Int(progress * 100))%")
                     .font(.appBody)
                     .foregroundStyle(.white.opacity(0.8))
@@ -1601,58 +1598,59 @@ private struct SubtitleInputOverlayView: View {
     let onConfirm: () -> Void
     let onCancel: () -> Void
     @FocusState private var isFocused: Bool
-
+    
+    private var isConfirmDisabled: Bool {
+        text.isEmpty || errorMessage != nil
+    }
+    
     var body: some View {
         ZStack {
             Color.black.opacity(0.7)
-
+            
             VStack(spacing: 0) {
-                // 툴바
-                HStack {
-                    Button("취소") {
-                        onCancel()
-                    }
-                    .foregroundStyle(.white)
-
-                    Spacer()
-
-                    Button("완료") {
-                        onConfirm()
-                    }
-                    .foregroundStyle(errorMessage == nil ? .white : .gray)
-                    .disabled(errorMessage != nil)
-                }
-                .padding(.horizontal, AppPadding.large)
-                .padding(.vertical, AppPadding.medium)
-
                 Spacer()
-
-                // 텍스트 필드 및 에러 메시지
-                VStack(alignment: .center, spacing: 4) {
-                    TextField("", text: $text)
-                        .textFieldStyle(.roundedBorder)
-                        .focused($isFocused)
-                        .submitLabel(.done)
-                        .onSubmit {
-                            if errorMessage == nil {
+                
+                TextField("", text: $text)
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundStyle(.white)
+                    .background(.clear)
+                    .focused($isFocused)
+                    .submitLabel(.done)
+                    .onSubmit {
+                        if !isConfirmDisabled {
+                            onConfirm()
+                        }
+                    }
+                    .multilineTextAlignment(.center)
+                    .toolbar {
+                        ToolbarItemGroup(placement: .keyboard) {
+                            Button("취소") {
+                                onCancel()
+                            }
+                            .foregroundStyle(.white)
+                            
+                            Spacer()
+                            
+                            Button("완료") {
                                 onConfirm()
                             }
+                            .foregroundStyle(isConfirmDisabled ? .gray : .white)
+                            .disabled(isConfirmDisabled)
                         }
-                        .multilineTextAlignment(.center)
-
-                    // 고정 높이 에러 메시지 영역
-                    Text(errorMessage ?? " ")
-                        .font(.appCaption)
-                        .foregroundStyle(.red)
-                        .frame(height: 16)
-                        .opacity(errorMessage == nil ? 0 : 1)
-                }
-                .padding(.horizontal, AppPadding.large)
-                .padding(.bottom, AppPadding.large)
+                    }
+                
+                Text(errorMessage ?? " ")
+                    .font(.appCaption)
+                    .foregroundStyle(.red)
+                    .frame(height: 16)
+                    .opacity(errorMessage == nil ? 0 : 1)
+                
+                Spacer()
             }
-        }
-        .onAppear {
-            isFocused = true
+            .padding(.horizontal, AppPadding.large)
+            .onAppear {
+                isFocused = true
+            }
         }
     }
 }
