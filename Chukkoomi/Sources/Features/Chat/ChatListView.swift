@@ -83,6 +83,11 @@ struct ChatRoomRow: View {
     let chatRoom: ChatRoom
     let myUserId: String?
 
+    // 해당 채팅방의 저장된 테마 불러오기
+    private var savedTheme: ChatFeature.ChatTheme {
+        ChatThemeStorage.loadTheme(for: chatRoom.roomId)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // 프로필 이미지
@@ -94,11 +99,7 @@ struct ChatRoomRow: View {
                 )
                 .clipShape(Circle())
             } else {
-                Image("기본 프로필")
-                    .resizable()
-                    .scaledToFill()
-                    .frame(width: 56, height: 56)
-                    .clipShape(Circle())
+                ChatListProfileImageView(selectedTheme: savedTheme)
             }
 
             // 닉네임 + 마지막 메시지
@@ -204,5 +205,27 @@ struct ChatRoomRow: View {
 
         // 나 자신과의 채팅방인 경우
         return chatRoom.participants.first?.profileImage
+    }
+}
+
+// MARK: - 채팅 리스트 프로필 이미지 뷰 (테마별 기본 이미지)
+struct ChatListProfileImageView: View {
+    let selectedTheme: ChatFeature.ChatTheme
+
+    var body: some View {
+        let imageName: String = {
+            switch selectedTheme {
+            case .theme2, .theme3:
+                return "기본 프로필2"
+            default:
+                return "기본 프로필"
+            }
+        }()
+
+        Image(imageName)
+            .resizable()
+            .scaledToFill()
+            .frame(width: 56, height: 56)
+            .clipShape(Circle())
     }
 }

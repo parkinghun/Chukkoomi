@@ -78,6 +78,7 @@ struct ChatView: View {
                                     opponentProfileImage: opponentProfileImage,
                                     showProfile: shouldShowProfile(currentMessage: message, previousMessage: previousMessage, myUserId: viewStore.myUserId),
                                     showTime: shouldShowTime(currentMessage: message, nextMessage: nextMessage, myUserId: viewStore.myUserId),
+                                    selectedTheme: viewStore.selectedTheme,
                                     onRetry: { localId in
                                         viewStore.send(.retryMessage(localId: localId))
                                     },
@@ -476,6 +477,7 @@ struct MessageRow: View {
     let opponentProfileImage: UIImage?
     let showProfile: Bool
     let showTime: Bool
+    let selectedTheme: ChatFeature.ChatTheme
     let onRetry: ((String) -> Void)?
     let onCancel: ((String) -> Void)?
 
@@ -538,11 +540,7 @@ struct MessageRow: View {
                             .frame(width: 36, height: 36)
                             .clipShape(Circle())
                     } else {
-                        Image("기본 프로필")
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: 36, height: 36)
-                            .clipShape(Circle())
+                        ProfileImageView(selectedTheme: selectedTheme)
                     }
                 } else {
                     // 프로필 이미지 자리 확보 (투명 공간)
@@ -955,5 +953,27 @@ struct LocalMediaGridView: View {
         await MainActor.run {
             self.thumbnails = results
         }
+    }
+}
+
+// MARK: - 프로필 이미지 뷰 (테마별 기본 이미지)
+struct ProfileImageView: View {
+    let selectedTheme: ChatFeature.ChatTheme
+
+    var body: some View {
+        let imageName: String = {
+            switch selectedTheme {
+            case .theme2, .theme3:
+                return "기본 프로필2"
+            default:
+                return "기본 프로필"
+            }
+        }()
+
+        Image(imageName)
+            .resizable()
+            .scaledToFill()
+            .frame(width: 36, height: 36)
+            .clipShape(Circle())
     }
 }
