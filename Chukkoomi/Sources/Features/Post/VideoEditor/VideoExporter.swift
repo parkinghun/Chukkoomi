@@ -150,23 +150,14 @@ struct VideoExporter {
         // 3) Filter와 Subtitles 처리
         let videoComposition: AVVideoComposition?
 
-        if !editState.subtitles.isEmpty {
-            // 자막이 있으면: 커스텀 compositor가 필터와 자막을 함께 처리
-            // 단, 필터가 이미 적용된 경우 필터는 스킵
+        if !editState.subtitles.isEmpty || (editState.selectedFilter != nil && !isFilterAlreadyApplied) {
+            // 자막이 있거나 필터가 있으면: 커스텀 compositor 사용
+            // (자막 없이 필터만 있는 경우도 커스텀 compositor로 처리하여 회전 문제 방지)
             let filterToApply = isFilterAlreadyApplied ? nil : editState.selectedFilter
             videoComposition = try await applySubtitles(
                 to: trimmedAsset,
                 editState: editState,
                 filterToApply: filterToApply,
-                targetSize: targetSize,
-                isPortraitFromPHAsset: isPortraitFromPHAsset
-            )
-        } else if editState.selectedFilter != nil && !isFilterAlreadyApplied {
-            // 자막이 없고 필터만 있으면: VideoFilterManager로 필터만 적용
-            // (이미 필터가 적용된 경우는 제외)
-            videoComposition = await VideoFilterManager.createVideoComposition(
-                for: trimmedAsset,
-                filter: editState.selectedFilter,
                 targetSize: targetSize,
                 isPortraitFromPHAsset: isPortraitFromPHAsset
             )
@@ -219,6 +210,14 @@ struct VideoExporter {
             at: .zero
         )
 
+        // 원본 트랙의 preferredTransform 복사
+        if let preferredTransform = try? await videoTrack.load(.preferredTransform) {
+            compositionVideoTrack.preferredTransform = preferredTransform
+            print("✂️ [VideoExporter.applyTrim] 원본 preferredTransform: \(preferredTransform)")
+            print("✂️ [VideoExporter.applyTrim] composition 트랙에 복사 완료")
+        }
+        print("✂️ [VideoExporter.applyTrim] composition 트랙 preferredTransform: \(compositionVideoTrack.preferredTransform)")
+
         if let audioTrack = try await asset.loadTracks(withMediaType: .audio).first {
             if let compositionAudioTrack = composition.addMutableTrack(
                 withMediaType: .audio,
@@ -249,6 +248,21 @@ struct VideoExporter {
 
         let naturalSize = try await videoTrack.load(.naturalSize)
         let preferredTransform = try await videoTrack.load(.preferredTransform)
+
+        print("💬 [VideoExporter.applySubtitles] 트랙 정보:")
+        print("💬 [VideoExporter.applySubtitles] 진입 시 트랙 preferredTransform: \(preferredTransform)")
+
+        // 커스텀 compositor가 픽셀 회전을 수행하므로, composition 트랙의 preferredTransform을 identity로 재설정
+        // (이미 회전된 픽셀이므로 추가 회전 방지)
+        if let composition = asset as? AVMutableComposition,
+           let compositionVideoTrack = composition.tracks(withMediaType: .video).first as? AVMutableCompositionTrack {
+            print("💬 [VideoExporter.applySubtitles] composition 트랙 발견 - preferredTransform을 identity로 재설정")
+            print("💬 [VideoExporter.applySubtitles] 재설정 전: \(compositionVideoTrack.preferredTransform)")
+            compositionVideoTrack.preferredTransform = .identity
+            print("💬 [VideoExporter.applySubtitles] 재설정 후: \(compositionVideoTrack.preferredTransform)")
+        } else {
+            print("💬 [VideoExporter.applySubtitles] composition 트랙 아님 - preferredTransform 재설정 스킵")
+        }
         let frameDuration = try await videoTrack.load(.minFrameDuration)
         let duration = try await asset.load(.duration)
 
@@ -276,41 +290,30 @@ struct VideoExporter {
         let renderSize = targetSize ?? adjustedNaturalSize
         print("💬 [VideoExporter.applySubtitles] renderSize: \(renderSize)")
 
-        // 세로 영상인데 naturalSize가 가로였으면 90도 회전 필요
-        let correctedTransform: CGAffineTransform
-        if isPortraitFromPHAsset && !isNaturalSizePortrait {
-            correctedTransform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 0, ty: 0)
-            print("💬 [VideoExporter.applySubtitles] ✅ 세로 영상 - 90도 회전 transform 적용")
-        } else {
-            correctedTransform = preferredTransform ?? .identity
-            print("💬 [VideoExporter.applySubtitles] 원본 transform 사용")
-        }
+        // renderSize 방향 확인
+        let isRenderSizePortrait = renderSize.width < renderSize.height
+        print("💬 [VideoExporter.applySubtitles] isRenderSizePortrait: \(isRenderSizePortrait)")
+
+        // 원본 비디오의 preferredTransform을 그대로 사용
+        // (커스텀 compositor가 이를 먼저 적용하여 raw 픽셀을 실제 방향으로 변환)
+        let correctedTransform = preferredTransform ?? .identity
+        print("💬 [VideoExporter.applySubtitles] 원본 preferredTransform 사용: \(correctedTransform)")
         print("💬 [VideoExporter.applySubtitles] ====== 자막 적용 종료 ======")
 
 
-        // aspect-fit 스케일 계산
+        // aspect-fit 스케일 계산 (adjustedNaturalSize 기준 - preferredTransform 적용 후 크기)
         let scaleX = renderSize.width / adjustedNaturalSize.width
         let scaleY = renderSize.height / adjustedNaturalSize.height
         let scale = min(scaleX, scaleY)
         print("💬 [VideoExporter.applySubtitles] scale: \(scale) (scaleX: \(scaleX), scaleY: \(scaleY))")
 
-        // 중앙 정렬을 위한 offset 계산 (원본 naturalSize 기준)
-        let scaledWidth = naturalSize.width * scale
-        let scaledHeight = naturalSize.height * scale
+        // 중앙 정렬을 위한 offset 계산 (adjustedNaturalSize 기준)
+        let scaledWidth = adjustedNaturalSize.width * scale
+        let scaledHeight = adjustedNaturalSize.height * scale
         print("💬 [VideoExporter.applySubtitles] scaledWidth: \(scaledWidth), scaledHeight: \(scaledHeight)")
 
-        let offsetX: CGFloat
-        let offsetY: CGFloat
-
-        if isPortraitFromPHAsset && !isNaturalSizePortrait {
-            // 세로 영상이고 회전 필요한 경우: 90도 회전 후 중앙 정렬
-            offsetX = (renderSize.width - scaledHeight) / 2
-            offsetY = (renderSize.height - scaledWidth) / 2
-        } else {
-            // 가로 영상 또는 회전 불필요: 일반 중앙 정렬
-            offsetX = (renderSize.width - scaledWidth) / 2
-            offsetY = (renderSize.height - scaledHeight) / 2
-        }
+        let offsetX = (renderSize.width - scaledWidth) / 2
+        let offsetY = (renderSize.height - scaledHeight) / 2
         print("💬 [VideoExporter.applySubtitles] offset: (\(offsetX), \(offsetY))")
 
         // 커스텀 compositor를 사용하는 AVMutableVideoComposition 생성
@@ -321,6 +324,10 @@ struct VideoExporter {
 
         // LayerInstruction 생성
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
+
+        // 커스텀 compositor가 픽셀 회전을 수행하므로, 출력 트랙은 추가 회전이 필요 없음
+        // 따라서 identity transform 설정 (이미 회전된 픽셀이므로)
+        layerInstruction.setTransform(.identity, at: .zero)
 
         // 커스텀 Instruction 생성 (필터, 자막, 리사이징 정보 포함)
         let instruction = SubtitleVideoCompositionInstruction(
@@ -350,6 +357,27 @@ struct VideoExporter {
         videoComposition: AVVideoComposition?,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
+        print("📹 [VideoExporter.exportComposition] ====== Export 시작 ======")
+
+        // composition 트랙 정보 로깅
+        if let tracks = try? await composition.loadTracks(withMediaType: .video) {
+            for (index, track) in tracks.enumerated() {
+                if let naturalSize = try? await track.load(.naturalSize),
+                   let preferredTransform = try? await track.load(.preferredTransform) {
+                    print("📹 [VideoExporter.exportComposition] 트랙 \(index):")
+                    print("📹 [VideoExporter.exportComposition]   naturalSize: \(naturalSize)")
+                    print("📹 [VideoExporter.exportComposition]   preferredTransform: \(preferredTransform)")
+                }
+            }
+        }
+
+        if let videoComposition = videoComposition {
+            print("📹 [VideoExporter.exportComposition] videoComposition:")
+            print("📹 [VideoExporter.exportComposition]   renderSize: \(videoComposition.renderSize)")
+            print("📹 [VideoExporter.exportComposition]   customCompositorClass: \(String(describing: videoComposition.customVideoCompositorClass))")
+        }
+        print("📹 [VideoExporter.exportComposition] ====== Export 설정 완료 ======")
+
         guard let exportSession = AVAssetExportSession(
             asset: composition,
             presetName: AVAssetExportPresetHighestQuality

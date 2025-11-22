@@ -103,6 +103,7 @@ struct EditVideoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.light, for: .navigationBar)
+            .navigationBarBackButtonHidden(viewStore.isExporting || viewStore.isShowingSubtitleInput)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
@@ -111,7 +112,7 @@ struct EditVideoView: View {
                         Text("완료")
                             .foregroundStyle(.black)
                     }
-                    .disabled(viewStore.isExporting)
+                    .disabled(viewStore.isExporting || viewStore.isShowingSubtitleInput)
                 }
             }
             .overlay {
@@ -240,14 +241,14 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
         func loadVideo(for asset: PHAsset, in view: UIView) {
             currentPreProcessedURL = nil  // PHAsset 로드 시 전처리 URL 초기화
             currentPHAsset = asset  // PHAsset 저장
-
+            
             let options = PHVideoRequestOptions()
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .highQualityFormat
-
+            
             PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { [weak self] avAsset, _, _ in
                 guard let self, let avAsset else { return }
-
+                
                 DispatchQueue.main.async {
                     self.setupPlayer(with: avAsset, in: view)
                 }
@@ -257,7 +258,7 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
         func loadVideo(from url: URL, in view: UIView) {
             currentPreProcessedURL = url  // 전처리 URL 저장
             // 전처리 영상은 URL에서 로드되므로 PHAsset은 nil (원본 PHAsset 정보는 유지됨)
-
+            
             let avAsset = AVAsset(url: url)
             DispatchQueue.main.async { [weak self] in
                 self?.setupPlayer(with: avAsset, in: view)
@@ -401,14 +402,14 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
                         isPortraitFromPHAsset = false
                     }
                 }
-
+                
                 // VideoFilterManager를 사용하여 필터 적용
                 let videoComposition = await VideoFilterManager.createVideoComposition(
                     for: avAsset,
                     filter: filterType,
                     isPortraitFromPHAsset: isPortraitFromPHAsset
                 )
-
+                
                 // 메인 스레드에서 videoComposition 적용
                 await MainActor.run {
                     playerItem.videoComposition = videoComposition
