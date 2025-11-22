@@ -36,7 +36,8 @@ struct VideoFilterManager {
     static func createVideoComposition(
         for asset: AVAsset,
         filter: VideoFilter?,
-        targetSize: CGSize? = nil
+        targetSize: CGSize? = nil,
+        isPortraitFromPHAsset: Bool
     ) async -> AVVideoComposition? {
         // 필터가 없으면 nil 반환
         guard let filter = filter else {
@@ -55,32 +56,58 @@ struct VideoFilterManager {
             return nil
         }
 
-        // 회전 각도 확인
-        let correctedTransform = preferredTransform ?? .identity
-        let videoAngleInDegree = atan2(correctedTransform.b, correctedTransform.a) * 180 / .pi
+        // 디버깅 로그
+        print("🎬 [VideoFilterManager] ====== 필터 적용 시작 ======")
+        print("🎬 [VideoFilterManager] 원본 naturalSize: \(naturalSize)")
+        print("🎬 [VideoFilterManager] isPortraitFromPHAsset: \(isPortraitFromPHAsset)")
 
-        // targetSize가 있으면 회전을 고려한 renderSize 계산
-        var renderSize = naturalSize
-        if let targetSize = targetSize, targetSize != naturalSize {
-            switch Int(videoAngleInDegree) {
-            case 90, -270:
-                // 세로 영상의 경우 width/height 뒤집기
-                renderSize = CGSize(width: targetSize.height, height: targetSize.width)
-            default:
-                renderSize = targetSize
-            }
+        // 세로 영상일 때 naturalSize 조정
+        let adjustedNaturalSize: CGSize
+        if isPortraitFromPHAsset {
+            adjustedNaturalSize = CGSize(width: naturalSize.height, height: naturalSize.width)
+            print("🎬 [VideoFilterManager] 세로 영상 - naturalSize swap: \(adjustedNaturalSize)")
+        } else {
+            adjustedNaturalSize = naturalSize
         }
 
-        // aspect-fit 스케일 계산
+        // renderSize 계산
+        let renderSize = targetSize ?? adjustedNaturalSize
+        print("🎬 [VideoFilterManager] renderSize: \(renderSize)")
+
+        // 세로 영상일 때 강제로 90도 회전 transform 적용
+        let correctedTransform: CGAffineTransform
+        if isPortraitFromPHAsset {
+            correctedTransform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 0, ty: 0)
+            print("🎬 [VideoFilterManager] ✅ 세로 영상 - 90도 회전 transform 강제 적용")
+        } else {
+            correctedTransform = preferredTransform ?? .identity
+            print("🎬 [VideoFilterManager] 가로 영상 - 원본 transform 사용")
+        }
+        print("🎬 [VideoFilterManager] ====== 필터 적용 종료 ======")
+
+
+        // aspect-fit 스케일 계산 (원본 naturalSize 기준)
         let scaleX = renderSize.width / naturalSize.width
         let scaleY = renderSize.height / naturalSize.height
         let scale = min(scaleX, scaleY)
+        print("🎬 [VideoFilterManager] scale: \(scale)")
 
         // 중앙 정렬을 위한 offset 계산
         let scaledWidth = naturalSize.width * scale
         let scaledHeight = naturalSize.height * scale
-        let offsetX = (renderSize.width - scaledWidth) / 2
-        let offsetY = (renderSize.height - scaledHeight) / 2
+        let offsetX: CGFloat
+        let offsetY: CGFloat
+
+        if isPortraitFromPHAsset {
+            // 세로 영상: 90도 회전 후 중앙 정렬
+            offsetX = (renderSize.width - scaledHeight) / 2
+            offsetY = (renderSize.height - scaledWidth) / 2
+        } else {
+            // 가로 영상: 일반 중앙 정렬
+            offsetX = (renderSize.width - scaledWidth) / 2
+            offsetY = (renderSize.height - scaledHeight) / 2
+        }
+        print("🎬 [VideoFilterManager] offset: (\(offsetX), \(offsetY))")
 
         // AVVideoComposition 생성 (필터 + 리사이즈를 CIImage로 처리)
         let composition = AVMutableVideoComposition(
@@ -91,15 +118,19 @@ struct VideoFilterManager {
                 // 필터 적용
                 let filtered = applyFilter(filter, to: source, originalImage: source, targetSize: nil)
 
-                // aspect-fit 리사이징 및 중앙 정렬
+                // aspect-fit 리사이징 및 회전
                 let scaleTransform = CGAffineTransform(scaleX: scale, y: scale)
-                let translateTransform = CGAffineTransform(translationX: offsetX, y: offsetY)
-                let finalTransform = scaleTransform.concatenating(translateTransform)
+                // 회전 적용 (세로 영상인 경우)
+                let transformWithRotation = scaleTransform.concatenating(correctedTransform)
 
-                let resized = filtered.transformed(by: finalTransform)
+                // 중앙 정렬
+                let translateTransform = CGAffineTransform(translationX: offsetX, y: offsetY)
+                let finalTransform = transformWithRotation.concatenating(translateTransform)
+
+                let transformed = filtered.transformed(by: finalTransform)
 
                 // renderSize 영역으로 crop
-                let output = resized.cropped(to: CGRect(origin: .zero, size: renderSize))
+                let output = transformed.cropped(to: CGRect(origin: .zero, size: renderSize))
 
                 // GPU 가속 컨텍스트를 명시적으로 전달
                 request.finish(with: output, context: VideoFilterHelper.gpuContext)

@@ -49,12 +49,20 @@ struct VideoExporter {
             avAsset = try await loadAVAsset(from: asset)
         }
 
+        // PHAsset의 실제 픽셀 크기로 세로 영상 판단 (더 정확함)
+        let isPortraitFromPHAsset = asset.pixelWidth < asset.pixelHeight
+        print("🎥 [VideoExporter.export] PHAsset 정보:")
+        print("🎥 [VideoExporter.export] pixelWidth: \(asset.pixelWidth)")
+        print("🎥 [VideoExporter.export] pixelHeight: \(asset.pixelHeight)")
+        print("🎥 [VideoExporter.export] isPortrait (PHAsset): \(isPortraitFromPHAsset)")
+
         // 미리 처리된 영상을 사용하는 경우, 필터는 이미 적용되어 있음
         let isFilterAlreadyApplied = editState.selectedFilter == .animeGANHayao && preProcessedVideoURL != nil
         let (composition, videoComposition) = try await applyEdits(
             to: avAsset,
             editState: editState,
-            isFilterAlreadyApplied: isFilterAlreadyApplied
+            isFilterAlreadyApplied: isFilterAlreadyApplied,
+            isPortraitFromPHAsset: isPortraitFromPHAsset
         )
         let exportedURL = try await exportComposition(
             composition,
@@ -85,7 +93,8 @@ struct VideoExporter {
     private func applyEdits(
         to asset: AVAsset,
         editState: EditVideoFeature.EditState,
-        isFilterAlreadyApplied: Bool
+        isFilterAlreadyApplied: Bool,
+        isPortraitFromPHAsset: Bool
     ) async throws -> (AVAsset, AVVideoComposition?) {
         let composition = AVMutableComposition()
 
@@ -99,29 +108,39 @@ struct VideoExporter {
         let naturalSize = try await videoTrack.load(.naturalSize)
         let preferredTransform = try await videoTrack.load(.preferredTransform)
 
-        // 전처리 영상을 사용하는 경우, 이미 리사이징되어 있으므로 naturalSize를 그대로 사용
+        // 디버깅 로그
+        print("📤 [VideoExporter.applyEdits] ====== 편집 적용 시작 ======")
+        print("📤 [VideoExporter.applyEdits] naturalSize: \(naturalSize)")
+        print("📤 [VideoExporter.applyEdits] preferredTransform: \(preferredTransform)")
+        print("📤 [VideoExporter.applyEdits] isFilterAlreadyApplied: \(isFilterAlreadyApplied)")
+        print("📤 [VideoExporter.applyEdits] isPortraitFromPHAsset: \(isPortraitFromPHAsset)")
+
+        // 세로 영상일 때 naturalSize 조정 (CompressHelper와 동일한 로직)
+        let adjustedNaturalSize: CGSize
+        if isPortraitFromPHAsset {
+            adjustedNaturalSize = CGSize(width: naturalSize.height, height: naturalSize.width)
+            print("📤 [VideoExporter.applyEdits] 세로 영상 - naturalSize swap: \(adjustedNaturalSize)")
+        } else {
+            adjustedNaturalSize = naturalSize
+            print("📤 [VideoExporter.applyEdits] 가로 영상 - naturalSize 유지: \(adjustedNaturalSize)")
+        }
+
+        // 전처리 영상을 사용하는 경우, 이미 리사이징되어 있으므로 adjustedNaturalSize를 그대로 사용
         let targetSize: CGSize
         if isFilterAlreadyApplied {
             // 전처리 영상은 이미 리사이징되어 있음
-            targetSize = naturalSize
+            targetSize = adjustedNaturalSize
+            print("📤 [VideoExporter.applyEdits] 전처리 영상 - targetSize = adjustedNaturalSize: \(targetSize)")
         } else {
-            // 새로 처리하는 경우 목표 크기 계산 (회전 고려)
-            let baseTargetSize = CompressHelper.resizedSizeForiPhoneMax(
-                originalWidth: naturalSize.width,
-                originalHeight: naturalSize.height
+            // 새로 처리하는 경우 목표 크기 계산 (조정된 naturalSize 기준)
+            targetSize = CompressHelper.resizedSizeForiPhoneMax(
+                originalWidth: adjustedNaturalSize.width,
+                originalHeight: adjustedNaturalSize.height
             )
-
-            // 회전 각도 확인하여 세로 영상이면 width/height swap
-            let videoAngleInDegree = atan2(preferredTransform.b, preferredTransform.a) * 180 / .pi
-
-            switch Int(videoAngleInDegree) {
-            case 90, -270:
-                // 세로 영상: width/height swap
-                targetSize = CGSize(width: baseTargetSize.height, height: baseTargetSize.width)
-            default:
-                targetSize = baseTargetSize
-            }
+            print("📤 [VideoExporter.applyEdits] targetSize: \(targetSize)")
         }
+        print("📤 [VideoExporter.applyEdits] ====== 편집 적용 종료 ======")
+
 
         // 3) Filter와 Subtitles 처리
         let videoComposition: AVVideoComposition?
@@ -134,7 +153,8 @@ struct VideoExporter {
                 to: trimmedAsset,
                 editState: editState,
                 filterToApply: filterToApply,
-                targetSize: targetSize
+                targetSize: targetSize,
+                isPortraitFromPHAsset: isPortraitFromPHAsset
             )
         } else if editState.selectedFilter != nil && !isFilterAlreadyApplied {
             // 자막이 없고 필터만 있으면: VideoFilterManager로 필터만 적용
@@ -142,13 +162,15 @@ struct VideoExporter {
             videoComposition = await VideoFilterManager.createVideoComposition(
                 for: trimmedAsset,
                 filter: editState.selectedFilter,
-                targetSize: targetSize
+                targetSize: targetSize,
+                isPortraitFromPHAsset: isPortraitFromPHAsset
             )
         } else if targetSize != naturalSize {
             // 필터도 자막도 없지만 리사이즈가 필요한 경우
             videoComposition = await CompressHelper.createResizeVideoComposition(
                 for: trimmedAsset,
-                targetSize: targetSize
+                targetSize: targetSize,
+                isPortraitFromPHAsset: isPortraitFromPHAsset
             )
         } else {
             // 필터도 자막도 리사이즈도 필요 없으면: nil
@@ -212,7 +234,8 @@ struct VideoExporter {
         to asset: AVAsset,
         editState: EditVideoFeature.EditState,
         filterToApply: VideoFilter?,
-        targetSize: CGSize? = nil
+        targetSize: CGSize? = nil,
+        isPortraitFromPHAsset: Bool
     ) async throws -> AVVideoComposition {
         // 비디오 트랙 가져오기
         guard let videoTrack = try await asset.loadTracks(withMediaType: .video).first else {
@@ -224,32 +247,58 @@ struct VideoExporter {
         let frameDuration = try await videoTrack.load(.minFrameDuration)
         let duration = try await asset.load(.duration)
 
-        // 회전 각도 확인
-        let correctedTransform = preferredTransform ?? .identity
-        let videoAngleInDegree = atan2(correctedTransform.b, correctedTransform.a) * 180 / .pi
+        // 디버깅 로그
+        print("💬 [VideoExporter.applySubtitles] ====== 자막 적용 시작 ======")
+        print("💬 [VideoExporter.applySubtitles] 원본 naturalSize: \(naturalSize)")
+        print("💬 [VideoExporter.applySubtitles] isPortraitFromPHAsset: \(isPortraitFromPHAsset)")
 
-        // targetSize가 있으면 회전을 고려한 renderSize 계산
-        var renderSize = naturalSize
-        if let targetSize = targetSize, targetSize != naturalSize {
-            switch Int(videoAngleInDegree) {
-            case 90, -270:
-                // 세로 영상의 경우 width/height 뒤집기
-                renderSize = CGSize(width: targetSize.height, height: targetSize.width)
-            default:
-                renderSize = targetSize
-            }
+        // 세로 영상일 때 naturalSize 조정
+        let adjustedNaturalSize: CGSize
+        if isPortraitFromPHAsset {
+            adjustedNaturalSize = CGSize(width: naturalSize.height, height: naturalSize.width)
+            print("💬 [VideoExporter.applySubtitles] 세로 영상 - naturalSize swap: \(adjustedNaturalSize)")
+        } else {
+            adjustedNaturalSize = naturalSize
         }
 
-        // aspect-fit 스케일 계산
+        // renderSize 계산
+        let renderSize = targetSize ?? adjustedNaturalSize
+        print("💬 [VideoExporter.applySubtitles] renderSize: \(renderSize)")
+
+        // 세로 영상일 때 강제로 90도 회전 transform 적용
+        let correctedTransform: CGAffineTransform
+        if isPortraitFromPHAsset {
+            correctedTransform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 0, ty: 0)
+            print("💬 [VideoExporter.applySubtitles] ✅ 세로 영상 - 90도 회전 transform 강제 적용")
+        } else {
+            correctedTransform = preferredTransform ?? .identity
+            print("💬 [VideoExporter.applySubtitles] 가로 영상 - 원본 transform 사용")
+        }
+        print("💬 [VideoExporter.applySubtitles] ====== 자막 적용 종료 ======")
+
+
+        // aspect-fit 스케일 계산 (원본 naturalSize 기준)
         let scaleX = renderSize.width / naturalSize.width
         let scaleY = renderSize.height / naturalSize.height
         let scale = min(scaleX, scaleY)
+        print("💬 [VideoExporter.applySubtitles] scale: \(scale)")
 
         // 중앙 정렬을 위한 offset 계산
         let scaledWidth = naturalSize.width * scale
         let scaledHeight = naturalSize.height * scale
-        let offsetX = (renderSize.width - scaledWidth) / 2
-        let offsetY = (renderSize.height - scaledHeight) / 2
+        let offsetX: CGFloat
+        let offsetY: CGFloat
+
+        if isPortraitFromPHAsset {
+            // 세로 영상: 90도 회전 후 중앙 정렬
+            offsetX = (renderSize.width - scaledHeight) / 2
+            offsetY = (renderSize.height - scaledWidth) / 2
+        } else {
+            // 가로 영상: 일반 중앙 정렬
+            offsetX = (renderSize.width - scaledWidth) / 2
+            offsetY = (renderSize.height - scaledHeight) / 2
+        }
+        print("💬 [VideoExporter.applySubtitles] offset: (\(offsetX), \(offsetY))")
 
         // 커스텀 compositor를 사용하는 AVMutableVideoComposition 생성
         let composition = AVMutableVideoComposition()
@@ -272,7 +321,9 @@ struct VideoExporter {
             renderSize: renderSize,
             scale: scale,
             offsetX: offsetX,
-            offsetY: offsetY
+            offsetY: offsetY,
+            correctedTransform: correctedTransform,
+            isPortraitFromPHAsset: isPortraitFromPHAsset
         )
 
         composition.instructions = [instruction]

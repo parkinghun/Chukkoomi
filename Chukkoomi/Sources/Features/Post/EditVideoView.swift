@@ -220,6 +220,7 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
         var timeObserver: Any?
         var boundaryObserver: Any?
         var currentAVAsset: AVAsset?
+        var currentPHAsset: PHAsset?  // 현재 로드된 PHAsset 저장
         var lastAppliedFilter: VideoFilter?
         var currentPreProcessedURL: URL?  // 현재 로드된 전처리 비디오 URL
         let onTimeUpdate: (Double) -> Void
@@ -238,14 +239,15 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
         
         func loadVideo(for asset: PHAsset, in view: UIView) {
             currentPreProcessedURL = nil  // PHAsset 로드 시 전처리 URL 초기화
-            
+            currentPHAsset = asset  // PHAsset 저장
+
             let options = PHVideoRequestOptions()
             options.isNetworkAccessAllowed = true
             options.deliveryMode = .highQualityFormat
-            
+
             PHImageManager.default().requestAVAsset(forVideo: asset, options: options) { [weak self] avAsset, _, _ in
                 guard let self, let avAsset else { return }
-                
+
                 DispatchQueue.main.async {
                     self.setupPlayer(with: avAsset, in: view)
                 }
@@ -254,7 +256,8 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
         
         func loadVideo(from url: URL, in view: UIView) {
             currentPreProcessedURL = url  // 전처리 URL 저장
-            
+            // 전처리 영상은 URL에서 로드되므로 PHAsset은 nil (원본 PHAsset 정보는 유지됨)
+
             let avAsset = AVAsset(url: url)
             DispatchQueue.main.async { [weak self] in
                 self?.setupPlayer(with: avAsset, in: view)
@@ -385,12 +388,27 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
             }
             
             Task {
+                // PHAsset으로부터 세로 영상 여부 판단
+                let isPortraitFromPHAsset: Bool
+                if let phAsset = currentPHAsset {
+                    isPortraitFromPHAsset = phAsset.pixelWidth < phAsset.pixelHeight
+                } else {
+                    // PHAsset이 없으면 (전처리 영상인 경우) AVAsset의 naturalSize로 판단
+                    if let videoTrack = try? await avAsset.loadTracks(withMediaType: .video).first,
+                       let naturalSize = try? await videoTrack.load(.naturalSize) {
+                        isPortraitFromPHAsset = naturalSize.width < naturalSize.height
+                    } else {
+                        isPortraitFromPHAsset = false
+                    }
+                }
+
                 // VideoFilterManager를 사용하여 필터 적용
                 let videoComposition = await VideoFilterManager.createVideoComposition(
                     for: avAsset,
-                    filter: filterType
+                    filter: filterType,
+                    isPortraitFromPHAsset: isPortraitFromPHAsset
                 )
-                
+
                 // 메인 스레드에서 videoComposition 적용
                 await MainActor.run {
                     playerItem.videoComposition = videoComposition

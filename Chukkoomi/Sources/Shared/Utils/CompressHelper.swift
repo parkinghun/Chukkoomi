@@ -81,10 +81,12 @@ enum CompressHelper {
     /// - Parameters:
     ///   - asset: 원본 비디오 asset
     ///   - targetSize: 목표 크기 (nil이면 resizedSizeForiPhoneMax로 자동 계산)
+    ///   - isPortraitFromPHAsset: PHAsset 기준 세로 영상 여부
     /// - Returns: 리사이징 정보가 담긴 AVVideoComposition, 리사이즈 불필요시 nil
     static func createResizeVideoComposition(
         for asset: AVAsset,
-        targetSize: CGSize? = nil
+        targetSize: CGSize? = nil,
+        isPortraitFromPHAsset: Bool
     ) async -> AVVideoComposition? {
         // 비디오 트랙 가져오기
         guard let videoTrack = try? await asset.loadTracks(withMediaType: .video).first else {
@@ -94,25 +96,43 @@ enum CompressHelper {
         let naturalSize = try? await videoTrack.load(.naturalSize)
         let preferredTransform = try? await videoTrack.load(.preferredTransform)
         let frameDuration = try? await videoTrack.load(.minFrameDuration)
-
-        guard let naturalSize = naturalSize else {
+        
+        guard let naturalSize else {
             return nil
         }
 
-        // 목표 크기 계산
+        // 디버깅 로그 추가
+        print("🔍 [CompressHelper] ====== 비디오 정보 시작 ======")
+        print("🔍 [CompressHelper] 원본 naturalSize: \(naturalSize)")
+        print("🔍 [CompressHelper] isPortraitFromPHAsset: \(isPortraitFromPHAsset)")
+
+        // 세로 영상일 때 naturalSize가 회전되지 않은 상태이므로 수정
+        let adjustedNaturalSize: CGSize
+        if isPortraitFromPHAsset {
+            // 세로 영상인데 naturalSize가 가로로 나온 경우 swap
+            adjustedNaturalSize = CGSize(width: naturalSize.height, height: naturalSize.width)
+            print("🔍 [CompressHelper] 세로 영상 - naturalSize swap: \(adjustedNaturalSize)")
+        } else {
+            adjustedNaturalSize = naturalSize
+            print("🔍 [CompressHelper] 가로 영상 - naturalSize 유지: \(adjustedNaturalSize)")
+        }
+
+        // 목표 크기 계산 (조정된 naturalSize 기준)
         let finalTargetSize = targetSize ?? resizedSizeForiPhoneMax(
-            originalWidth: naturalSize.width,
-            originalHeight: naturalSize.height
+            originalWidth: adjustedNaturalSize.width,
+            originalHeight: adjustedNaturalSize.height
         )
+        print("🔍 [CompressHelper] finalTargetSize: \(finalTargetSize)")
 
         // 이미 목표 크기와 같거나 작으면 리사이즈 불필요
-        if finalTargetSize == naturalSize {
+        if finalTargetSize == adjustedNaturalSize {
+            print("🔍 [CompressHelper] 리사이즈 불필요 - nil 반환")
             return nil
         }
 
         // AVMutableVideoComposition 생성
         let composition = AVMutableVideoComposition()
-        if let frameDuration = frameDuration {
+        if let frameDuration {
             composition.frameDuration = frameDuration
         }
 
@@ -126,51 +146,52 @@ enum CompressHelper {
         // LayerInstruction에 스케일 transform 적용
         let layerInstruction = AVMutableVideoCompositionLayerInstruction(assetTrack: videoTrack)
 
-        // 원본 preferredTransform 적용하여 화면 기준 정렬
-        let correctedTransform = preferredTransform ?? .identity
-
-        // 회전 보정 후 프레임 기준 변경되는 경우 보정
-        let videoAngleInDegree = atan2(correctedTransform.b, correctedTransform.a) * 180 / .pi
-        var renderSize = finalTargetSize
-
-        switch Int(videoAngleInDegree) {
-        case 90, -270:
-            // 세로 영상의 경우 width/height 뒤집기
-            renderSize = CGSize(width: finalTargetSize.height, height: finalTargetSize.width)
-        case 180, -180:
-            break
-        default:
-            break
+        // 세로 영상일 때 강제로 90도 회전 transform 적용
+        let correctedTransform: CGAffineTransform
+        if isPortraitFromPHAsset {
+            // 90도 회전: (0, 1, -1, 0)
+            correctedTransform = CGAffineTransform(a: 0, b: 1, c: -1, d: 0, tx: 0, ty: 0)
+            print("🔍 [CompressHelper] ✅ 세로 영상 - 90도 회전 transform 강제 적용")
+        } else {
+            correctedTransform = preferredTransform ?? .identity
+            print("🔍 [CompressHelper] 가로 영상 - 원본 transform 사용")
         }
+        print("🔍 [CompressHelper] correctedTransform: \(correctedTransform)")
+
+        let renderSize = finalTargetSize
+        print("🔍 [CompressHelper] renderSize: \(renderSize)")
+        print("🔍 [CompressHelper] ====== 비디오 정보 종료 ======")
+
 
         // 비율을 유지하는 스케일 계산 (aspect fit)
+        // 원본 naturalSize 기준으로 계산 (회전 전 크기)
         let scaleX = renderSize.width / naturalSize.width
         let scaleY = renderSize.height / naturalSize.height
         let scale = min(scaleX, scaleY)  // 작은 값 사용하여 비율 유지
+        print("🔍 [CompressHelper] scale: \(scale) (scaleX: \(scaleX), scaleY: \(scaleY))")
+
         let scaleTransform = CGAffineTransform(scaleX: scale, y: scale)
 
         // 최종 변환 = 스케일 → 회전 보정
         let finalTransform = scaleTransform.concatenating(correctedTransform)
 
-        // 중앙 정렬을 위한 이동 계산
+        // 중앙 정렬을 위한 이동 계산 (원본 naturalSize 기준)
         let scaledWidth = naturalSize.width * scale
         let scaledHeight = naturalSize.height * scale
         let tx: CGFloat
         let ty: CGFloat
 
-        switch Int(videoAngleInDegree) {
-        case 90:
+        if isPortraitFromPHAsset {
+            // 세로 영상: 90도 회전 후 중앙 정렬
+            // 회전 후에는 width/height가 바뀌므로
             tx = (renderSize.width - scaledHeight) / 2 + scaledHeight
             ty = (renderSize.height - scaledWidth) / 2
-        case -90, 270:
-            tx = (renderSize.width - scaledHeight) / 2
-            ty = (renderSize.height - scaledWidth) / 2 + scaledWidth
-        case 180, -180:
-            tx = (renderSize.width - scaledWidth) / 2 + scaledWidth
-            ty = (renderSize.height - scaledHeight) / 2 + scaledHeight
-        default:
+            print("🔍 [CompressHelper] 세로 영상 중앙 정렬 - tx: \(tx), ty: \(ty)")
+        } else {
+            // 가로 영상: 일반 중앙 정렬
             tx = (renderSize.width - scaledWidth) / 2
             ty = (renderSize.height - scaledHeight) / 2
+            print("🔍 [CompressHelper] 가로 영상 중앙 정렬 - tx: \(tx), ty: \(ty)")
         }
 
         let translateTransform = CGAffineTransform(translationX: tx, y: ty)

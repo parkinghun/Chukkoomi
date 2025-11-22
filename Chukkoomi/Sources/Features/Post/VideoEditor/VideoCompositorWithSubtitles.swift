@@ -29,6 +29,8 @@ final class SubtitleVideoCompositionInstruction: NSObject, AVVideoCompositionIns
     let scale: CGFloat
     let offsetX: CGFloat
     let offsetY: CGFloat
+    let correctedTransform: CGAffineTransform
+    let isPortraitFromPHAsset: Bool
 
     init(
         timeRange: CMTimeRange,
@@ -41,7 +43,9 @@ final class SubtitleVideoCompositionInstruction: NSObject, AVVideoCompositionIns
         renderSize: CGSize,
         scale: CGFloat,
         offsetX: CGFloat,
-        offsetY: CGFloat
+        offsetY: CGFloat,
+        correctedTransform: CGAffineTransform,
+        isPortraitFromPHAsset: Bool
     ) {
         self.timeRange = timeRange
         self.filter = filter
@@ -54,6 +58,8 @@ final class SubtitleVideoCompositionInstruction: NSObject, AVVideoCompositionIns
         self.scale = scale
         self.offsetX = offsetX
         self.offsetY = offsetY
+        self.correctedTransform = correctedTransform
+        self.isPortraitFromPHAsset = isPortraitFromPHAsset
         super.init()
     }
 }
@@ -144,10 +150,13 @@ final class VideoCompositorWithSubtitles: NSObject, AVVideoCompositing {
                 outputImage = self.applyFilter(filter, to: outputImage)
             }
 
-            // 2. aspect-fit 리사이징 및 중앙 정렬
+            // 2. aspect-fit 리사이징, 회전 및 중앙 정렬
             let scaleTransform = CGAffineTransform(scaleX: instruction.scale, y: instruction.scale)
+            // 회전 적용 (세로 영상인 경우)
+            let transformWithRotation = scaleTransform.concatenating(instruction.correctedTransform)
+            // 중앙 정렬
             let translateTransform = CGAffineTransform(translationX: instruction.offsetX, y: instruction.offsetY)
-            let finalTransform = scaleTransform.concatenating(translateTransform)
+            let finalTransform = transformWithRotation.concatenating(translateTransform)
             outputImage = outputImage.transformed(by: finalTransform)
 
             // renderSize 영역으로 crop
