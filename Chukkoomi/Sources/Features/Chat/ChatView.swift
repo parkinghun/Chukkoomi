@@ -140,7 +140,7 @@ struct ChatView: View {
                         viewStore.send(.sendMessageTapped)
                     }) {
                         Image(systemName: "paperplane.fill")
-                            .foregroundColor(viewStore.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .white : Color(hex: "DEFD09"))
+                            .foregroundColor(viewStore.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color(hex: "002D5B") : .white)
                             .font(.system(size: 20))
                     }
                     .disabled(viewStore.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewStore.isSending)
@@ -180,7 +180,7 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color.black, for: .navigationBar)
+            .toolbarBackground(Color(hex: "202255"), for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

@@ -56,6 +56,7 @@ struct ChatListView: View {
                         viewStore.send(.userSearchButtonTapped)
                     } label: {
                         AppIcon.searchUser
+                            .foregroundColor(.black)
                     }
                 }
             }
