@@ -24,6 +24,26 @@ struct ChatFeature: Reducer {
         var cursorDate: String?
         var hasMoreMessages: Bool = true
         var pendingFileUploads: [String: [Data]] = [:]  // localId: filesData
+        var selectedTheme: ChatTheme = .default
+        var isThemeSheetPresented: Bool = false
+    }
+
+    enum ChatTheme: String, CaseIterable, Equatable {
+        case `default` = "기본 테마"
+        case theme1 = "테마1"
+        case theme2 = "테마2"
+        case theme3 = "테마3"
+        case theme4 = "테마4"
+
+        var imageName: String? {
+            switch self {
+            case .default: return "기본 테마"
+            case .theme1: return "테마1"
+            case .theme2: return "테마2"
+            case .theme3: return "테마3"
+            case .theme4: return "테마4"
+            }
+        }
     }
 
     // MARK: - Action
@@ -49,6 +69,11 @@ struct ChatFeature: Reducer {
         // 메시지 재전송 및 취소
         case retryMessage(localId: String)
         case cancelMessage(localId: String)
+
+        // 테마 선택
+        case themeButtonTapped
+        case themeSelected(ChatTheme)
+        case dismissThemeSheet
     }
 
     // MARK: - Reducer
@@ -508,6 +533,19 @@ struct ChatFeature: Reducer {
             state.messages.removeAll { $0.localId == localId }
             // 파일 Data도 정리
             state.pendingFileUploads.removeValue(forKey: localId)
+            return .none
+
+        case .themeButtonTapped:
+            state.isThemeSheetPresented = true
+            return .none
+
+        case .themeSelected(let theme):
+            state.selectedTheme = theme
+            state.isThemeSheetPresented = false
+            return .none
+
+        case .dismissThemeSheet:
+            state.isThemeSheetPresented = false
             return .none
         }
     }

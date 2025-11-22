@@ -108,16 +108,6 @@ struct ChatView: View {
                         }
                     }
                     .scrollDismissesKeyboard(.immediately)
-                    .background(
-                        GeometryReader { geometry in
-                            Image("기본 테마")
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                                .frame(width: geometry.size.width, height: geometry.size.height)
-                                .clipped()
-                        }
-                        .ignoresSafeArea()
-                    )
                 }
 
                 Divider()
@@ -171,10 +161,46 @@ struct ChatView: View {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             )
+            .background(
+                Group {
+                    if let imageName = viewStore.selectedTheme.imageName {
+                        GeometryReader { geometry in
+                            Image(imageName)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .clipped()
+                        }
+                        .ignoresSafeArea()
+                    }
+                }
+            )
             .navigationTitle(opponentNickname(chatRoom: viewStore.chatRoom, opponent: viewStore.opponent, myUserId: viewStore.myUserId))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
             .toolbarBackground(.hidden, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        viewStore.send(.themeButtonTapped)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .sheet(isPresented: viewStore.binding(
+                get: \.isThemeSheetPresented,
+                send: .dismissThemeSheet
+            )) {
+                ThemeSelectionView(
+                    selectedTheme: viewStore.selectedTheme,
+                    onThemeSelected: { theme in
+                        viewStore.send(.themeSelected(theme))
+                    }
+                )
+                .presentationDetents([.medium])
+            }
         }
     }
 
