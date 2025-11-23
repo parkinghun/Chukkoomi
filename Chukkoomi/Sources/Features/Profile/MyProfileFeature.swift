@@ -9,6 +9,7 @@ import ComposableArchitecture
 import Foundation
 import RealmSwift
 import KakaoSDKUser
+import AuthenticationServices
 
 @Reducer
 struct MyProfileFeature {
@@ -371,12 +372,20 @@ struct MyProfileFeature {
                         // 회원탈퇴 API 호출
                         let _ = try await NetworkManager.shared.performRequest(UserRouter.withdraw, as: WithdrawResponseDTO.self)
 
-                        // 카카오 연결 해제
+                        // 카카오 연결 해제 (카카오 로그인 사용자의 경우)
                         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
                             UserApi.shared.unlink { error in
                                 // 에러가 있어도 계속 진행 (이미 연결 해제되었거나 카카오 로그인이 아닐 수 있음)
                                 continuation.resume()
                             }
+                        }
+
+                        // 애플 로그인 Credential 해제 (iOS 13+)
+                        // 애플은 명시적인 연결 해제 API가 없으므로 Credential 상태만 확인
+                        if let userId = UserDefaultsHelper.userId {
+                            let appleIDProvider = ASAuthorizationAppleIDProvider()
+                            _ = try? await appleIDProvider.credentialState(forUserID: userId)
+                            // 서버에서 이미 탈퇴 처리되었으므로 credential 상태와 무관하게 진행
                         }
 
                         // Realm에서 해당 사용자의 최근 검색어 모두 삭제
@@ -399,7 +408,7 @@ struct MyProfileFeature {
                         // 성공 시 로그아웃 처리
                         await send(.logoutCompleted)
                     } catch {
-                        // TODO: 에러 처리
+                        // TODO: 에러 처리 - 사용자에게 알림 표시 필요
                         print("회원탈퇴 실패: \(error)")
                     }
                 }
