@@ -550,24 +550,32 @@ struct MessageRow: View {
     // 메시지 내용 부분
     private var messageContent: some View {
         VStack(alignment: isMyMessage ? .trailing : .leading, spacing: 4) {
-            // 메시지 내용
-            if let content = message.content, !content.isEmpty {
-                Text(content)
-                    .font(.system(size: 15))
-                    .foregroundColor(isMyMessage ? .black : .white)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(isMyMessage ? AppColor.disabled : Color.gray.opacity(0.7))
-                    .cornerRadius(12)
-            }
+            // 공유된 게시물 카드
+            if let sharedPost = message.sharedPost {
+                SharedPostCardView(
+                    sharedPost: sharedPost,
+                    isMyMessage: isMyMessage
+                )
+            } else {
+                // 일반 메시지 내용
+                if let content = message.content, !content.isEmpty {
+                    Text(content)
+                        .font(.system(size: 15))
+                        .foregroundColor(isMyMessage ? .white : .black)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
+                        .background(isMyMessage ? Color(hex: "002D5B") : .white)
+                        .cornerRadius(12)
+                }
 
-            // 이미지 파일
-            if let localImages = message.localImages, !localImages.isEmpty {
-                // 업로드 중인 로컬 이미지 표시
-                localImageGridView(imagesData: localImages)
-            } else if !message.files.isEmpty {
-                // 서버 이미지 표시
-                imageGridView(files: message.files)
+                // 이미지 파일
+                if let localImages = message.localImages, !localImages.isEmpty {
+                    // 업로드 중인 로컬 이미지 표시
+                    localImageGridView(imagesData: localImages)
+                } else if !message.files.isEmpty {
+                    // 서버 이미지 표시
+                    imageGridView(files: message.files)
+                }
             }
         }
     }
@@ -925,6 +933,127 @@ struct LocalMediaGridView: View {
 
         await MainActor.run {
             self.thumbnails = results
+        }
+    }
+}
+
+// MARK: - Shared Post Card View
+struct SharedPostCardView: View {
+    let sharedPost: SharedPost
+    let isMyMessage: Bool
+    @State private var creatorProfileImage: UIImage?
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // 작성자 정보 영역
+            HStack(spacing: 8) {
+                // 프로필 이미지
+                Group {
+                    if let profileImage = creatorProfileImage {
+                        Image(uiImage: profileImage)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        Image("기본 프로필")
+                            .resizable()
+                            .scaledToFill()
+                    }
+                }
+                .frame(width: 32, height: 32)
+                .clipShape(Circle())
+
+                // 닉네임
+                Text(sharedPost.creatorNick ?? "알 수 없음")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(isMyMessage ? .white : .black)
+
+                Spacer()
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
+
+            Divider()
+                .background(Color.gray.opacity(0.3))
+
+            // 게시물 이미지 또는 영상 (첫 번째 파일만)
+            if let firstFile = sharedPost.files.first {
+                if MediaTypeHelper.isVideoPath(firstFile) {
+                    ChatVideoPlayerView(
+                        mediaPath: firstFile,
+                        maxWidth: 250
+                    )
+                    .frame(height: 200)
+                    .clipped()
+                } else {
+                    AsyncMediaImageView(
+                        imagePath: firstFile,
+                        width: 250,
+                        height: 200
+                    )
+                    .clipped()
+                }
+            }
+
+            // 게시물 내용 영역
+            if let content = sharedPost.content, !content.isEmpty {
+                HStack(alignment: .top, spacing: 4) {
+                    // 닉네임 (볼드)
+                    Text(sharedPost.creatorNick ?? "알 수 없음")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(isMyMessage ? .white : .black)
+
+                    // 게시물 내용 (레귤러, 최대 2줄)
+                    Text(content)
+                        .font(.system(size: 14, weight: .regular))
+                        .foregroundColor(isMyMessage ? .white : .black)
+                        .lineLimit(2)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
+                .padding(.bottom, 12)
+            }
+        }
+        .frame(width: 250)
+        .background(isMyMessage ? Color(hex: "002D5B") : .white)
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+        )
+        .task {
+            // 작성자 프로필 이미지 로드
+            await loadCreatorProfileImage()
+        }
+    }
+
+    private func loadCreatorProfileImage() async {
+        guard let profilePath = sharedPost.creatorProfileImage else {
+            return
+        }
+
+        do {
+            let imageData: Data
+
+            if profilePath.hasPrefix("http://") || profilePath.hasPrefix("https://") {
+                guard let url = URL(string: profilePath) else { return }
+                let (data, _) = try await URLSession.shared.data(from: url)
+                imageData = data
+            } else {
+                imageData = try await NetworkManager.shared.download(
+                    MediaRouter.getData(path: profilePath)
+                )
+            }
+
+            if let uiImage = UIImage(data: imageData) {
+                await MainActor.run {
+                    creatorProfileImage = uiImage
+                }
+            }
+        } catch {
+            // 프로필 이미지 로드 실패 시 기본 이미지 사용
         }
     }
 }

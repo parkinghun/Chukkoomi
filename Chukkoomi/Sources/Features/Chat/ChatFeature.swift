@@ -182,7 +182,8 @@ struct ChatFeature: Reducer {
                 files: [],
                 sendStatus: .sending,
                 localId: localId,
-                localImages: nil
+                localImages: nil,
+                sharedPost: nil
             )
             state.messages.append(tempMessage)
 
@@ -297,7 +298,8 @@ struct ChatFeature: Reducer {
                 files: ["uploading"],  // 업로드 중 표시를 위한 placeholder
                 sendStatus: .sending,
                 localId: localId,
-                localImages: filesData  // 로컬 이미지 Data 저장
+                localImages: filesData,  // 로컬 이미지 Data 저장
+                sharedPost: nil
             )
             state.messages.append(tempMessage)
 

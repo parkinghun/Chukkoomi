@@ -22,19 +22,19 @@ struct ChatMessageResponseDTO: Decodable {
     let createdAt: String
     let sender: Sender
     let files: [String]
-    
+
     struct Sender: Decodable {
         let userId: String
         let nick: String
         let profileImage: String?
-        
+
         enum CodingKeys: String, CodingKey {
             case userId = "user_id"
             case nick
             case profileImage
         }
     }
-    
+
     enum CodingKeys: String, CodingKey {
         case chatId = "chat_id"
         case roomId = "room_id"
@@ -42,6 +42,55 @@ struct ChatMessageResponseDTO: Decodable {
         case createdAt
         case sender
         case files
+    }
+
+    // content에서 게시물 공유 정보 파싱
+    var sharedPost: SharedPost? {
+        guard let content = content,
+              content.hasPrefix("[SHARED_POST]") else {
+            return nil
+        }
+
+        // "[SHARED_POST]postId:xxx|content:xxx|files:file1,file2|creatorNick:xxx|creatorProfileImage:xxx" 형식 파싱
+        let parts = content.dropFirst("[SHARED_POST]".count).split(separator: "|")
+        var postId: String?
+        var postContent: String?
+        var postFiles: [String] = []
+        var creatorNick: String?
+        var creatorProfileImage: String?
+
+        for part in parts {
+            let keyValue = part.split(separator: ":", maxSplits: 1)
+            guard keyValue.count == 2 else { continue }
+
+            let key = String(keyValue[0])
+            let value = String(keyValue[1])
+
+            switch key {
+            case "postId":
+                postId = value
+            case "content":
+                postContent = value
+            case "files":
+                postFiles = value.split(separator: ",").map { String($0) }
+            case "creatorNick":
+                creatorNick = value
+            case "creatorProfileImage":
+                creatorProfileImage = value
+            default:
+                break
+            }
+        }
+
+        guard let postId = postId else { return nil }
+
+        return SharedPost(
+            postId: postId,
+            content: postContent,
+            files: postFiles,
+            creatorNick: creatorNick,
+            creatorProfileImage: creatorProfileImage
+        )
     }
 }
 
@@ -67,7 +116,8 @@ extension ChatMessageResponseDTO {
             files: files,
             sendStatus: .sent,  // 서버에서 받은 메시지는 전송 완료 상태
             localId: nil,  // 서버에서 받은 메시지는 localId 없음
-            localImages: nil  // 서버에서 받은 메시지는 로컬 이미지 없음
+            localImages: nil,  // 서버에서 받은 메시지는 로컬 이미지 없음
+            sharedPost: sharedPost  // 파싱된 게시물 정보
         )
     }
 }
@@ -99,6 +149,7 @@ final class ChatMessageRealmDTO: Object {
     @Persisted var sender: ChatUserRealmDTO?
     @Persisted var files: List<String>
     @Persisted var sendStatus: String  // "sending", "sent", "failed"
+    @Persisted var sharedPostData: String?  // JSON 인코딩된 SharedPost 데이터
 
     convenience init(
         chatId: String,
@@ -107,7 +158,8 @@ final class ChatMessageRealmDTO: Object {
         createdAt: String,
         sender: ChatUserRealmDTO?,
         files: [String],
-        sendStatus: String
+        sendStatus: String,
+        sharedPostData: String? = nil
     ) {
         self.init()
         self.chatId = chatId
@@ -117,6 +169,7 @@ final class ChatMessageRealmDTO: Object {
         self.sender = sender
         self.files.append(objectsIn: files)
         self.sendStatus = sendStatus
+        self.sharedPostData = sharedPostData
     }
 }
 
@@ -133,6 +186,12 @@ extension ChatMessageRealmDTO {
             status = .sent
         }
 
+        // sharedPostData JSON 디코딩
+        var sharedPost: SharedPost? = nil
+        if let jsonData = sharedPostData?.data(using: .utf8) {
+            sharedPost = try? JSONDecoder().decode(SharedPost.self, from: jsonData)
+        }
+
         return ChatMessage(
             chatId: chatId,
             roomId: roomId,
@@ -142,7 +201,8 @@ extension ChatMessageRealmDTO {
             files: Array(files),
             sendStatus: status,
             localId: nil,  // Realm에서 로드한 메시지는 localId 없음
-            localImages: nil
+            localImages: nil,
+            sharedPost: sharedPost
         )
     }
 }
@@ -160,6 +220,14 @@ extension ChatMessage {
             statusString = "failed"
         }
 
+        // sharedPost JSON 인코딩
+        var sharedPostJson: String? = nil
+        if let sharedPost = sharedPost,
+           let jsonData = try? JSONEncoder().encode(sharedPost),
+           let jsonString = String(data: jsonData, encoding: .utf8) {
+            sharedPostJson = jsonString
+        }
+
         return ChatMessageRealmDTO(
             chatId: chatId,
             roomId: roomId,
@@ -167,7 +235,8 @@ extension ChatMessage {
             createdAt: createdAt,
             sender: sender.toRealmDTO(),
             files: files,
-            sendStatus: statusString
+            sendStatus: statusString,
+            sharedPostData: sharedPostJson
         )
     }
 }

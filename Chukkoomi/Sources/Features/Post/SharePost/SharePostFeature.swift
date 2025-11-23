@@ -152,15 +152,61 @@ struct SharePostFeature {
                 // 선택된 사용자에게 게시글 공유
                 guard let selectedUserId = state.selectedUserId else { return .none }
 
-                return .run { [postId = state.post.id] send in
+                return .run { [post = state.post, availableUsers = state.availableUsers] send in
                     do {
-                        // TODO: 실제 공유 API 호출
-                        print("게시글 공유: \(postId) to \(selectedUserId)")
+                        // 1. 선택된 유저 정보 찾기
+                        guard let user = availableUsers.first(where: { $0.userId == selectedUserId }) else {
+                            throw NSError(domain: "SharePost", code: -1, userInfo: [NSLocalizedDescriptionKey: "사용자를 찾을 수 없습니다"])
+                        }
 
-                        // 임시로 성공 처리
-                        try await Task.sleep(for: .milliseconds(500))
+                        print("📤 게시글 공유 시작: \(post.id) to \(user.nickname)")
+
+                        // 2. 기존 채팅방 확인
+                        let chatRoomResponse = try await NetworkManager.shared.performRequest(
+                            ChatRouter.getChatRoomList,
+                            as: ChatRoomListResponseDTO.self
+                        )
+                        let chatRooms = chatRoomResponse.data.map { $0.toDomain }
+
+                        let myUserId = UserDefaultsHelper.userId ?? ""
+
+                        // 해당 유저와의 채팅방 찾기
+                        let existingRoom = chatRooms.first { room in
+                            let hasSelectedUser = room.participants.contains(where: { $0.userId == selectedUserId })
+                            let hasMyUser = room.participants.contains(where: { $0.userId == myUserId })
+                            return hasSelectedUser && hasMyUser
+                        }
+
+                        var roomId: String
+
+                        if let existing = existingRoom {
+                            // 3-1. 기존 채팅방이 있으면 해당 roomId 사용
+                            roomId = existing.roomId
+                            print("   기존 채팅방 발견: \(roomId)")
+                        } else {
+                            // 3-2. 채팅방이 없으면 첫 메시지 전송 시 자동 생성됨
+                            // opponent userId를 roomId로 사용 (첫 메시지 전송 시 서버에서 채팅방 생성)
+                            roomId = selectedUserId
+                            print("   새 채팅방 생성 예정 (opponent: \(selectedUserId))")
+                        }
+
+                        // 4. 게시물 공유 메시지 생성 및 전송
+                        // 특별한 형식으로 게시물 정보 인코딩
+                        let filesString = post.files.joined(separator: ",")
+                        let contentPreview = String(post.content.prefix(100))
+                        let creatorNick = post.creator?.nickname ?? ""
+                        let creatorProfileImage = post.creator?.profileImage ?? ""
+                        let shareMessage = "[SHARED_POST]postId:\(post.id)|content:\(contentPreview)|files:\(filesString)|creatorNick:\(creatorNick)|creatorProfileImage:\(creatorProfileImage)"
+
+                        let response = try await NetworkManager.shared.performRequest(
+                            ChatRouter.sendMessage(roomId: roomId, content: shareMessage, files: nil),
+                            as: ChatMessageResponseDTO.self
+                        )
+
+                        print("✅ 게시글 공유 완료: \(response.chatId)")
                         await send(.sendPostResponse(.success(())))
                     } catch {
+                        print("❌ 게시글 공유 실패: \(error)")
                         await send(.sendPostResponse(.failure(error)))
                     }
                 }
