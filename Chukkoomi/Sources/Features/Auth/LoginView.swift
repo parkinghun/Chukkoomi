@@ -20,18 +20,16 @@ struct LoginView: View {
                 Text("로그인")
                     .font(.system(size: 17, weight: .semibold))
                     .frame(maxWidth: .infinity)
-                    .padding(.top, 16)
+                    .padding(.top, 8)
                     .padding(.bottom, 20)
 
                 // 로고
-                Image(systemName: "soccerball.circle.fill")
+                Image("AppLogo")
                     .resizable()
                     .scaledToFit()
-                    .frame(width: 120, height: 120)
-                    .foregroundColor(AppColor.primary)
-                    .padding(.top, 40)
-
-                Spacer()
+                    .frame(width: 240, height: 240)
+                    .padding(.top, 20)
+                    .padding(.bottom, 30)
 
                 // 로그인 폼
                 VStack(spacing: 12) {
@@ -149,7 +147,7 @@ struct LoginView: View {
                     HStack(spacing: 16) {
                         // 카카오 로그인
                         Button {
-                            // TODO: 카카오 로그인
+                            viewStore.send(.kakaoLoginButtonTapped)
                         } label: {
                             Image(systemName: "message.fill")
                                 .resizable()
@@ -160,6 +158,7 @@ struct LoginView: View {
                                 .background(Color.yellow)
                                 .clipShape(Circle())
                         }
+                        .disabled(viewStore.isLoading)
 
                         // 애플 로그인
                         Button {
@@ -189,7 +188,7 @@ struct LoginView: View {
                     }
                     .padding(.top, 8)
                 }
-                .padding(.bottom, 40)
+                .padding(.bottom, 60)
             }
         }
     }

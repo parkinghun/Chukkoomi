@@ -7,6 +7,8 @@
 
 import ComposableArchitecture
 import Foundation
+import KakaoSDKAuth
+import KakaoSDKUser
 
 @Reducer
 struct LoginFeature {
@@ -26,6 +28,8 @@ struct LoginFeature {
         case passwordChanged(String)
         case loginButtonTapped
         case loginResponse(Result<SignResponse, Error>)
+        case kakaoLoginButtonTapped
+        case kakaoLoginResponse(Result<SignResponse, Error>)
         case clearFields // 필드 초기화
     }
 
@@ -107,6 +111,43 @@ struct LoginFeature {
 
                 return .none
 
+            case .kakaoLoginButtonTapped:
+                state.isLoading = true
+                state.errorMessage = nil
+
+                return .run { send in
+                    await send(.kakaoLoginResponse(
+                        Result {
+                            try await networkClient.signInWithKakao()
+                        }
+                    ))
+                }
+
+            case let .kakaoLoginResponse(.success(response)):
+                state.isLoading = false
+
+                // Keychain에 토큰 저장
+                KeychainManager.shared.save(response.accessToken, for: .accessToken)
+                KeychainManager.shared.save(response.refreshToken, for: .refreshToken)
+
+                // UserDefaults에 userId 저장
+                UserDefaultsHelper.userId = response.userId
+
+                state.isLoginSuccessful = true
+                return .none
+
+            case let .kakaoLoginResponse(.failure(error)):
+                state.isLoading = false
+
+                // 에러 메시지 표시
+                if let networkError = error as? NetworkError {
+                    state.errorMessage = networkError.errorDescription ?? "카카오 로그인에 실패했습니다."
+                } else {
+                    state.errorMessage = "카카오 로그인에 실패했습니다."
+                }
+
+                return .none
+
             case .clearFields:
                 state.email = ""
                 state.password = ""
@@ -121,12 +162,42 @@ struct LoginFeature {
 // MARK: - NetworkClient Dependency
 struct NetworkClient {
     var signInWithEmail: @Sendable (String, String) async throws -> SignResponse
+    var signInWithKakao: @Sendable () async throws -> SignResponse
 }
 
 extension NetworkClient: DependencyKey {
     static let liveValue = NetworkClient(
         signInWithEmail: { email, password in
             let router = UserRouter.signInWithEmail(email: email, password: password)
+            let responseDTO = try await NetworkManager.shared.performRequest(router, as: SignResponseDTO.self)
+            return responseDTO.toDomain
+        },
+        signInWithKakao: {
+            // Kakao SDK를 사용하여 로그인
+            let oauthToken = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<String, Error>) in
+                if UserApi.isKakaoTalkLoginAvailable() {
+                    // 카카오톡 앱으로 로그인
+                    UserApi.shared.loginWithKakaoTalk { oauthToken, error in
+                        if let error = error {
+                            continuation.resume(throwing: error)
+                        } else if let oauthToken = oauthToken {
+                            continuation.resume(returning: oauthToken.accessToken)
+                        }
+                    }
+                } else {
+                    // 카카오 계정으로 로그인 (웹)
+                    UserApi.shared.loginWithKakaoAccount { oauthToken, error in
+                        if let error = error {
+                            continuation.resume(throwing: error)
+                        } else if let oauthToken = oauthToken {
+                            continuation.resume(returning: oauthToken.accessToken)
+                        }
+                    }
+                }
+            }
+
+            // 서버에 OAuth 토큰 전송
+            let router = UserRouter.signInWithKakao(oauthToken: oauthToken)
             let responseDTO = try await NetworkManager.shared.performRequest(router, as: SignResponseDTO.self)
             return responseDTO.toDomain
         }

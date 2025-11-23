@@ -10,6 +10,21 @@ import ComposableArchitecture
 import PhotosUI
 import UniformTypeIdentifiers
 
+// MARK: - Movie Transferable for PhotosPicker
+struct Movie: Transferable {
+    let url: URL
+
+    static var transferRepresentation: some TransferRepresentation {
+        FileRepresentation(contentType: .movie) { movie in
+            SentTransferredFile(movie.url)
+        } importing: { received in
+            let copiedURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString).appendingPathExtension("mov")
+            try FileManager.default.copyItem(at: received.file, to: copiedURL)
+            return Self(url: copiedURL)
+        }
+    }
+}
+
 struct ChatView: View {
 
     let store: StoreOf<ChatFeature>
@@ -63,6 +78,7 @@ struct ChatView: View {
                                     opponentProfileImage: opponentProfileImage,
                                     showProfile: shouldShowProfile(currentMessage: message, previousMessage: previousMessage, myUserId: viewStore.myUserId),
                                     showTime: shouldShowTime(currentMessage: message, nextMessage: nextMessage, myUserId: viewStore.myUserId),
+                                    selectedTheme: viewStore.selectedTheme,
                                     onRetry: { localId in
                                         viewStore.send(.retryMessage(localId: localId))
                                     },
@@ -102,7 +118,7 @@ struct ChatView: View {
                     // 이미지/영상 선택 버튼
                     PhotosPicker(selection: $selectedPhotosItems, maxSelectionCount: 5, matching: .any(of: [.images, .videos])) {
                         Image(systemName: "photo")
-                            .foregroundColor(.blue)
+                            .foregroundColor(.white)
                             .font(.system(size: 22))
                     }
                     .onChange(of: selectedPhotosItems) { oldValue, newValue in
@@ -115,16 +131,17 @@ struct ChatView: View {
                         send: { .messageTextChanged($0) }
                     ))
                     .textFieldStyle(.plain)
+                    .foregroundColor(.black)
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
-                    .background(Color.gray.opacity(0.1))
+                    .background(Color.white)
                     .cornerRadius(20)
 
                     Button(action: {
                         viewStore.send(.sendMessageTapped)
                     }) {
                         Image(systemName: "paperplane.fill")
-                            .foregroundColor(viewStore.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? .gray : .blue)
+                            .foregroundColor(viewStore.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? Color(hex: "002D5B") : .white)
                             .font(.system(size: 20))
                     }
                     .disabled(viewStore.messageText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || viewStore.isSending)
@@ -132,8 +149,8 @@ struct ChatView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
                 .overlay {
-                    // 업로드 중 로딩 표시
-                    if viewStore.isUploadingFiles {
+                    // 업로드 중 또는 사진 처리 중 로딩 표시
+                    if viewStore.isUploadingFiles || isProcessingPhotos {
                         ProgressView()
                             .progressViewStyle(CircularProgressViewStyle())
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -146,9 +163,48 @@ struct ChatView: View {
                     UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
                 }
             )
+            .background(
+                Group {
+                    if let imageName = viewStore.selectedTheme.imageName {
+                        GeometryReader { geometry in
+                            Image(imageName)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                                .frame(width: geometry.size.width, height: geometry.size.height)
+                                .clipped()
+                        }
+                        .ignoresSafeArea(edges: .bottom)
+                    }
+                }
+            )
             .navigationTitle(opponentNickname(chatRoom: viewStore.chatRoom, opponent: viewStore.opponent, myUserId: viewStore.myUserId))
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color(hex: "202255"), for: .navigationBar)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button {
+                        viewStore.send(.themeButtonTapped)
+                    } label: {
+                        Image(systemName: "ellipsis")
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .sheet(isPresented: viewStore.binding(
+                get: \.isThemeSheetPresented,
+                send: .dismissThemeSheet
+            )) {
+                ThemeSelectionView(
+                    selectedTheme: viewStore.selectedTheme,
+                    onThemeSelected: { theme in
+                        viewStore.send(.themeSelected(theme))
+                    }
+                )
+                .presentationDetents([.medium])
+            }
         }
     }
 
@@ -336,18 +392,30 @@ struct ChatView: View {
             var imageData: [Data] = []
             var videoData: [Data] = []
 
+
             for item in itemsToProcess {
                 // 영상인지 이미지인지 확인
                 let isVideo = item.supportedContentTypes.contains(where: { $0.conforms(to: .movie) })
 
-                if let data = try? await item.loadTransferable(type: Data.self) {
-                    if isVideo {
-                        videoData.append(data)
+                if isVideo {
+                    // 영상은 URL로 로드 후 Data로 변환
+                    if let movie = try? await item.loadTransferable(type: Movie.self) {
+                        let data = try? Data(contentsOf: movie.url)
+                        if let data = data {
+                            videoData.append(data)
+                        } else {
+                        }
                     } else {
+                    }
+                } else {
+                    // 이미지는 Data로 직접 로드
+                    if let data = try? await item.loadTransferable(type: Data.self) {
                         imageData.append(data)
+                    } else {
                     }
                 }
             }
+
 
             // 메인 스레드에서 상태 업데이트
             await MainActor.run {
@@ -409,6 +477,7 @@ struct MessageRow: View {
     let opponentProfileImage: UIImage?
     let showProfile: Bool
     let showTime: Bool
+    let selectedTheme: ChatFeature.ChatTheme
     let onRetry: ((String) -> Void)?
     let onCancel: ((String) -> Void)?
 
@@ -419,40 +488,44 @@ struct MessageRow: View {
 
                 HStack(alignment: .bottom, spacing: 8) {
                     // 내 메시지: 시간이 왼쪽 (실패 시 재전송/취소 버튼)
-                    if showTime {
-                        if message.sendStatus == .failed {
-                            // 실패 시 재전송/취소 버튼
-                            HStack(spacing: 0) {
-                                Button(action: {
-                                    if let localId = message.localId {
-                                        onRetry?(localId)
-                                    }
-                                }) {
-                                    Image(systemName: "arrow.clockwise")
-                                        .font(.system(size: 11, weight: .semibold))
-                                        .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
-                                        .frame(width: 24, height: 24)
+                    if message.sendStatus == .failed {
+                        // 실패 시 재전송/취소 버튼 (항상 표시)
+                        HStack(spacing: 0) {
+                            Button(action: {
+                                if let localId = message.localId {
+                                    onRetry?(localId)
                                 }
-
-                                Button(action: {
-                                    if let localId = message.localId {
-                                        onCancel?(localId)
-                                    }
-                                }) {
-                                    Image(systemName: "xmark")
-                                        .font(.system(size: 10, weight: .semibold))
-                                        .foregroundColor(.red)
-                                        .frame(width: 24, height: 24)
-                                }
+                            }) {
+                                Image(systemName: "arrow.clockwise")
+                                    .font(.system(size: 11, weight: .semibold))
+                                    .foregroundColor(Color(red: 0.4, green: 0.4, blue: 0.4))
+                                    .frame(width: 24, height: 24)
+                                    .contentShape(Rectangle())
                             }
-                            .background(Color(red: 0.95, green: 0.95, blue: 0.95))
-                            .cornerRadius(6)
-                        } else {
-                            Text(DateFormatters.formatChatMessageTime(message.createdAt))
-                                .font(.system(size: 11))
-                                .foregroundColor(.gray)
-                                .fixedSize()
+                            .buttonStyle(.plain)
+
+                            Button(action: {
+                                if let localId = message.localId {
+                                    onCancel?(localId)
+                                }
+                            }) {
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 10, weight: .semibold))
+                                    .foregroundColor(.red)
+                                    .frame(width: 24, height: 24)
+                                    .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
                         }
+                        .background(Color(red: 0.95, green: 0.95, blue: 0.95))
+                        .cornerRadius(6)
+                        .zIndex(100)
+                    } else if showTime {
+                        // 성공 시 시간 표시
+                        Text(DateFormatters.formatChatMessageTime(message.createdAt))
+                            .font(.system(size: 11))
+                            .foregroundColor(.white)
+                            .fixedSize()
                     }
 
                     messageContent
@@ -467,14 +540,7 @@ struct MessageRow: View {
                             .frame(width: 36, height: 36)
                             .clipShape(Circle())
                     } else {
-                        Circle()
-                            .fill(Color.gray.opacity(0.3))
-                            .frame(width: 36, height: 36)
-                            .overlay(
-                                Image(systemName: "person.fill")
-                                    .font(.system(size: 16))
-                                    .foregroundColor(.gray)
-                            )
+                        ProfileImageView(selectedTheme: selectedTheme)
                     }
                 } else {
                     // 프로필 이미지 자리 확보 (투명 공간)
@@ -487,7 +553,7 @@ struct MessageRow: View {
                     if showProfile {
                         Text(message.sender.nick)
                             .font(.system(size: 13, weight: .medium))
-                            .foregroundColor(.primary)
+                            .foregroundColor(.white)
                     }
 
                     HStack(alignment: .bottom, spacing: 8) {
@@ -497,7 +563,7 @@ struct MessageRow: View {
                         if showTime {
                             Text(DateFormatters.formatChatMessageTime(message.createdAt))
                                 .font(.system(size: 11))
-                                .foregroundColor(.gray)
+                                .foregroundColor(.white)
                                 .fixedSize()
                         }
                     }
@@ -515,10 +581,10 @@ struct MessageRow: View {
             if let content = message.content, !content.isEmpty {
                 Text(content)
                     .font(.system(size: 15))
-                    .foregroundColor(isMyMessage ? .black : .primary)
+                    .foregroundColor(isMyMessage ? .white : .black)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
-                    .background(isMyMessage ? AppColor.disabled : Color.gray.opacity(0.2))
+                    .background(isMyMessage ? Color(hex: "002D5B") : .white)
                     .cornerRadius(12)
             }
 
@@ -533,6 +599,23 @@ struct MessageRow: View {
         }
     }
 
+    // 미디어 뷰 헬퍼 (이미지 or 영상)
+    @ViewBuilder
+    private func mediaView(filePath: String, width: CGFloat, height: CGFloat) -> some View {
+        if MediaTypeHelper.isVideoPath(filePath) {
+            ChatVideoPlayerView(
+                mediaPath: filePath,
+                maxWidth: width
+            )
+        } else {
+            AsyncMediaImageView(
+                imagePath: filePath,
+                width: width,
+                height: height
+            )
+        }
+    }
+
     // 이미지 그리드 레이아웃
     @ViewBuilder
     private func imageGridView(files: [String]) -> some View {
@@ -541,24 +624,28 @@ struct MessageRow: View {
         Group {
             switch count {
             case 1:
-                // 1개: 단일 이미지
-                AsyncMediaImageView(
-                    imagePath: files[0],
-                    width: 200,
-                    height: 200
-                )
-                .cornerRadius(8)
+                // 1개: 단일 이미지/영상
+                if MediaTypeHelper.isVideoPath(files[0]) {
+                    ChatVideoPlayerView(
+                        mediaPath: files[0],
+                        maxWidth: 260
+                    )
+                    .cornerRadius(8)
+                } else {
+                    AsyncMediaImageView(
+                        imagePath: files[0],
+                        width: 200,
+                        height: 200
+                    )
+                    .cornerRadius(8)
+                }
 
             case 2:
                 // 2개: 한 줄에 표시
                 HStack(spacing: 2) {
                     ForEach(Array(files.enumerated()), id: \.offset) { index, filePath in
-                        AsyncMediaImageView(
-                            imagePath: filePath,
-                            width: 98,
-                            height: 98
-                        )
-                        .cornerRadius(6)
+                        mediaView(filePath: filePath, width: 98, height: 98)
+                            .cornerRadius(6)
                     }
                 }
 
@@ -566,12 +653,12 @@ struct MessageRow: View {
                 // 3개: 윗줄 2개, 아랫줄 1개 (꽉 차게)
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[0], width: 98, height: 98)
+                        mediaView(filePath: files[0], width: 98, height: 98)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[1], width: 98, height: 98)
+                        mediaView(filePath: files[1], width: 98, height: 98)
                             .cornerRadius(6)
                     }
-                    AsyncMediaImageView(imagePath: files[2], width: 198, height: 98)
+                    mediaView(filePath: files[2], width: 198, height: 98)
                         .cornerRadius(6)
                 }
 
@@ -579,15 +666,15 @@ struct MessageRow: View {
                 // 4개: 2x2 그리드
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[0], width: 98, height: 98)
+                        mediaView(filePath: files[0], width: 98, height: 98)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[1], width: 98, height: 98)
+                        mediaView(filePath: files[1], width: 98, height: 98)
                             .cornerRadius(6)
                     }
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[2], width: 98, height: 98)
+                        mediaView(filePath: files[2], width: 98, height: 98)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[3], width: 98, height: 98)
+                        mediaView(filePath: files[3], width: 98, height: 98)
                             .cornerRadius(6)
                     }
                 }
@@ -596,17 +683,17 @@ struct MessageRow: View {
                 // 5개: 윗줄 2개, 아랫줄 3개
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[0], width: 98, height: 98)
+                        mediaView(filePath: files[0], width: 98, height: 98)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[1], width: 98, height: 98)
+                        mediaView(filePath: files[1], width: 98, height: 98)
                             .cornerRadius(6)
                     }
                     HStack(spacing: 2) {
-                        AsyncMediaImageView(imagePath: files[2], width: 64, height: 64)
+                        mediaView(filePath: files[2], width: 64, height: 64)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[3], width: 64, height: 64)
+                        mediaView(filePath: files[3], width: 64, height: 64)
                             .cornerRadius(6)
-                        AsyncMediaImageView(imagePath: files[4], width: 64, height: 64)
+                        mediaView(filePath: files[4], width: 64, height: 64)
                             .cornerRadius(6)
                     }
                 }
@@ -614,57 +701,95 @@ struct MessageRow: View {
             default:
                 // 그 외: 기본 처리 (1개씩 표시)
                 ForEach(files, id: \.self) { filePath in
-                    AsyncMediaImageView(
-                        imagePath: filePath,
-                        width: 200,
-                        height: 200
-                    )
-                    .cornerRadius(8)
+                    if MediaTypeHelper.isVideoPath(filePath) {
+                        ChatVideoPlayerView(
+                            mediaPath: filePath,
+                            maxWidth: 260
+                        )
+                        .cornerRadius(8)
+                    } else {
+                        AsyncMediaImageView(
+                            imagePath: filePath,
+                            width: 200,
+                            height: 200
+                        )
+                        .cornerRadius(8)
+                    }
                 }
             }
         }
     }
 
-    // 로컬 이미지 그리드 레이아웃 (업로드 중)
+    // 로컬 이미지/영상 그리드 레이아웃 (업로드 중)
     @ViewBuilder
     private func localImageGridView(imagesData: [Data]) -> some View {
-        let count = imagesData.count
-        let images = imagesData.compactMap { UIImage(data: $0) }
+        LocalMediaGridView(imagesData: imagesData)
+    }
+}
+
+// MARK: - 로컬 미디어 그리드 뷰 (업로드 중/실패 시)
+struct LocalMediaGridView: View {
+    let imagesData: [Data]
+    @State private var thumbnails: [UIImage?] = []
+
+    var body: some View {
+        Group {
+            if thumbnails.isEmpty {
+                // 썸네일 로딩 중
+                ProgressView()
+                    .frame(width: 200, height: 200)
+            } else {
+                gridContent
+            }
+        }
+        .task {
+            await loadThumbnails()
+        }
+    }
+
+    @ViewBuilder
+    private var gridContent: some View {
+        let count = thumbnails.count
 
         Group {
             switch count {
             case 1:
-                // 1개: 단일 이미지
-                if let image = images.first {
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 200, height: 200)
-                        .clipped()
-                        .cornerRadius(8)
-                        .opacity(0.7)  // 업로드 중 표시
-                }
-
-            case 2:
-                // 2개: 한 줄에 표시
-                HStack(spacing: 2) {
-                    ForEach(Array(images.enumerated()), id: \.offset) { index, image in
+                if let thumbnail = thumbnails.first, let image = thumbnail {
+                    ZStack {
                         Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 98, height: 98)
+                            .frame(width: 200, height: 200)
                             .clipped()
-                            .cornerRadius(6)
+                            .cornerRadius(8)
                             .opacity(0.7)
+
+                        ProgressView()
+                            .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            .scaleEffect(1.5)
+                    }
+                }
+
+            case 2:
+                HStack(spacing: 2) {
+                    ForEach(Array(thumbnails.enumerated()), id: \.offset) { index, thumbnail in
+                        if let image = thumbnail {
+                            Image(uiImage: image)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 98, height: 98)
+                                .clipped()
+                                .cornerRadius(6)
+                                .opacity(0.7)
+                        }
                     }
                 }
 
             case 3:
-                // 3개: 윗줄 2개, 아랫줄 1개
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        if images.count > 0 {
-                            Image(uiImage: images[0])
+                        if thumbnails.count > 0, let image = thumbnails[0] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 98, height: 98)
@@ -672,8 +797,8 @@ struct MessageRow: View {
                                 .cornerRadius(6)
                                 .opacity(0.7)
                         }
-                        if images.count > 1 {
-                            Image(uiImage: images[1])
+                        if thumbnails.count > 1, let image = thumbnails[1] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 98, height: 98)
@@ -682,8 +807,8 @@ struct MessageRow: View {
                                 .opacity(0.7)
                         }
                     }
-                    if images.count > 2 {
-                        Image(uiImage: images[2])
+                    if thumbnails.count > 2, let image = thumbnails[2] {
+                        Image(uiImage: image)
                             .resizable()
                             .scaledToFill()
                             .frame(width: 198, height: 98)
@@ -694,11 +819,10 @@ struct MessageRow: View {
                 }
 
             case 4:
-                // 4개: 2x2 그리드
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        if images.count > 0 {
-                            Image(uiImage: images[0])
+                        if thumbnails.count > 0, let image = thumbnails[0] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 98, height: 98)
@@ -706,8 +830,8 @@ struct MessageRow: View {
                                 .cornerRadius(6)
                                 .opacity(0.7)
                         }
-                        if images.count > 1 {
-                            Image(uiImage: images[1])
+                        if thumbnails.count > 1, let image = thumbnails[1] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 98, height: 98)
@@ -717,8 +841,8 @@ struct MessageRow: View {
                         }
                     }
                     HStack(spacing: 2) {
-                        if images.count > 2 {
-                            Image(uiImage: images[2])
+                        if thumbnails.count > 2, let image = thumbnails[2] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 98, height: 98)
@@ -726,8 +850,8 @@ struct MessageRow: View {
                                 .cornerRadius(6)
                                 .opacity(0.7)
                         }
-                        if images.count > 3 {
-                            Image(uiImage: images[3])
+                        if thumbnails.count > 3, let image = thumbnails[3] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 98, height: 98)
@@ -739,11 +863,10 @@ struct MessageRow: View {
                 }
 
             case 5:
-                // 5개: 윗줄 2개, 아랫줄 3개
                 VStack(spacing: 2) {
                     HStack(spacing: 2) {
-                        if images.count > 0 {
-                            Image(uiImage: images[0])
+                        if thumbnails.count > 0, let image = thumbnails[0] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 98, height: 98)
@@ -751,8 +874,8 @@ struct MessageRow: View {
                                 .cornerRadius(6)
                                 .opacity(0.7)
                         }
-                        if images.count > 1 {
-                            Image(uiImage: images[1])
+                        if thumbnails.count > 1, let image = thumbnails[1] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 98, height: 98)
@@ -762,8 +885,8 @@ struct MessageRow: View {
                         }
                     }
                     HStack(spacing: 2) {
-                        if images.count > 2 {
-                            Image(uiImage: images[2])
+                        if thumbnails.count > 2, let image = thumbnails[2] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 64, height: 64)
@@ -771,8 +894,8 @@ struct MessageRow: View {
                                 .cornerRadius(6)
                                 .opacity(0.7)
                         }
-                        if images.count > 3 {
-                            Image(uiImage: images[3])
+                        if thumbnails.count > 3, let image = thumbnails[3] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 64, height: 64)
@@ -780,8 +903,8 @@ struct MessageRow: View {
                                 .cornerRadius(6)
                                 .opacity(0.7)
                         }
-                        if images.count > 4 {
-                            Image(uiImage: images[4])
+                        if thumbnails.count > 4, let image = thumbnails[4] {
+                            Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 64, height: 64)
@@ -793,17 +916,64 @@ struct MessageRow: View {
                 }
 
             default:
-                // 그 외: 기본 처리
-                ForEach(Array(images.enumerated()), id: \.offset) { index, image in
-                    Image(uiImage: image)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 200, height: 200)
-                        .clipped()
-                        .cornerRadius(8)
-                        .opacity(0.7)
+                ForEach(Array(thumbnails.enumerated()), id: \.offset) { index, thumbnail in
+                    if let image = thumbnail {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: 200, height: 200)
+                            .clipped()
+                            .cornerRadius(8)
+                            .opacity(0.7)
+                    }
                 }
             }
         }
+    }
+
+    private func loadThumbnails() async {
+        var results: [UIImage?] = []
+
+        for data in imagesData {
+            // 먼저 이미지로 변환 시도
+            if let image = UIImage(data: data) {
+                results.append(image)
+            } else {
+                // 이미지 변환 실패 시 영상 썸네일 추출
+                if let thumbnail = await VideoThumbnailHelper.generateThumbnail(from: data),
+                   let thumbnailImage = UIImage(data: thumbnail) {
+                    results.append(thumbnailImage)
+                } else {
+                    // 썸네일 추출 실패 시 플레이스홀더
+                    results.append(UIImage(systemName: "video.fill"))
+                }
+            }
+        }
+
+        await MainActor.run {
+            self.thumbnails = results
+        }
+    }
+}
+
+// MARK: - 프로필 이미지 뷰 (테마별 기본 이미지)
+struct ProfileImageView: View {
+    let selectedTheme: ChatFeature.ChatTheme
+
+    var body: some View {
+        let imageName: String = {
+            switch selectedTheme {
+            case .theme2, .theme3:
+                return "기본 프로필2"
+            default:
+                return "기본 프로필"
+            }
+        }()
+
+        Image(imageName)
+            .resizable()
+            .scaledToFill()
+            .frame(width: 36, height: 36)
+            .clipShape(Circle())
     }
 }

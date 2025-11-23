@@ -24,6 +24,37 @@ struct ChatFeature: Reducer {
         var cursorDate: String?
         var hasMoreMessages: Bool = true
         var pendingFileUploads: [String: [Data]] = [:]  // localId: filesData
+        var selectedTheme: ChatTheme = .default
+        var isThemeSheetPresented: Bool = false
+
+        init(chatRoom: ChatRoom?, opponent: ChatUser, myUserId: String?) {
+            self.chatRoom = chatRoom
+            self.opponent = opponent
+            self.myUserId = myUserId
+
+            // roomId가 있으면 저장된 테마 불러오기
+            if let roomId = chatRoom?.roomId {
+                self.selectedTheme = ChatThemeStorage.loadTheme(for: roomId)
+            }
+        }
+    }
+
+    enum ChatTheme: String, CaseIterable, Equatable {
+        case `default` = "기본 테마"
+        case theme1 = "테마1"
+        case theme2 = "테마2"
+        case theme3 = "테마3"
+        case theme4 = "테마4"
+
+        var imageName: String? {
+            switch self {
+            case .default: return "기본 테마"
+            case .theme1: return "테마1"
+            case .theme2: return "테마2"
+            case .theme3: return "테마3"
+            case .theme4: return "테마4"
+            }
+        }
     }
 
     // MARK: - Action
@@ -49,6 +80,11 @@ struct ChatFeature: Reducer {
         // 메시지 재전송 및 취소
         case retryMessage(localId: String)
         case cancelMessage(localId: String)
+
+        // 테마 선택
+        case themeButtonTapped
+        case themeSelected(ChatTheme)
+        case dismissThemeSheet
     }
 
     // MARK: - Reducer
@@ -76,7 +112,6 @@ struct ChatFeature: Reducer {
                             send(.loadMessages)
                         }
                     } catch {
-                        print("Realm 메시지 로드 실패: \(error)")
                         // Realm 실패 시 HTTP로 직접 로드
                         Task {
                             send(.loadMessages)
@@ -150,7 +185,7 @@ struct ChatFeature: Reducer {
                             }
                         }
                     } catch {
-                        print("Realm 메시지 저장 실패: \(error)")
+                        // Realm 저장 실패
                     }
                 }
             }
@@ -247,13 +282,17 @@ struct ChatFeature: Reducer {
                             realm.add(messageDTO, update: .modified)
                         }
                     } catch {
-                        print("Realm 메시지 저장 실패: \(error)")
+                        // Realm 저장 실패
                     }
                 }
             }
 
         case .chatRoomCreated(let chatRoom):
             state.chatRoom = chatRoom
+
+            // 채팅방 생성 시 저장된 테마 불러오기
+            state.selectedTheme = ChatThemeStorage.loadTheme(for: chatRoom.roomId)
+
             return .none
 
         case .loadMoreMessages:
@@ -331,9 +370,20 @@ struct ChatFeature: Reducer {
                     do {
                         // Data를 MultipartFile 배열로 변환
                         let multipartFiles = filesData.enumerated().map { index, data in
-                            // 파일 확장자 결정 (간단하게 JPEG로 가정, 실제로는 MIME 타입 체크 필요)
-                            let fileName = "image_\(index)_\(UUID().uuidString).jpg"
-                            return MultipartFile(data: data, fileName: fileName, mimeType: "image/jpeg")
+                            // 파일 타입 감지 (이미지 vs 영상)
+                            let isVideo = isVideoData(data)
+                            let fileName: String
+                            let mimeType: String
+
+                            if isVideo {
+                                fileName = "video_\(index)_\(UUID().uuidString).mp4"
+                                mimeType = "video/mp4"
+                            } else {
+                                fileName = "image_\(index)_\(UUID().uuidString).jpg"
+                                mimeType = "image/jpeg"
+                            }
+
+                            return MultipartFile(data: data, fileName: fileName, mimeType: mimeType)
                         }
 
                         // 파일 업로드 (ChatRouter 사용)
@@ -430,11 +480,51 @@ struct ChatFeature: Reducer {
 
             // 파일 업로드가 실패한 경우 (pendingFileUploads에 Data가 있음)
             if let filesData = state.pendingFileUploads[localId] {
-                return .run { send in
-                    await send(.uploadAndSendFiles(filesData))
-                    // 기존 실패 메시지 삭제
-                    await send(.cancelMessage(localId: localId))
-                }
+                state.isUploadingFiles = true
+
+                return .merge(
+                    // 실제 파일 업로드
+                    .run { send in
+                        do {
+                            // Data를 MultipartFile 배열로 변환
+                            let multipartFiles = filesData.enumerated().map { index, data in
+                                // 파일 타입 감지 (이미지 vs 영상)
+                                let isVideo = isVideoData(data)
+                                let fileName: String
+                                let mimeType: String
+
+                                if isVideo {
+                                    fileName = "video_\(index)_\(UUID().uuidString).mp4"
+                                    mimeType = "video/mp4"
+                                } else {
+                                    fileName = "image_\(index)_\(UUID().uuidString).jpg"
+                                    mimeType = "image/jpeg"
+                                }
+
+                                return MultipartFile(data: data, fileName: fileName, mimeType: mimeType)
+                            }
+
+                            // 파일 업로드 (ChatRouter 사용)
+                            let response = try await NetworkManager.shared.performRequest(
+                                ChatRouter.uploadFiles(roomId: roomId, files: multipartFiles),
+                                as: UploadFileResponseDTO.self
+                            )
+
+                            // 업로드된 파일 URL로 메시지 전송
+                            await send(.filesUploaded(response.files, localId: localId))
+                        } catch {
+                            await send(.fileUploadFailed(error.localizedDescription, localId: localId))
+                        }
+                    }
+                    .cancellable(id: localId, cancelInFlight: true),
+
+                    // 5초 타임아웃
+                    .run { send in
+                        try await Task.sleep(nanoseconds: 5_000_000_000)
+                        await send(.uploadTimeout(localId: localId))
+                    }
+                    .cancellable(id: "\(localId)-timeout", cancelInFlight: true)
+                )
             }
 
             // 텍스트 메시지 재전송
@@ -459,6 +549,25 @@ struct ChatFeature: Reducer {
             // 파일 Data도 정리
             state.pendingFileUploads.removeValue(forKey: localId)
             return .none
+
+        case .themeButtonTapped:
+            state.isThemeSheetPresented = true
+            return .none
+
+        case .themeSelected(let theme):
+            state.selectedTheme = theme
+            state.isThemeSheetPresented = false
+
+            // roomId가 있으면 테마 저장
+            if let roomId = state.chatRoom?.roomId {
+                ChatThemeStorage.saveTheme(theme, for: roomId)
+            }
+
+            return .none
+
+        case .dismissThemeSheet:
+            state.isThemeSheetPresented = false
+            return .none
         }
     }
 
@@ -467,4 +576,37 @@ struct ChatFeature: Reducer {
             self.reduce(into: &state, action: action)
         }
     }
+}
+
+// MARK: - Helper Functions
+/// Data의 첫 바이트를 확인하여 영상 파일인지 판단
+private func isVideoData(_ data: Data) -> Bool {
+    guard data.count > 12 else { return false }
+
+    // MP4 시그니처 확인 (ftyp)
+    let mp4Signature: [UInt8] = [0x66, 0x74, 0x79, 0x70]  // "ftyp"
+    if data.count >= 8 {
+        let bytes = [UInt8](data[4..<8])
+        if bytes == mp4Signature {
+            return true
+        }
+    }
+
+    // MOV 시그니처 확인 (moov, mdat 등)
+    let movSignatures: [[UInt8]] = [
+        [0x6D, 0x6F, 0x6F, 0x76],  // "moov"
+        [0x6D, 0x64, 0x61, 0x74],  // "mdat"
+        [0x77, 0x69, 0x64, 0x65],  // "wide"
+    ]
+
+    for signature in movSignatures {
+        if data.count >= 8 {
+            let bytes = [UInt8](data[4..<8])
+            if bytes == signature {
+                return true
+            }
+        }
+    }
+
+    return false
 }

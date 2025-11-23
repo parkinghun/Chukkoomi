@@ -11,6 +11,9 @@
 		15163D142EC49DB400843A8A /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 15163D132EC49DB400843A8A /* RealmSwift */; };
 		154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 154F15AF2EBDE1A20079B157 /* ComposableArchitecture */; };
 		B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B5CC0CDD2EBA3E81003B6A27 /* .gitignore */; };
+		EC6A27072ED07A5B00648E9A /* KakaoSDKAuth in Frameworks */ = {isa = PBXBuildFile; productRef = EC6A27062ED07A5B00648E9A /* KakaoSDKAuth */; };
+		EC6A27092ED07A5B00648E9A /* KakaoSDKCommon in Frameworks */ = {isa = PBXBuildFile; productRef = EC6A27082ED07A5B00648E9A /* KakaoSDKCommon */; };
+		EC6A270B2ED07A5B00648E9A /* KakaoSDKUser in Frameworks */ = {isa = PBXBuildFile; productRef = EC6A270A2ED07A5B00648E9A /* KakaoSDKUser */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -30,6 +33,7 @@
 /* Begin PBXFileReference section */
 		B5CC0CC92EBA3C6D003B6A27 /* Chukkoomi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Chukkoomi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5CC0CDD2EBA3E81003B6A27 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		ECBCD8DE2ED1A5B80085F83B /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -58,8 +62,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				EC6A27092ED07A5B00648E9A /* KakaoSDKCommon in Frameworks */,
 				15163D142EC49DB400843A8A /* RealmSwift in Frameworks */,
 				154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */,
+				EC6A270B2ED07A5B00648E9A /* KakaoSDKUser in Frameworks */,
+				EC6A27072ED07A5B00648E9A /* KakaoSDKAuth in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -69,6 +76,7 @@
 		B5CC0CC02EBA3C6D003B6A27 = {
 			isa = PBXGroup;
 			children = (
+				ECBCD8DE2ED1A5B80085F83B /* Secrets.xcconfig */,
 				B5CC0CDD2EBA3E81003B6A27 /* .gitignore */,
 				B5CC0CCB2EBA3C6D003B6A27 /* Chukkoomi */,
 				B5CC0CCA2EBA3C6D003B6A27 /* Products */,
@@ -106,6 +114,9 @@
 			packageProductDependencies = (
 				154F15AF2EBDE1A20079B157 /* ComposableArchitecture */,
 				15163D132EC49DB400843A8A /* RealmSwift */,
+				EC6A27062ED07A5B00648E9A /* KakaoSDKAuth */,
+				EC6A27082ED07A5B00648E9A /* KakaoSDKCommon */,
+				EC6A270A2ED07A5B00648E9A /* KakaoSDKUser */,
 			);
 			productName = Chukkoomi;
 			productReference = B5CC0CC92EBA3C6D003B6A27 /* Chukkoomi.app */;
@@ -138,6 +149,7 @@
 			packageReferences = (
 				154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */,
 				15163D122EC49DB400843A8A /* XCRemoteSwiftPackageReference "realm-swift" */,
+				EC6A27052ED07A5B00648E9A /* XCRemoteSwiftPackageReference "kakao-ios-sdk" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B5CC0CCA2EBA3C6D003B6A27 /* Products */;
@@ -173,6 +185,7 @@
 /* Begin XCBuildConfiguration section */
 		B5CC0CD22EBA3C6E003B6A27 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = ECBCD8DE2ED1A5B80085F83B /* Secrets.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -237,6 +250,7 @@
 		};
 		B5CC0CD32EBA3C6E003B6A27 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = ECBCD8DE2ED1A5B80085F83B /* Secrets.xcconfig */;
 			buildSettings = {
 				ALWAYS_SEARCH_USER_PATHS = NO;
 				ASSETCATALOG_COMPILER_GENERATE_SWIFT_ASSET_SYMBOL_EXTENSIONS = YES;
@@ -294,6 +308,7 @@
 		};
 		B5CC0CD52EBA3C6E003B6A27 /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = ECBCD8DE2ED1A5B80085F83B /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -329,6 +344,7 @@
 		};
 		B5CC0CD62EBA3C6E003B6A27 /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = ECBCD8DE2ED1A5B80085F83B /* Secrets.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
@@ -402,6 +418,14 @@
 				minimumVersion = 1.23.1;
 			};
 		};
+		EC6A27052ED07A5B00648E9A /* XCRemoteSwiftPackageReference "kakao-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/kakao/kakao-ios-sdk.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 2.26.0;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -414,6 +438,21 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 154F15AE2EBDE1A10079B157 /* XCRemoteSwiftPackageReference "swift-composable-architecture" */;
 			productName = ComposableArchitecture;
+		};
+		EC6A27062ED07A5B00648E9A /* KakaoSDKAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EC6A27052ED07A5B00648E9A /* XCRemoteSwiftPackageReference "kakao-ios-sdk" */;
+			productName = KakaoSDKAuth;
+		};
+		EC6A27082ED07A5B00648E9A /* KakaoSDKCommon */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EC6A27052ED07A5B00648E9A /* XCRemoteSwiftPackageReference "kakao-ios-sdk" */;
+			productName = KakaoSDKCommon;
+		};
+		EC6A270A2ED07A5B00648E9A /* KakaoSDKUser */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = EC6A27052ED07A5B00648E9A /* XCRemoteSwiftPackageReference "kakao-ios-sdk" */;
+			productName = KakaoSDKUser;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -56,6 +56,7 @@ struct ChatListView: View {
                         viewStore.send(.userSearchButtonTapped)
                     } label: {
                         AppIcon.searchUser
+                            .foregroundColor(.black)
                     }
                 }
             }
@@ -82,6 +83,11 @@ struct ChatRoomRow: View {
     let chatRoom: ChatRoom
     let myUserId: String?
 
+    // 해당 채팅방의 저장된 테마 불러오기
+    private var savedTheme: ChatFeature.ChatTheme {
+        ChatThemeStorage.loadTheme(for: chatRoom.roomId)
+    }
+
     var body: some View {
         HStack(spacing: 12) {
             // 프로필 이미지
@@ -93,14 +99,7 @@ struct ChatRoomRow: View {
                 )
                 .clipShape(Circle())
             } else {
-                Circle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(width: 56, height: 56)
-                    .overlay {
-                        AppIcon.personFill
-                            .foregroundColor(.gray)
-                            .font(.system(size: 28))
-                    }
+                ChatListProfileImageView(selectedTheme: savedTheme)
             }
 
             // 닉네임 + 마지막 메시지
@@ -128,7 +127,9 @@ struct ChatRoomRow: View {
                         .foregroundColor(.gray)
                         .lineLimit(1)
                 } else if let lastChat = chatRoom.lastChat, !lastChat.files.isEmpty {
-                    Text("사진")
+                    // 파일이 있는 경우 영상/사진 구분
+                    let hasVideo = lastChat.files.contains { MediaTypeHelper.isVideoPath($0) }
+                    Text(hasVideo ? "동영상을 보냈습니다" : "사진을 보냈습니다")
                         .font(.system(size: 14))
                         .foregroundColor(.gray)
                 } else {
@@ -204,5 +205,27 @@ struct ChatRoomRow: View {
 
         // 나 자신과의 채팅방인 경우
         return chatRoom.participants.first?.profileImage
+    }
+}
+
+// MARK: - 채팅 리스트 프로필 이미지 뷰 (테마별 기본 이미지)
+struct ChatListProfileImageView: View {
+    let selectedTheme: ChatFeature.ChatTheme
+
+    var body: some View {
+        let imageName: String = {
+            switch selectedTheme {
+            case .theme2, .theme3:
+                return "기본 프로필2"
+            default:
+                return "기본 프로필"
+            }
+        }()
+
+        Image(imageName)
+            .resizable()
+            .scaledToFill()
+            .frame(width: 56, height: 56)
+            .clipShape(Circle())
     }
 }

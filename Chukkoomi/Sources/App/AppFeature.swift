@@ -70,8 +70,8 @@ struct AppFeature {
 
                 return .none
 
-            case .login(.loginResponse(.success)):
-                // 로그인 성공 - MainTabView로 전환
+            case .login(.loginResponse(.success)), .login(.kakaoLoginResponse(.success)):
+                // 로그인 성공 (이메일/카카오) - MainTabView로 전환
                 state.isLoggedIn = true
                 state.mainTabState = MainTabFeature.State()
                 state.loginState = nil

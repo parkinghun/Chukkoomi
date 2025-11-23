@@ -8,6 +8,7 @@
 import ComposableArchitecture
 import Foundation
 import RealmSwift
+import KakaoSDKUser
 
 @Reducer
 struct MyProfileFeature {
@@ -369,6 +370,14 @@ struct MyProfileFeature {
                     do {
                         // 회원탈퇴 API 호출
                         let _ = try await NetworkManager.shared.performRequest(UserRouter.withdraw, as: WithdrawResponseDTO.self)
+
+                        // 카카오 연결 해제
+                        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+                            UserApi.shared.unlink { error in
+                                // 에러가 있어도 계속 진행 (이미 연결 해제되었거나 카카오 로그인이 아닐 수 있음)
+                                continuation.resume()
+                            }
+                        }
 
                         // Realm에서 해당 사용자의 최근 검색어 모두 삭제
                         if let userId = UserDefaultsHelper.userId {
