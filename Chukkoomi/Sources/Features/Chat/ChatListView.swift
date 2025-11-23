@@ -122,10 +122,18 @@ struct ChatRoomRow: View {
                 }
 
                 if let lastMessage = chatRoom.lastChat?.content {
-                    Text(lastMessage)
-                        .font(.system(size: 14))
-                        .foregroundColor(.gray)
-                        .lineLimit(1)
+                    // 게시물 공유 메시지 체크
+                    if lastMessage.hasPrefix("[SHARED_POST]") {
+                        Text("게시물을 공유했습니다")
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                    } else {
+                        Text(lastMessage)
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                            .lineLimit(1)
+                    }
                 } else if let lastChat = chatRoom.lastChat, !lastChat.files.isEmpty {
                     // 파일이 있는 경우 영상/사진 구분
                     let hasVideo = lastChat.files.contains { MediaTypeHelper.isVideoPath($0) }

@@ -128,13 +128,8 @@ struct SharePostFeature {
                             if uniqueUsers.count >= 8 { break }
                         }
 
-                        print("📤 공유 가능한 사용자 목록: \(uniqueUsers.count)명")
-                        print("   - 최근 채팅: \(recentChatUsers.count)명")
-                        print("   - 팔로우: \(followingUsers.count)명")
-
                         await send(.loadUsersResponse(.success(uniqueUsers)))
                     } catch {
-                        print("❌ 사용자 목록 로드 실패: \(error)")
                         await send(.loadUsersResponse(.failure(error)))
                     }
                 }
@@ -152,13 +147,53 @@ struct SharePostFeature {
                 // 선택된 사용자에게 게시글 공유
                 guard let selectedUserId = state.selectedUserId else { return .none }
 
-                return .run { [postId = state.post.id] send in
+                return .run { [post = state.post, availableUsers = state.availableUsers] send in
                     do {
-                        // TODO: 실제 공유 API 호출
-                        print("게시글 공유: \(postId) to \(selectedUserId)")
+                        // 1. 선택된 유저 정보 찾기
+                        guard let user = availableUsers.first(where: { $0.userId == selectedUserId }) else {
+                            throw NSError(domain: "SharePost", code: -1, userInfo: [NSLocalizedDescriptionKey: "사용자를 찾을 수 없습니다"])
+                        }
 
-                        // 임시로 성공 처리
-                        try await Task.sleep(for: .milliseconds(500))
+                        // 2. 기존 채팅방 확인
+                        let chatRoomResponse = try await NetworkManager.shared.performRequest(
+                            ChatRouter.getChatRoomList,
+                            as: ChatRoomListResponseDTO.self
+                        )
+                        let chatRooms = chatRoomResponse.data.map { $0.toDomain }
+
+                        let myUserId = UserDefaultsHelper.userId ?? ""
+
+                        // 해당 유저와의 채팅방 찾기
+                        let existingRoom = chatRooms.first { room in
+                            let hasSelectedUser = room.participants.contains(where: { $0.userId == selectedUserId })
+                            let hasMyUser = room.participants.contains(where: { $0.userId == myUserId })
+                            return hasSelectedUser && hasMyUser
+                        }
+
+                        var roomId: String
+
+                        if let existing = existingRoom {
+                            // 3-1. 기존 채팅방이 있으면 해당 roomId 사용
+                            roomId = existing.roomId
+                        } else {
+                            // 3-2. 채팅방이 없으면 첫 메시지 전송 시 자동 생성됨
+                            // opponent userId를 roomId로 사용 (첫 메시지 전송 시 서버에서 채팅방 생성)
+                            roomId = selectedUserId
+                        }
+
+                        // 4. 게시물 공유 메시지 생성 및 전송
+                        // 특별한 형식으로 게시물 정보 인코딩
+                        let filesString = post.files.joined(separator: ",")
+                        let contentPreview = String(post.content.prefix(100))
+                        let creatorNick = post.creator?.nickname ?? ""
+                        let creatorProfileImage = post.creator?.profileImage ?? ""
+                        let shareMessage = "[SHARED_POST]postId:\(post.id)|content:\(contentPreview)|files:\(filesString)|creatorNick:\(creatorNick)|creatorProfileImage:\(creatorProfileImage)"
+
+                        let response = try await NetworkManager.shared.performRequest(
+                            ChatRouter.sendMessage(roomId: roomId, content: shareMessage, files: nil),
+                            as: ChatMessageResponseDTO.self
+                        )
+
                         await send(.sendPostResponse(.success(())))
                     } catch {
                         await send(.sendPostResponse(.failure(error)))
@@ -175,21 +210,17 @@ struct SharePostFeature {
 
             case let .userSearch(.presented(.delegate(.userSelected(user)))):
                 // 검색에서 유저 선택됨
-                print("✅ 유저 선택됨: \(user.nickname)")
-
                 // 이미 목록에 있는지 확인
                 if let existingIndex = state.availableUsers.firstIndex(where: { $0.userId == user.userId }) {
                     // 기존 유저를 맨 앞으로 이동
                     let existingUser = state.availableUsers.remove(at: existingIndex)
                     state.availableUsers.insert(existingUser, at: 0)
-                    print("   기존 유저를 맨 앞으로 이동")
                 } else {
                     // 새 유저를 맨 앞에 추가 (최대 8명 유지)
                     state.availableUsers.insert(user, at: 0)
                     if state.availableUsers.count > 8 {
                         state.availableUsers.removeLast()
                     }
-                    print("   새 유저 추가")
                 }
 
                 // 해당 유저를 선택 상태로
@@ -214,15 +245,12 @@ struct SharePostFeature {
 
             case let .loadUsersResponse(.failure(error)):
                 state.isLoading = false
-                print("사용자 목록 로드 실패: \(error)")
                 return .none
 
             case .sendPostResponse(.success):
-                print("게시글 공유 성공")
                 return .send(.delegate(.postShared))
 
             case let .sendPostResponse(.failure(error)):
-                print("게시글 공유 실패: \(error)")
                 // TODO: 에러 토스트 표시
                 return .none
 

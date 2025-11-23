@@ -276,7 +276,6 @@ struct PostFeature {
                     state.sharePost = nil
                     return .none
                 case .postShared:
-                    print("✅ 게시글 공유 완료")
                     state.sharePost = nil
                     // TODO: 공유 성공 토스트 표시
                     return .none
@@ -346,10 +345,8 @@ struct PostFeature {
             return .none
 
         case let .sharePost(postId):
-            print("📤 공유 탭: \(postId)")
             // 해당 게시글 찾기
             guard let post = state.postCells.first(where: { $0.post.id == postId })?.post else {
-                print("❌ 공유할 게시글을 찾을 수 없음: \(postId)")
                 return .none
             }
             // SharePost 시트 표시
