@@ -978,21 +978,28 @@ struct SharedPostCardView: View {
 
             // 게시물 이미지 또는 영상 (첫 번째 파일만)
             if let firstFile = sharedPost.files.first {
-                if MediaTypeHelper.isVideoPath(firstFile) {
-                    ChatVideoPlayerView(
-                        mediaPath: firstFile,
-                        maxWidth: 250
-                    )
-                    .frame(height: 200)
-                    .clipped()
-                } else {
-                    AsyncMediaImageView(
-                        imagePath: firstFile,
-                        width: 250,
-                        height: 200
-                    )
-                    .clipped()
+                ZStack {
+                    // 검정 배경
+                    Color.black
+                        .frame(width: 250, height: 200)
+
+                    // 미디어 콘텐츠
+                    if MediaTypeHelper.isVideoPath(firstFile) {
+                        ChatVideoPlayerView(
+                            mediaPath: firstFile,
+                            maxWidth: 250
+                        )
+                        .frame(maxHeight: 200)
+                    } else {
+                        AsyncMediaImageView(
+                            imagePath: firstFile,
+                            width: 250,
+                            height: 200
+                        )
+                    }
                 }
+                .frame(width: 250, height: 200)
+                .clipped()
             }
 
             // 게시물 내용 영역
