@@ -81,6 +81,9 @@ struct EditVideoView: View {
                                 },
                                 onUpdateSubtitleEndTime: { id, time in
                                     viewStore.send(.updateSubtitleEndTime(id, time))
+                                },
+                                onEditSubtitle: { id in
+                                    viewStore.send(.editSubtitle(id))
                                 }
                             )
                             .frame(height: 20 + 16 + 80 + 16 + 80) // 눈금자(20) + 간격(16) + 타임라인(80) + 간격(16) + 자막(80)
@@ -674,6 +677,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
     let onRemoveSubtitle: (UUID) -> Void
     let onUpdateSubtitleStartTime: (UUID, Double) -> Void
     let onUpdateSubtitleEndTime: (UUID, Double) -> Void
+    let onEditSubtitle: (UUID) -> Void
     
     // 1초당 픽셀 수
     private let pixelsPerSecond: CGFloat = 50
@@ -714,7 +718,10 @@ private struct VideoTimelineEditor: UIViewRepresentable {
     
     func updateUIView(_ scrollView: UIScrollView, context: Context) {
         guard let containerView = context.coordinator.containerView else { return }
-        
+
+        // ScrollView 참조 저장
+        context.coordinator.scrollView = scrollView
+
         let screenWidth = scrollView.bounds.width
         
         // 안전한 width/height 계산 (음수/비유한 방지)
@@ -726,6 +733,10 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         // 타임라인 시작 Y는 눈금자 아래 gap만큼 띄움
         let timelineOriginY = rulerHeight + gapBetweenRulerAndTimeline
         let timelineHeight = trimmerHeight
+
+        // Coordinator에 저장
+        context.coordinator.timelineOriginY = timelineOriginY
+        context.coordinator.timelineHeight = timelineHeight
         
         // 자막 영역 Y 위치 (타임라인 아래 + 간격)
         let subtitleOriginY = timelineOriginY + timelineHeight + gapBetweenTrimmerAndSubtitle
@@ -780,6 +791,8 @@ private struct VideoTimelineEditor: UIViewRepresentable {
             trimmerContainer.backgroundColor = .clear
             containerView.addSubview(trimmerContainer)
             context.coordinator.trimmerContainer = trimmerContainer
+
+            // 로딩 indicator는 ThumbnailsView의 로딩 상태에 따라 동적으로 생성됨
         }
         
         if let trimmerContainer = context.coordinator.trimmerContainer {
@@ -797,7 +810,10 @@ private struct VideoTimelineEditor: UIViewRepresentable {
                                                                         trimStartTime: trimStartTime,
                                                                         trimEndTime: trimEndTime,
                                                                         onTrimStartChanged: onTrimStartChanged,
-                                                                        onTrimEndChanged: onTrimEndChanged
+                                                                        onTrimEndChanged: onTrimEndChanged,
+                                                                        onLoadingChanged: { isLoading in
+                                                                            context.coordinator.updateLoadingIndicator(isLoading: isLoading)
+                                                                        }
                                                                     )
                                                                     .frame(width: contentWidth, height: timelineHeight)
                                                                 )
@@ -816,7 +832,10 @@ private struct VideoTimelineEditor: UIViewRepresentable {
                         trimStartTime: trimStartTime,
                         trimEndTime: trimEndTime,
                         onTrimStartChanged: onTrimStartChanged,
-                        onTrimEndChanged: onTrimEndChanged
+                        onTrimEndChanged: onTrimEndChanged,
+                        onLoadingChanged: { isLoading in
+                            context.coordinator.updateLoadingIndicator(isLoading: isLoading)
+                        }
                     )
                     .frame(width: contentWidth, height: timelineHeight)
                 )
@@ -874,7 +893,8 @@ private struct VideoTimelineEditor: UIViewRepresentable {
                         pixelsPerSecond: pixelsPerSecond,
                         onStartTimeChanged: onUpdateSubtitleStartTime,
                         onEndTimeChanged: onUpdateSubtitleEndTime,
-                        onRemove: onRemoveSubtitle
+                        onRemove: onRemoveSubtitle,
+                        onEdit: onEditSubtitle
                     )
                     blockView.frame = CGRect(x: startPosition, y: 0, width: blockWidth, height: subtitleHeight)
                     subtitleContainer.addSubview(blockView)
@@ -964,7 +984,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
             let targetOffsetX = playheadPosition - screenWidth / 2
             let maxOffsetX = max(0, timelineWidth - screenWidth)
             let clampedOffsetX = max(0, min(targetOffsetX, maxOffsetX))
-            
+
             // seek 중이면 애니메이션 없이 바로 이동
             if context.coordinator.isSeeking {
                 scrollView.contentOffset.x = clampedOffsetX
@@ -1008,6 +1028,10 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         var isUserScrolling = false
         var isSeeking = false  // seek 중인지 추적
         var subtitleBlocks: [UUID: SubtitleBlockUIView] = [:]  // 자막 블록 캐시
+        var loadingIndicatorView: UIView?  // 로딩 indicator (화면 중앙에 배치)
+        weak var scrollView: UIScrollView?  // ScrollView 참조
+        var timelineOriginY: CGFloat = 0  // 타임라인 Y 위치
+        var timelineHeight: CGFloat = 0  // 타임라인 높이
         
         func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
             isUserScrolling = true
@@ -1021,6 +1045,37 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         
         func scrollViewDidEndDecelerating(_ scrollView: UIScrollView) {
             isUserScrolling = false
+        }
+
+        func updateLoadingIndicator(isLoading: Bool) {
+            guard let scrollView = scrollView else { return }
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self = self else { return }
+
+                if isLoading {
+                    // indicator 생성
+                    if self.loadingIndicatorView == nil {
+                        let activityIndicator = UIActivityIndicatorView(style: .medium)
+                        activityIndicator.color = .gray
+                        activityIndicator.startAnimating()
+
+                        scrollView.addSubview(activityIndicator)
+                        self.loadingIndicatorView = activityIndicator
+
+                        // 위치 설정
+                        let centerX = scrollView.bounds.width / 2
+                        let centerY = self.timelineOriginY + self.timelineHeight / 2
+                        activityIndicator.center = CGPoint(x: centerX, y: centerY)
+                    }
+                } else {
+                    // indicator 제거
+                    if let indicatorView = self.loadingIndicatorView {
+                        indicatorView.removeFromSuperview()
+                        self.loadingIndicatorView = nil
+                    }
+                }
+            }
         }
     }
 }
@@ -1155,13 +1210,19 @@ private struct VideoTimelineTrimmer: View {
     let trimEndTime: Double
     let onTrimStartChanged: (Double) -> Void
     let onTrimEndChanged: (Double) -> Void
-    
+    let onLoadingChanged: (Bool) -> Void
+
     @State private var isDraggingStart = false
     @State private var isDraggingEnd = false
     
     private let handleWidth: CGFloat = 12
     private let minTrimDuration: Double = 0.1
-    private let thumbnailCount = 8
+
+    // 썸네일 개수: 3초마다 1개
+    private var thumbnailCount: Int {
+        guard duration > 0 else { return 1 }
+        return max(1, Int(ceil(duration / 3.0)))
+    }
     
     var body: some View {
         GeometryReader { geometry in
@@ -1179,7 +1240,8 @@ private struct VideoTimelineTrimmer: View {
                     thumbnailCount: thumbnailCount,
                     thumbnailWidth: thumbnailWidth,
                     height: geometry.size.height,
-                    size: geometry.size
+                    size: geometry.size,
+                    onLoadingChanged: onLoadingChanged
                 )
                 
                 // 선택된 영역 테두리
@@ -1315,40 +1377,32 @@ private struct ThumbnailsView: View {
     let thumbnailWidth: CGFloat
     let height: CGFloat
     let size: CGSize
-    
+    let onLoadingChanged: (Bool) -> Void
+
     @State private var thumbnails: [UIImage] = []
-    @State private var isLoadingThumbnails = false
-    
+    @State private var isLoadingThumbnails = false {
+        didSet {
+            onLoadingChanged(isLoadingThumbnails)
+        }
+    }
+
     var body: some View {
-        ZStack {
-            HStack(spacing: 0) {
-                ForEach(0..<thumbnailCount, id: \.self) { index in
-                    if index < thumbnails.count {
-                        Image(uiImage: thumbnails[index])
-                            .resizable()
-                            .scaledToFill()
-                            .frame(width: thumbnailWidth, height: height)
-                            .clipped()
-                    } else {
-                        Rectangle()
-                            .fill(Color(uiColor: UIColor.systemGray6))
-                            .frame(width: thumbnailWidth, height: height)
-                    }
+        HStack(spacing: 0) {
+            ForEach(0..<thumbnailCount, id: \.self) { index in
+                if index < thumbnails.count {
+                    Image(uiImage: thumbnails[index])
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: thumbnailWidth, height: height)
+                        .clipped()
+                } else {
+                    Rectangle()
+                        .fill(Color(uiColor: UIColor.systemGray6))
+                        .frame(width: thumbnailWidth, height: height)
                 }
             }
-            .cornerRadius(4)
-            
-            // 로딩 인디케이터
-            if isLoadingThumbnails {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .cornerRadius(4)
-                    .overlay(
-                        ProgressView()
-                            .tint(.gray)
-                    )
-            }
         }
+        .cornerRadius(4)
         .onAppear {
             if duration > 0 && size.width > 0 {
                 loadThumbnails()
@@ -1422,12 +1476,13 @@ private class SubtitleBlockUIView: UIView {
     var onStartTimeChanged: ((UUID, Double) -> Void)?
     var onEndTimeChanged: ((UUID, Double) -> Void)?
     var onRemove: ((UUID) -> Void)?
-    
+    var onEdit: ((UUID) -> Void)?
+
     private var leftHandle: UIView!
     private var rightHandle: UIView!
     private var removeButton: UIButton!
     private var textLabel: UILabel!
-    
+
     init(
         subtitle: EditVideoFeature.Subtitle,
         duration: Double,
@@ -1435,7 +1490,8 @@ private class SubtitleBlockUIView: UIView {
         pixelsPerSecond: CGFloat,
         onStartTimeChanged: @escaping (UUID, Double) -> Void,
         onEndTimeChanged: @escaping (UUID, Double) -> Void,
-        onRemove: @escaping (UUID) -> Void
+        onRemove: @escaping (UUID) -> Void,
+        onEdit: @escaping (UUID) -> Void
     ) {
         self.subtitle = subtitle
         self.duration = duration
@@ -1444,7 +1500,8 @@ private class SubtitleBlockUIView: UIView {
         self.onStartTimeChanged = onStartTimeChanged
         self.onEndTimeChanged = onEndTimeChanged
         self.onRemove = onRemove
-        
+        self.onEdit = onEdit
+
         super.init(frame: .zero)
         setupViews()
     }
@@ -1520,8 +1577,13 @@ private class SubtitleBlockUIView: UIView {
         textLabel.textAlignment = .center
         textLabel.numberOfLines = 2
         textLabel.lineBreakMode = .byTruncatingTail
+        textLabel.isUserInteractionEnabled = true
         addSubview(textLabel)
         updateTextLabel()
+
+        // 텍스트 라벨 탭 제스처 (자막 수정)
+        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
+        textLabel.addGestureRecognizer(tapGesture)
     }
     
     override func layoutSubviews() {
@@ -1617,6 +1679,10 @@ private class SubtitleBlockUIView: UIView {
     
     @objc private func handleRemove() {
         onRemove?(subtitle.id)
+    }
+
+    @objc private func handleTap() {
+        onEdit?(subtitle.id)
     }
 }
 

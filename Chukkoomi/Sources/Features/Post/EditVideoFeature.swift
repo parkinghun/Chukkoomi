@@ -45,6 +45,7 @@ struct EditVideoFeature {
         var subtitleInputValidationError: String? = nil
         var pendingSubtitleStartTime: Double? = nil
         var pendingSubtitleEndTime: Double? = nil
+        var editingSubtitleId: UUID? = nil  // 수정 중인 자막 ID
 
         // Alert
         @Presents var alert: AlertState<Action.Alert>?
@@ -105,6 +106,7 @@ struct EditVideoFeature {
         case exportFailed(String)
         case playbackEnded
         case addSubtitle
+        case editSubtitle(UUID)
         case removeSubtitle(UUID)
         case updateSubtitleStartTime(UUID, Double)
         case updateSubtitleEndTime(UUID, Double)
@@ -336,6 +338,21 @@ struct EditVideoFeature {
                 state.pendingSubtitleEndTime = endTime
                 return .none
 
+            case .editSubtitle(let id):
+                // 수정할 자막 찾기
+                guard let subtitle = state.editState.subtitles.first(where: { $0.id == id }) else {
+                    return .none
+                }
+
+                // 텍스트 입력 오버레이 표시 (기존 데이터로 초기화)
+                state.isShowingSubtitleInput = true
+                state.subtitleInputText = subtitle.text
+                state.subtitleInputValidationError = nil  // 기존 텍스트는 유효함
+                state.pendingSubtitleStartTime = subtitle.startTime
+                state.pendingSubtitleEndTime = subtitle.endTime
+                state.editingSubtitleId = id
+                return .none
+
             case .updateSubtitleInputText(let text):
                 state.subtitleInputText = text
 
@@ -358,7 +375,7 @@ struct EditVideoFeature {
                     return .none
                 }
 
-                // 입력한 텍스트로 자막 생성
+                // 입력한 텍스트로 자막 생성/수정
                 guard let startTime = state.pendingSubtitleStartTime,
                       let endTime = state.pendingSubtitleEndTime else {
                     return .none
@@ -367,14 +384,25 @@ struct EditVideoFeature {
                 // 텍스트 검증
                 let trimmedText = state.subtitleInputText.trimmingCharacters(in: .whitespaces)
 
-                let newSubtitle = Subtitle(
-                    startTime: startTime,
-                    endTime: endTime,
-                    text: trimmedText
-                )
-                state.editState.subtitles.append(newSubtitle)
-                // 시작 시간 기준으로 정렬
-                state.editState.subtitles.sort { $0.startTime < $1.startTime }
+                if let editingId = state.editingSubtitleId {
+                    // 기존 자막 수정
+                    if let index = state.editState.subtitles.firstIndex(where: { $0.id == editingId }) {
+                        state.editState.subtitles[index].text = trimmedText
+                        // 시작/종료 시간도 업데이트 (현재는 변경 안되지만 확장성 고려)
+                        state.editState.subtitles[index].startTime = startTime
+                        state.editState.subtitles[index].endTime = endTime
+                    }
+                } else {
+                    // 새로운 자막 추가
+                    let newSubtitle = Subtitle(
+                        startTime: startTime,
+                        endTime: endTime,
+                        text: trimmedText
+                    )
+                    state.editState.subtitles.append(newSubtitle)
+                    // 시작 시간 기준으로 정렬
+                    state.editState.subtitles.sort { $0.startTime < $1.startTime }
+                }
 
                 // 오버레이 닫기
                 state.isShowingSubtitleInput = false
@@ -382,6 +410,7 @@ struct EditVideoFeature {
                 state.subtitleInputValidationError = nil
                 state.pendingSubtitleStartTime = nil
                 state.pendingSubtitleEndTime = nil
+                state.editingSubtitleId = nil
 
                 return .none
 
@@ -392,6 +421,7 @@ struct EditVideoFeature {
                 state.subtitleInputValidationError = nil
                 state.pendingSubtitleStartTime = nil
                 state.pendingSubtitleEndTime = nil
+                state.editingSubtitleId = nil
                 return .none
 
             case .removeSubtitle(let id):
