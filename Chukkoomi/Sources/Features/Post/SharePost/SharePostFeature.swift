@@ -149,8 +149,8 @@ struct SharePostFeature {
 
                 return .run { [post = state.post, availableUsers = state.availableUsers] send in
                     do {
-                        // 1. 선택된 유저 정보 찾기
-                        guard let user = availableUsers.first(where: { $0.userId == selectedUserId }) else {
+                        // 1. 선택된 유저가 유효한지 확인
+                        guard availableUsers.contains(where: { $0.userId == selectedUserId }) else {
                             throw NSError(domain: "SharePost", code: -1, userInfo: [NSLocalizedDescriptionKey: "사용자를 찾을 수 없습니다"])
                         }
 
@@ -189,7 +189,7 @@ struct SharePostFeature {
                         let creatorProfileImage = post.creator?.profileImage ?? ""
                         let shareMessage = "[SHARED_POST]postId:\(post.id)|content:\(contentPreview)|files:\(filesString)|creatorNick:\(creatorNick)|creatorProfileImage:\(creatorProfileImage)"
 
-                        let response = try await NetworkManager.shared.performRequest(
+                        _ = try await NetworkManager.shared.performRequest(
                             ChatRouter.sendMessage(roomId: roomId, content: shareMessage, files: nil),
                             as: ChatMessageResponseDTO.self
                         )
@@ -243,14 +243,14 @@ struct SharePostFeature {
                 state.availableUsers = users
                 return .none
 
-            case let .loadUsersResponse(.failure(error)):
+            case .loadUsersResponse(.failure):
                 state.isLoading = false
                 return .none
 
             case .sendPostResponse(.success):
                 return .send(.delegate(.postShared))
 
-            case let .sendPostResponse(.failure(error)):
+            case .sendPostResponse(.failure):
                 // TODO: 에러 토스트 표시
                 return .none
 

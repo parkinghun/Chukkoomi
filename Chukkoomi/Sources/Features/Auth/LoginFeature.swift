@@ -252,13 +252,15 @@ extension NetworkClient: DependencyKey {
 
             // Delegate를 통해 결과 받기
             let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorization, Error>) in
-                let delegate = AppleSignInDelegate(continuation: continuation)
-                authorizationController.delegate = delegate
-                authorizationController.presentationContextProvider = delegate
-                authorizationController.performRequests()
+                Task { @MainActor in
+                    let delegate = AppleSignInDelegate(continuation: continuation)
+                    authorizationController.delegate = delegate
+                    authorizationController.presentationContextProvider = delegate
+                    authorizationController.performRequests()
 
-                // delegate를 메모리에 유지
-                objc_setAssociatedObject(authorizationController, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+                    // delegate를 메모리에 유지
+                    objc_setAssociatedObject(authorizationController, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+                }
             }
 
             guard let appleIDCredential = result.credential as? ASAuthorizationAppleIDCredential,
