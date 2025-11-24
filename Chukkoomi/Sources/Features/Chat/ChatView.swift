@@ -246,7 +246,6 @@ struct ChatView: View {
 
         // 줄 수 계산
         let lines = text.components(separatedBy: .newlines)
-        let lineCount = lines.count
 
         // 각 줄의 너비를 고려한 실제 줄 수 계산
         let font = UIFont.systemFont(ofSize: 15)
