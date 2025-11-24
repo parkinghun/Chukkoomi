@@ -28,6 +28,9 @@ struct MatchInfoView: View {
         .ignoresSafeArea(edges: .top)
         .navigationTitle("경기 정보")
         .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            store.send(.onAppear)
+        }
     }
 }
 

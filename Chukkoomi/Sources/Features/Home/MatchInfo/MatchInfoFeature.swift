@@ -16,6 +16,8 @@ struct MatchInfoFeature {
     struct State: Equatable {
         let match: Match
         var selectedTeam: TeamType = .home
+        var matchDetail: MatchDetail?
+        var isLoading: Bool = false
 
         enum TeamType {
             case home
@@ -25,15 +27,73 @@ struct MatchInfoFeature {
 
     // MARK: - Action
     enum Action: Equatable {
+        case onAppear
         case selectTeam(State.TeamType)
+        case fetchMatchDetail
+        case fetchMatchDetailResponse(Result<MatchDetail, Error>)
+
+        static func == (lhs: Action, rhs: Action) -> Bool {
+            switch (lhs, rhs) {
+            case (.onAppear, .onAppear),
+                 (.fetchMatchDetail, .fetchMatchDetail):
+                return true
+            case let (.selectTeam(lhsType), .selectTeam(rhsType)):
+                return lhsType == rhsType
+            case (.fetchMatchDetailResponse, .fetchMatchDetailResponse):
+                return true
+            default:
+                return false
+            }
+        }
     }
 
     // MARK: - Reducer
     var body: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
+            case .onAppear:
+                return .send(.fetchMatchDetail)
+
             case let .selectTeam(teamType):
                 state.selectedTeam = teamType
+                return .none
+
+            case .fetchMatchDetail:
+                state.isLoading = true
+                return .run { send in
+                    do {
+                        let response = try await NetworkManager.shared.performRequest(
+                            MatchRouter.fetchMatchDetail(title: "1138378"),
+                            as: MatchDetailListDTO.self
+                        )
+
+                        let matchDetail = try response.toDomain
+                        print("✅ Match Detail 받아오기 성공:")
+                        print("ID: \(matchDetail.id)")
+                        print("홈 골키퍼: \(matchDetail.homeKeeper.name)(\(matchDetail.homeKeeper.number))")
+                        print("홈 수비수: \(matchDetail.homeDefends.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
+                        print("홈 미드필더: \(matchDetail.homeMidFields.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
+                        print("홈 공격수: \(matchDetail.homeForwards.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
+                        print("원정 골키퍼: \(matchDetail.awayKeeper.name)(\(matchDetail.awayKeeper.number))")
+                        print("원정 수비수: \(matchDetail.awayDefends.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
+                        print("원정 미드필더: \(matchDetail.awayMidFields.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
+                        print("원정 공격수: \(matchDetail.awayForwards.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
+
+                        await send(.fetchMatchDetailResponse(.success(matchDetail)))
+                    } catch {
+                        print("❌ Match Detail 받아오기 실패: \(error)")
+                        await send(.fetchMatchDetailResponse(.failure(error)))
+                    }
+                }
+
+            case let .fetchMatchDetailResponse(.success(matchDetail)):
+                state.isLoading = false
+                state.matchDetail = matchDetail
+                return .none
+
+            case let .fetchMatchDetailResponse(.failure(error)):
+                state.isLoading = false
+                print("Error: \(error.localizedDescription)")
                 return .none
             }
         }
