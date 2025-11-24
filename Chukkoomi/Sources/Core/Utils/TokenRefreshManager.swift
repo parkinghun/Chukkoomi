@@ -71,8 +71,20 @@ actor TokenRefreshManager {
 
             return true
 
+        } catch let error as NetworkError {
+            // NetworkError인 경우 에러 종류에 따라 처리
+            switch error {
+            case .statusCode(418, _), .statusCode(401, _), .refreshTokenExpired:
+                // RefreshToken 만료 또는 인증 실패 - 로그아웃 필요
+                await handleLogout()
+                return false
+
+            default:
+                // 기타 서버 에러 또는 네트워크 에러 - 로그아웃하지 않음
+                return false
+            }
         } catch {
-            await handleLogout()
+            // 기타 에러 (URLError 등) - 로그아웃하지 않음
             return false
         }
     }
