@@ -90,8 +90,13 @@ struct HomeView: View {
             } else {
                 TabView {
                     ForEach(store.matches) { match in
-                        MatchCard(match: match)
-                            .padding(.horizontal, 20)
+                        Button {
+                            store.send(.matchTapped(match))
+                        } label: {
+                            MatchCard(match: match)
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 20)
+                        }
                     }
                 }
                 .tabViewStyle(.page(indexDisplayMode: .always))
@@ -171,6 +176,11 @@ private struct HomeNavigation: ViewModifier {
                 store: store.scope(state: \.$postList, action: \.postList)
             ) { store in
                 PostView(store: store)
+            }
+            .navigationDestination(
+                store: store.scope(state: \.$matchInfo, action: \.matchInfo)
+            ) { store in
+                MatchInfoView(store: store)
             }
     }
 }
