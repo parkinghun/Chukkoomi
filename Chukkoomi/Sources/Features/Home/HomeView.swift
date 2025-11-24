@@ -131,9 +131,9 @@ struct HomeView: View {
                 : Array(store.teams.prefix(4))
 
             LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(displayedTeams) { team in
+                ForEach(displayedTeams, id: \.self) { team in
                     TeamLogoButton(team: team, onTap: {
-                        store.send(.teamTapped(team.id))
+                        store.send(.teamTapped(team))
                     })
                 }
             }
@@ -144,7 +144,7 @@ struct HomeView: View {
 
 // MARK: - 구단 로고 버튼
 struct TeamLogoButton: View {
-    let team: KLeagueTeam
+    let team: FootballTeams
     let onTap: () -> Void
 
     var body: some View {

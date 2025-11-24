@@ -100,7 +100,7 @@ struct PostCreateFeature {
 
         // 기본 생성자 (작성 모드)
         init() {
-            self.selectedCategory = .all
+            self.selectedCategory = .ulsan  // 기본값: 울산 (전체는 선택 불가)
             self.content = ""
             self.selectedImageData = nil
             self.isUploading = false
@@ -135,6 +135,7 @@ struct PostCreateFeature {
         enum Delegate: Equatable {
             case postCreated
             case postUpdated
+            case dismiss
         }
 
         static func == (lhs: Action, rhs: Action) -> Bool {
@@ -251,7 +252,7 @@ struct PostCreateFeature {
 
                             // PostRequestDTO 생성
                             let postRequest = PostRequestDTO(
-                                category: category.rawValue,
+                                category: category.identifier,
                                 title: "게시글",
                                 price: 0,
                                 content: content,
@@ -308,7 +309,7 @@ struct PostCreateFeature {
 
                             // PostRequestDTO 생성
                             let postRequest = PostRequestDTO(
-                                category: category.rawValue,
+                                category: category.identifier,
                                 title: "게시글",
                                 price: 0,
                                 content: content,
@@ -364,11 +365,17 @@ struct PostCreateFeature {
                 state.showSuccessAlert = false
                 let wasEditMode = state.isEditMode
 
-                // Delegate 액션 전송 (PostFeature에서 게시글 리스트 새로고침 및 화면 닫기)
+                // Delegate 액션 전송: 먼저 업데이트 알림(리스트 새로고침용), 그 다음 화면 닫기
                 if wasEditMode {
-                    return .send(.delegate(.postUpdated))
+                    return .run { send in
+                        await send(.delegate(.postUpdated))
+                        await send(.delegate(.dismiss))
+                    }
                 } else {
-                    return .send(.delegate(.postCreated))
+                    return .run { send in
+                        await send(.delegate(.postCreated))
+                        await send(.delegate(.dismiss))
+                    }
                 }
 
             case let .uploadResponse(.failure(error)):
@@ -382,6 +389,18 @@ struct PostCreateFeature {
                 // 갤러리에서 이미지 선택 완료
                 state.selectedImageData = imageData
                 print("이미지 선택 완료: \(imageData.count) bytes")
+                // 갤러리 피커 닫기
+                state.galleryPicker = nil
+                return .none
+
+            case .galleryPicker(.presented(.cancel)):
+                // 사용자가 취소 버튼을 눌렀을 때
+                state.galleryPicker = nil
+                return .none
+
+            case .galleryPicker(.dismiss):
+                // 갤러리 피커가 dismiss될 때
+                state.galleryPicker = nil
                 return .none
 
             case let .galleryPicker(.presented(.delegate(.didExportVideo(url)))):

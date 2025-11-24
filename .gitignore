@@ -13,6 +13,26 @@ Secrets.*
 *.env
 *.xcconfig
 
+### ML Models & Large Files ###
+# CoreML 모델과 관련된 대용량 파일은 GitHub에 업로드 불가(100MB 제한)
+*.mlmodel
+*.mlpackage
+*.mlmodelc/
+
+# 모델 변환 과정에서 자주 생성되는 파일들
+*.onnx
+*.tflite
+*.bin
+
+### Media Outputs ###
+# 이미지 편집/비디오 처리 과정에서 생성되는 임시 또는 대용량 파일
+*.mp4
+*.mov
+*.avi
+*.webm
+*.tmp
+*.temp
+
 # Logs & Reports
 *.log
 *.xcresult/

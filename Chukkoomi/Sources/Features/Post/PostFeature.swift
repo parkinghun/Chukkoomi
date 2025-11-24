@@ -107,6 +107,33 @@ struct PostFeature {
 
     // MARK: - Reducer
     var body: some ReducerOf<Self> {
+        Reduce(core)
+            .forEach(\.postCells, action: \.postCell) {
+                PostCellFeature()
+            }
+            .ifLet(\.$hashtagSearch, action: \.hashtagSearch) {
+                PostFeature()
+            }
+            .ifLet(\.$postCreate, action: \.postCreate) {
+                PostCreateFeature()
+            }
+            .ifLet(\.$sharePost, action: \.sharePost) {
+                SharePostFeature()
+            }
+            .ifLet(\.$comment, action: \.comment) {
+                CommentFeature()
+            }
+            .ifLet(\.$myProfile, action: \.myProfile) {
+                MyProfileFeature()
+            }
+            .ifLet(\.$otherProfile, action: \.otherProfile) {
+                OtherProfileFeature()
+            }
+    }
+
+    // MARK: - Core Reducer
+    @ReducerBuilder<State, Action>
+    private var core: some ReducerOf<Self> {
         Reduce { state, action in
             switch action {
             case .onAppear:
@@ -168,12 +195,17 @@ struct PostFeature {
                     }
                 } else {
                     // 일반 게시글 조회
+                    // teamInfo가 있으면 해당 팀의 카테고리로 필터링
+                    let category: [String]? = state.teamInfo.flatMap { team in
+                        FootballTeams.from(koreanName: team.koreanName)?.identifier
+                    }.map { [$0] }
+
                     return .run { [postService] send in
                         do {
                             let query = PostRouter.ListQuery(
                                 next: nil,
                                 limit: 20,
-                                category: nil  // 전체 카테고리
+                                category: category  // teamInfo가 있으면 해당 카테고리, 없으면 nil (전체)
                             )
 
                             let response = try await postService.fetchPosts(query: query)
@@ -193,12 +225,17 @@ struct PostFeature {
 
                 state.isLoading = true
 
+                // teamInfo가 있으면 해당 팀의 카테고리로 필터링
+                let category: [String]? = state.teamInfo.flatMap { team in
+                    FootballTeams.from(koreanName: team.koreanName)?.identifier
+                }.map { [$0] }
+
                 return .run { [postService] send in
                     do {
                         let query = PostRouter.ListQuery(
                             next: nextCursor,
                             limit: 20,
-                            category: nil
+                            category: category  // teamInfo가 있으면 해당 카테고리, 없으면 nil (전체)
                         )
 
                         let response = try await postService.fetchPosts(query: query)
@@ -258,12 +295,16 @@ struct PostFeature {
                 switch delegateAction {
                 case .postCreated, .postUpdated:
                     print("📝 게시글 작성/수정 완료 - 리스트 새로고침")
-                    // 게시글 리스트 새로고침
+                    // 게시글 리스트 새로고침 (화면은 아직 닫지 않음)
                     state.postCells = []
                     state.nextCursor = nil
+                    return .send(.loadPosts)
+
+                case .dismiss:
+                    print("📝 게시글 작성/수정 화면 닫기")
                     // PostCreate 화면 닫기
                     state.postCreate = nil
-                    return .send(.loadPosts)
+                    return .none
                 }
 
             case .postCreate:
@@ -301,27 +342,6 @@ struct PostFeature {
             case .otherProfile:
                 return .none
             }
-        }
-        .forEach(\.postCells, action: \.postCell) {
-            PostCellFeature()
-        }
-        .ifLet(\.$hashtagSearch, action: \.hashtagSearch) {
-            PostFeature()
-        }
-        .ifLet(\.$postCreate, action: \.postCreate) {
-            PostCreateFeature()
-        }
-        .ifLet(\.$sharePost, action: \.sharePost) {
-            SharePostFeature()
-        }
-        .ifLet(\.$comment, action: \.comment) {
-            CommentFeature()
-        }
-        .ifLet(\.$myProfile, action: \.myProfile) {
-            MyProfileFeature()
-        }
-        .ifLet(\.$otherProfile, action: \.otherProfile) {
-            OtherProfileFeature()
         }
     }
 

@@ -40,4 +40,13 @@ enum AppIcon {
     // Chat Message Icons
     static let retry = Image(systemName: "arrow.clockwise")
     static let cancel = Image(systemName: "xmark.circle")
+    
+    // Image Edit
+    static let crop = Image(systemName: "crop.rotate")
+    static let sticker = Image(systemName: "fireworks")
+    static let filter = Image(systemName: "camera.filters")
+    static let text = Image(systemName: "textformat")
+    static let draw = Image(systemName: "pencil.and.scribble")
+    static let undo = Image(systemName: "arrow.uturn.backward.circle")
+    static let redo = Image(systemName: "arrow.uturn.right.circle")
 }

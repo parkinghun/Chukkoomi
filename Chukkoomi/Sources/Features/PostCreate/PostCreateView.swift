@@ -90,13 +90,17 @@ struct PostCreateView: View {
                 // 영상 썸네일 표시
                 ZStack(alignment: .topTrailing) {
                     ZStack {
-                        Image(uiImage: uiImage)
-                            .resizable()
-                            .scaledToFit()
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 200)
-                            .background(Color.black)
-                            .cornerRadius(12)
+                        GeometryReader { geometry in
+                            Image(uiImage: uiImage)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: geometry.size.width, height: geometry.size.width / 16 * 9)
+                                .clipped()
+                        }
+                        .frame(maxWidth: .infinity)
+                        .aspectRatio(16/9, contentMode: .fill)
+                        .background(Color.black)
+                        .cornerRadius(12)
 
                         // 재생 아이콘 오버레이
                         Image(systemName: "play.circle.fill")
@@ -120,13 +124,17 @@ struct PostCreateView: View {
                       let uiImage = UIImage(data: imageData) {
                 // 새로 선택된 이미지 표시
                 ZStack(alignment: .topTrailing) {
-                    Image(uiImage: uiImage)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 200)
-                        .background(Color.black)
-                        .cornerRadius(12)
+                    GeometryReader { geometry in
+                        Image(uiImage: uiImage)
+                            .resizable()
+                            .scaledToFill()
+                            .frame(width: geometry.size.width, height: geometry.size.width / 16 * 9)
+                            .clipped()
+                    }
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(16/9, contentMode: .fill)
+                    .background(Color.black)
+                    .cornerRadius(12)
 
                     // 제거 버튼
                     Button {
@@ -142,13 +150,16 @@ struct PostCreateView: View {
             } else if let originalImageUrl = store.originalImageUrl {
                 // 수정 모드: 기존 이미지 표시
                 ZStack(alignment: .topTrailing) {
-                    AsyncMediaImageView(
-                        imagePath: originalImageUrl,
-                        width: UIScreen.main.bounds.width - 32,
-                        height: 200,
-                        onImageLoaded: { _ in }
-                    )
-                    .frame(height: 200)
+                    GeometryReader { geometry in
+                        AsyncMediaImageView(
+                            imagePath: originalImageUrl,
+                            width: geometry.size.width,
+                            height: geometry.size.width / 16 * 9,
+                            onImageLoaded: { _ in }
+                        )
+                    }
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(16/9, contentMode: .fill)
                     .background(Color.black)
                     .cornerRadius(12)
 
@@ -171,25 +182,28 @@ struct PostCreateView: View {
                 }
             } else {
                 // 이미지 선택 버튼
-                Button {
-                    store.send(.selectImageTapped)
-                } label: {
-                    VStack(spacing: 12) {
-                        Image(systemName: "photo.on.rectangle.angled")
-                            .font(.system(size: 40))
-                        Text("사진/영상 선택")
-                            .font(.headline)
+                GeometryReader { geometry in
+                    Button {
+                        store.send(.selectImageTapped)
+                    } label: {
+                        VStack(spacing: 12) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.system(size: 40))
+                            Text("사진/영상 선택")
+                                .font(.headline)
+                        }
+                        .frame(width: geometry.size.width, height: geometry.size.width / 16 * 9)
+                        .background(Color.gray.opacity(0.1))
+                        .foregroundColor(.primary)
+                        .cornerRadius(12)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                        )
                     }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 200)
-                    .background(Color.gray.opacity(0.1))
-                    .foregroundColor(.primary)
-                    .cornerRadius(12)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-                    )
                 }
+                .frame(maxWidth: .infinity)
+                .aspectRatio(16/9, contentMode: .fill)
             }
         }
     }
@@ -201,7 +215,8 @@ struct PostCreateView: View {
                 .font(.headline)
 
             Menu {
-                ForEach(FootballTeams.visibleCategories, id: \.self) { category in
+                // .all 제외 - 게시글은 특정 팀에만 작성 가능
+                ForEach(FootballTeams.visibleCategories.filter { $0 != .all }, id: \.self) { category in
                     Button {
                         store.send(.categorySelected(category))
                     } label: {

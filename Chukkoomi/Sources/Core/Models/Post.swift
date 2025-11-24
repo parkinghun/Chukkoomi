@@ -114,6 +114,46 @@ enum FootballTeams: String, CaseIterable {
         allCases.filter { !$0.isHidden }
     }
 
+    /// 서버 전송용 카테고리 identifier (공백 없는 영어 이름)
+    var identifier: String {
+        switch self {
+        case .all: return "all"
+        case .ulsan: return "ulsan"
+        case .jeonbuk: return "jeonbuk"
+        case .pohang: return "pohang"
+        case .suwonFC: return "suwonFC"
+        case .kimcheon: return "kimcheon"
+        case .gangwon: return "gangwon"
+        case .jeju: return "jeju"
+        case .anyang: return "anyang"
+        case .seoul: return "seoul"
+        case .gwangju: return "gwangju"
+        case .daejeon: return "daejeon"
+        case .daegu: return "daegu"
+        case .payment: return "payment"
+        }
+    }
+
+    /// 로고 이미지 이름
+    var logoImageName: String {
+        switch self {
+        case .all: return "team_all"  // 전체 팀용 로고
+        case .ulsan: return "team_ulsan"
+        case .jeonbuk: return "team_jeonbuk"
+        case .pohang: return "team_pohang"
+        case .suwonFC: return "team_suwon_fc"
+        case .kimcheon: return "team_kimcheon"
+        case .gangwon: return "team_gangwon"
+        case .jeju: return "team_jeju"
+        case .anyang: return "team_anyang"
+        case .seoul: return "team_seoul"
+        case .gwangju: return "team_gwangju"
+        case .daejeon: return "team_daejeon"
+        case .daegu: return "team_daegu"
+        case .payment: return ""  // 숨김 카테고리
+        }
+    }
+
     /// KLeagueTeam과 매핑
     var kLeagueTeam: KLeagueTeam? {
         switch self {
@@ -136,6 +176,11 @@ enum FootballTeams: String, CaseIterable {
     /// 한글 이름으로 FootballTeams 찾기
     static func from(koreanName: String) -> FootballTeams? {
         allCases.first { $0.rawValue == koreanName }
+    }
+
+    /// identifier로 FootballTeams 찾기
+    static func from(identifier: String) -> FootballTeams? {
+        allCases.first { $0.identifier == identifier }
     }
 }
 

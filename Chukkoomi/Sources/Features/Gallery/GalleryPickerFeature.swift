@@ -26,39 +26,6 @@ struct GalleryPickerFeature {
         @Presents var editPhoto: EditPhotoFeature.State?
     }
 
-    @Reducer
-    struct EditPhotoFeature {
-        @ObservableState
-        struct State: Equatable {
-            let selectedImage: UIImage
-        }
-
-        enum Action: Equatable {
-            case completeButtonTapped
-            case delegate(Delegate)
-
-            enum Delegate: Equatable {
-                case photoEditCompleted(Data)
-            }
-        }
-
-        var body: some ReducerOf<Self> {
-            Reduce { state, action in
-                switch action {
-                case .completeButtonTapped:
-                    // 이미지를 Data로 변환하여 delegate 전송
-                    if let imageData = state.selectedImage.jpegData(compressionQuality: 0.8) {
-                        return .send(.delegate(.photoEditCompleted(imageData)))
-                    }
-                    return .none
-
-                case .delegate:
-                    return .none
-                }
-            }
-        }
-    }
-
     // MARK: - PickerMode
     enum PickerMode: Equatable {
         case profileImage  // 프로필 사진: "완료", 사진만
@@ -184,7 +151,7 @@ struct GalleryPickerFeature {
                         return .none
                     } else if let selectedImage = state.selectedImage {
                         // 사진 선택 시 EditPhotoView로 push
-                        state.editPhoto = EditPhotoFeature.State(selectedImage: selectedImage)
+                        state.editPhoto = EditPhotoFeature.State(originalImage: selectedImage)
                         return .none
                     }
                     return .none
@@ -218,7 +185,7 @@ struct GalleryPickerFeature {
             case .editVideo:
                 return .none
 
-            case let .editPhoto(.presented(.delegate(.photoEditCompleted(imageData)))):
+            case let .editPhoto(.presented(.delegate(.didCompleteEditing(imageData)))):
                 // 사진 편집 완료 - PostCreateFeature로 전달하고 fullscreen 닫기
                 state.editPhoto = nil
                 return .run { send in

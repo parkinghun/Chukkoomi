@@ -14,7 +14,7 @@ struct HomeFeature {
     // MARK: - State
     @ObservableState
     struct State: Equatable {
-        var teams: [KLeagueTeam] = KLeagueTeam.allTeams
+        var teams: [FootballTeams] = FootballTeams.visibleCategories.filter { $0 != .all }
         var matches: [Match] = []
         var isShowingAllTeams: Bool = false
         var isLoading: Bool = false
@@ -30,7 +30,7 @@ struct HomeFeature {
         case toggleShowAllTeams
         case loadMatches
         case loadMatchesResponse(Result<[Match], Error>)
-        case teamTapped(String) // team ID
+        case teamTapped(FootballTeams) // 팀 카테고리
 
         // PostView 네비게이션
         case postList(PresentationAction<PostFeature.Action>)
@@ -41,8 +41,8 @@ struct HomeFeature {
                  (.toggleShowAllTeams, .toggleShowAllTeams),
                  (.loadMatches, .loadMatches):
                 return true
-            case let (.teamTapped(lhsId), .teamTapped(rhsId)):
-                return lhsId == rhsId
+            case let (.teamTapped(lhsTeam), .teamTapped(rhsTeam)):
+                return lhsTeam == rhsTeam
             case (.loadMatchesResponse, .loadMatchesResponse):
                 return true
             case (.postList, .postList):
@@ -149,11 +149,17 @@ struct HomeFeature {
                 state.isShowingAllTeams.toggle()
                 return .none
 
-            case let .teamTapped(teamId):
-                // PostView로 네비게이션 (팀 정보 전달)
-                print("Team tapped: \(teamId)")
-                let tappedTeam = state.teams.first(where: { $0.id == teamId })
-                state.postList = PostFeature.State(teamInfo: tappedTeam)
+            case let .teamTapped(team):
+                // PostView로 네비게이션
+                print("Team tapped: \(team.rawValue)")
+
+                // 울산은 전체 게시글을 보여줌 (teamInfo: nil)
+                if team == .ulsan {
+                    state.postList = PostFeature.State(teamInfo: nil)
+                } else {
+                    // 나머지는 해당 팀의 게시글만 필터링
+                    state.postList = PostFeature.State(teamInfo: team.kLeagueTeam)
+                }
                 return .none
 
             case let .loadMatchesResponse(.success(matches)):
@@ -192,32 +198,29 @@ extension HomeFeature {
         let today = Date()
         let calendar = Calendar.current
 
-        // K리그 팀 목록
-        let teams = KLeagueTeam.allTeams
-
         // 더미 경기 3개 생성
         return [
             Match(
                 id: -1,
                 date: calendar.date(byAdding: .hour, value: 2, to: today) ?? today,
-                homeTeamName: teams[0].englishName, // 울산 HD FC
-                awayTeamName: teams[1].englishName, // 전북 현대 모터스
+                homeTeamName: FootballTeams.ulsan.kLeagueTeam?.englishName ?? "Ulsan Hyundai FC",
+                awayTeamName: FootballTeams.jeonbuk.kLeagueTeam?.englishName ?? "Jeonbuk Motors",
                 homeScore: nil,
                 awayScore: nil
             ),
             Match(
                 id: -2,
                 date: calendar.date(byAdding: .hour, value: 5, to: today) ?? today,
-                homeTeamName: teams[2].englishName, // 포항 스틸러스
-                awayTeamName: teams[8].englishName, // FC 서울
+                homeTeamName: FootballTeams.pohang.kLeagueTeam?.englishName ?? "Pohang Steelers",
+                awayTeamName: FootballTeams.seoul.kLeagueTeam?.englishName ?? "FC Seoul",
                 homeScore: nil,
                 awayScore: nil
             ),
             Match(
                 id: -3,
                 date: calendar.date(byAdding: .hour, value: 7, to: today) ?? today,
-                homeTeamName: teams[6].englishName, // 제주 유나이티드
-                awayTeamName: teams[3].englishName, // 수원 FC
+                homeTeamName: FootballTeams.jeju.kLeagueTeam?.englishName ?? "Jeju United",
+                awayTeamName: FootballTeams.suwonFC.kLeagueTeam?.englishName ?? "Suwon City FC",
                 homeScore: nil,
                 awayScore: nil
             )
