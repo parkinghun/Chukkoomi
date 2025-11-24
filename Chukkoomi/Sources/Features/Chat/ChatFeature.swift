@@ -105,26 +105,12 @@ struct ChatFeature: Reducer {
     func reduce(into state: inout State, action: Action) -> Effect<Action> {
         switch action {
         case .onAppear:
-            print("[ChatFeature] 👀 onAppear called")
-            print("[ChatFeature] chatRoom: \(state.chatRoom?.roomId ?? "nil")")
-
             // 채팅방이 없으면 (첫 메시지 전송 전) 로딩하지 않음
             guard let roomId = state.chatRoom?.roomId else {
-                print("[ChatFeature] ⚠️ No roomId, skipping WebSocket connection")
                 return .none
             }
 
-            // ===== 🧪 Postman 테스트용 정보 출력 =====
-            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            print("🔌 WebSocket 테스트 정보")
-            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-            print("🏠 Room ID: \(roomId)")
-            print("👤 상대방 User ID: \(state.opponent.userId)")
-            print("📛 상대방 닉네임: \(state.opponent.nick)")
-            print("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━")
-
-            // PDF 권장 순서:
-            // 1. Realm에서 먼저 로드 (빠른 UI 표시)
+            // 1. Realm에서 먼저 로드
             // 2. HTTP로 동기화
             // 3. 모든 동기화 완료 후 WebSocket 연결 (.messagesLoaded에서 처리)
             return .run { send in
@@ -616,15 +602,11 @@ struct ChatFeature: Reducer {
         // MARK: - WebSocket Actions
         case .connectWebSocket:
             guard let roomId = state.chatRoom?.roomId else {
-                print("[ChatFeature] ⚠️ Cannot connect WebSocket: roomId is nil")
                 return .none
             }
 
-            print("[ChatFeature] 🔌 Connecting WebSocket for room: \(roomId)")
             return .run { send in
                 // WebSocket 연결 및 콜백 설정
-                print("[ChatFeature] 📝 Setting up WebSocket callbacks")
-
                 ChatWebSocketManager.shared.onConnectionChanged = { isConnected in
                     Task { @MainActor in
                         if isConnected {
@@ -643,9 +625,7 @@ struct ChatFeature: Reducer {
 
                 // WebSocket 연결 (콜백을 파라미터로 전달)
                 ChatWebSocketManager.shared.connect(roomId: roomId) { messages in
-                    print("[ChatFeature] 🎯 onMessageReceived called with \(messages.count) messages")
                     Task { @MainActor in
-                        print("[ChatFeature] 📤 Sending .webSocketMessageReceived action")
                         send(.webSocketMessageReceived(messages))
                     }
                 }
@@ -658,22 +638,17 @@ struct ChatFeature: Reducer {
 
         case .webSocketConnected:
             state.isWebSocketConnected = true
-            print("[ChatFeature] WebSocket connected")
             return .none
 
         case .webSocketDisconnected:
             state.isWebSocketConnected = false
-            print("[ChatFeature] WebSocket disconnected")
             return .none
 
         case .webSocketMessageReceived(let newMessages):
-            print("[ChatFeature] 📨 WebSocket message received: \(newMessages.count) messages")
             // 실시간으로 받은 메시지를 추가
             for message in newMessages {
-                print("[ChatFeature] 🔍 Checking message: chatId=\(message.chatId), content=\(message.content ?? "nil")")
                 // 중복 메시지 체크 (chatId 기준)
                 if !state.messages.contains(where: { $0.chatId == message.chatId }) {
-                    print("[ChatFeature] ✅ Adding new message to state")
                     state.messages.append(message)
 
                     // Realm에 저장
@@ -686,12 +661,10 @@ struct ChatFeature: Reducer {
                                     realm.add(messageDTO, update: .modified)
                                 }
                             } catch {
-                                print("[ChatFeature] Failed to save WebSocket message to Realm: \(error)")
+                                // Realm 저장 실패 시 무시
                             }
                         }
                     }
-                } else {
-                    print("[ChatFeature] ⚠️ Message already exists, skipping (chatId=\(message.chatId))")
                 }
 
                 // localId로 전송 중인 메시지가 있다면 교체 (내가 보낸 메시지가 서버에서 다시 돌아온 경우)
@@ -706,8 +679,7 @@ struct ChatFeature: Reducer {
             }
             return .none
 
-        case .webSocketError(let errorMessage):
-            print("[ChatFeature] WebSocket error: \(errorMessage)")
+        case .webSocketError:
             // TODO: 사용자에게 에러 표시 (필요시)
             return .none
         }
