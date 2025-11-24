@@ -181,7 +181,7 @@ struct ChatView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar(.hidden, for: .tabBar)
             .toolbarBackground(.visible, for: .navigationBar)
-            .toolbarBackground(Color(hex: "202255"), for: .navigationBar)
+            .toolbarBackground(navigationBarColor(for: viewStore.selectedTheme), for: .navigationBar)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -217,6 +217,22 @@ struct ChatView: View {
             return false
         }
         return message.sender.userId == myUserId
+    }
+
+    // 테마별 네비게이션바 색상
+    private func navigationBarColor(for theme: ChatFeature.ChatTheme) -> Color {
+        switch theme {
+        case .default:
+            return Color(hex: "69AE42")
+        case .theme1:
+            return Color(hex: "202255")
+        case .theme2:
+            return Color(hex: "80AECE")
+        case .theme3:
+            return Color(hex: "010103")
+        case .theme4:
+            return Color(hex: "0A406F")
+        }
     }
 
     // 상대방 닉네임 추출
