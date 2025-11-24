@@ -22,7 +22,7 @@ struct MatchInfoView: View {
                     .padding(.top, AppPadding.medium)
 
                 // 라인업
-                LineupView(selectedTeam: store.selectedTeam)
+                LineupView(matchDetail: store.matchDetail, selectedTeam: store.selectedTeam)
             }
         }
         .ignoresSafeArea(edges: .top)
@@ -63,7 +63,7 @@ private struct ScoreView: View {
 
                 HStack(spacing: AppPadding.large) {
                     // 홈 팀
-                    VStack(spacing: 8) {
+                    VStack(spacing: AppPadding.small) {
                         if let homeTeam = homeTeam {
                             ZStack {
                                 // 흰색 배경 (이미지 형태로 마스킹)
@@ -109,7 +109,7 @@ private struct ScoreView: View {
                     }
 
                     // 원정 팀
-                    VStack(spacing: 8) {
+                    VStack(spacing: AppPadding.small) {
                         if let awayTeam = awayTeam {
                             ZStack {
                                 // 흰색 배경 (이미지 형태로 마스킹)
@@ -223,12 +223,209 @@ private struct TeamTabButton: View {
 
 // MARK: - 라인업
 private struct LineupView: View {
+    let matchDetail: MatchDetail?
     let selectedTeam: MatchInfoFeature.State.TeamType
 
+    @State private var homeUniformData: Data?
+    @State private var awayUniformData: Data?
+    @State private var isLoadingHomeUniform: Bool = true
+    @State private var isLoadingAwayUniform: Bool = true
+
     var body: some View {
-        Image("SoccerField")
-            .resizable()
-            .frame(height: 500)
-            .rotationEffect(.degrees(selectedTeam == .away ? 180 : 0))
+        ZStack {
+            Image("SoccerField")
+                .resizable()
+                .frame(maxHeight: .infinity)
+                .rotationEffect(.degrees(selectedTeam == .away ? 180 : 0))
+
+            if let matchDetail {
+                if selectedTeam == .home {
+                    if isLoadingHomeUniform {
+                        VStack {
+                            GoalkeeperRowView(
+                                player: matchDetail.homeKeeper,
+                                uniformImagePath: matchDetail.homeUniform,
+                                onImageLoaded: { data in
+                                    homeUniformData = data
+                                    isLoadingHomeUniform = false
+                                }
+                            )
+                            .hidden()
+
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.5)
+                        }
+                    } else {
+                        VStack(spacing: 0) {
+                            Spacer()
+
+                            GoalkeeperRowView(
+                                player: matchDetail.homeKeeper,
+                                uniformImagePath: matchDetail.homeUniform,
+                                onImageLoaded: { data in
+                                    homeUniformData = data
+                                }
+                            )
+
+                            if let uniformData = homeUniformData {
+                                Spacer()
+                                FieldPlayerRowView(players: Array(matchDetail.homeDefends.reversed()), uniformImageData: uniformData)
+                                Spacer()
+                                FieldPlayerRowView(players: Array(matchDetail.homeMidFields.reversed()), uniformImageData: uniformData)
+                                Spacer()
+                                FieldPlayerRowView(players: Array(matchDetail.homeForwards.reversed()), uniformImageData: uniformData)
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, AppPadding.large)
+                    }
+                } else {
+                    if isLoadingAwayUniform {
+                        VStack {
+                            GoalkeeperRowView(
+                                player: matchDetail.awayKeeper,
+                                uniformImagePath: matchDetail.awayUniform,
+                                onImageLoaded: { data in
+                                    awayUniformData = data
+                                    isLoadingAwayUniform = false
+                                }
+                            )
+                            .hidden()
+
+                            ProgressView()
+                                .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                                .scaleEffect(1.5)
+                        }
+                    } else {
+                        VStack(spacing: 0) {
+                            Spacer()
+
+                            if let uniformData = awayUniformData {
+                                FieldPlayerRowView(players: matchDetail.awayForwards, uniformImageData: uniformData)
+                                Spacer()
+                                FieldPlayerRowView(players: matchDetail.awayMidFields, uniformImageData: uniformData)
+                                Spacer()
+                                FieldPlayerRowView(players: matchDetail.awayDefends, uniformImageData: uniformData)
+                                Spacer()
+                            }
+
+                            GoalkeeperRowView(
+                                player: matchDetail.awayKeeper,
+                                uniformImagePath: matchDetail.awayUniform,
+                                onImageLoaded: { data in
+                                    awayUniformData = data
+                                }
+                            )
+
+                            Spacer()
+                        }
+                        .padding(.vertical, AppPadding.large)
+                    }
+                }
+            }
+        }
+        .frame(height: 460)
+    }
+}
+
+// MARK: - 골키퍼 행 뷰
+// 한번만 이미지 받아오기 위해 골키퍼 뷰를 구분
+private struct GoalkeeperRowView: View {
+    let player: Player
+    let uniformImagePath: String
+    let onImageLoaded: (Data) -> Void
+
+    var body: some View {
+        GoalkeeperPlayerView(
+            player: player,
+            uniformImagePath: uniformImagePath,
+            onImageLoaded: onImageLoaded
+        )
+    }
+}
+
+// MARK: - 필드 선수 행 뷰
+private struct FieldPlayerRowView: View {
+    let players: [Player]
+    let uniformImageData: Data
+
+    var body: some View {
+        HStack(spacing: 0) {
+            ForEach(players.indices, id: \.self) { index in
+                if index == 0 {
+                    Spacer()
+                }
+
+                FieldPlayerView(player: players[index], uniformImageData: uniformImageData)
+
+                Spacer()
+            }
+        }
+        .padding(.horizontal, AppPadding.large)
+    }
+}
+
+// MARK: - 골키퍼 선수 뷰
+private struct GoalkeeperPlayerView: View {
+    let player: Player
+    let uniformImagePath: String
+    let onImageLoaded: (Data) -> Void
+
+    var body: some View {
+        VStack(spacing: 4) {
+            AsyncMediaImageView(
+                imagePath: uniformImagePath,
+                width: 40,
+                height: 40,
+                onImageLoaded: onImageLoaded
+            )
+            .clipShape(Circle())
+
+            PlayerInfoView(player: player)
+        }
+    }
+}
+
+// MARK: - 필드 선수 뷰
+private struct FieldPlayerView: View {
+    let player: Player
+    let uniformImageData: Data
+
+    var body: some View {
+        VStack(spacing: 4) {
+            if let uiImage = UIImage(data: uniformImageData) {
+                Image(uiImage: uiImage)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 40, height: 40)
+                    .clipShape(Circle())
+            }
+
+            PlayerInfoView(player: player)
+        }
+    }
+}
+
+// MARK: - 선수 정보 뷰
+private struct PlayerInfoView: View {
+    let player: Player
+
+    var body: some View {
+        HStack(spacing: 2) {
+            Text("\(player.number)")
+                .font(.appCaption)
+                .fontWeight(.bold)
+                .foregroundStyle(.white)
+                .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 0)
+
+            Text(player.name)
+                .font(.appCaption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.white)
+                .lineLimit(1)
+                .shadow(color: .black.opacity(0.8), radius: 2, x: 0, y: 0)
+        }
     }
 }
