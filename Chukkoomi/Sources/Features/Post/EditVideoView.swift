@@ -25,6 +25,7 @@ struct EditVideoView: View {
                     seekTrigger: viewStore.seekTrigger,
                     seekTarget: viewStore.seekTarget,
                     selectedFilter: viewStore.editState.selectedFilter,
+                    backgroundMusics: viewStore.editState.backgroundMusics,
                     onTimeUpdate: { time in viewStore.send(.updateCurrentTime(time)) },
                     onDurationUpdate: { duration in viewStore.send(.updateDuration(duration)) },
                     onVideoSizeUpdate: { size in viewStore.send(.updateVideoDisplaySize(size)) },
@@ -64,7 +65,7 @@ struct EditVideoView: View {
                                 trimStartTime: viewStore.editState.trimStartTime,
                                 trimEndTime: viewStore.editState.trimEndTime,
                                 subtitles: viewStore.editState.subtitles,
-                                backgroundMusic: viewStore.editState.backgroundMusic,
+                                backgroundMusics: viewStore.editState.backgroundMusics,
                                 onTrimStartChanged: { time in
                                     viewStore.send(.updateTrimStartTime(time))
                                 },
@@ -86,14 +87,14 @@ struct EditVideoView: View {
                                 onEditSubtitle: { id in
                                     viewStore.send(.editSubtitle(id))
                                 },
-                                onRemoveBackgroundMusic: {
-                                    viewStore.send(.removeBackgroundMusic)
+                                onRemoveBackgroundMusic: { id in
+                                    viewStore.send(.removeBackgroundMusic(id))
                                 },
-                                onUpdateBackgroundMusicStartTime: { time in
-                                    viewStore.send(.updateBackgroundMusicStartTime(time))
+                                onUpdateBackgroundMusicStartTime: { id, time in
+                                    viewStore.send(.updateBackgroundMusicStartTime(id, time))
                                 },
-                                onUpdateBackgroundMusicEndTime: { time in
-                                    viewStore.send(.updateBackgroundMusicEndTime(time))
+                                onUpdateBackgroundMusicEndTime: { id, time in
+                                    viewStore.send(.updateBackgroundMusicEndTime(id, time))
                                 }
                             )
                             .frame(height: 20 + 16 + 80 + 16 + 80 + 16 + 80) // 눈금자(20) + 간격(16) + 타임라인(80) + 간격(16) + 자막(80) + 간격(16) + 배경음악(80)
@@ -173,6 +174,7 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
     let seekTrigger: EditVideoFeature.SeekDirection?
     let seekTarget: Double?
     let selectedFilter: VideoFilter?
+    let backgroundMusics: [EditVideoFeature.BackgroundMusic]
     let onTimeUpdate: (Double) -> Void
     let onDurationUpdate: (Double) -> Void
     let onVideoSizeUpdate: (CGSize) -> Void
@@ -210,14 +212,17 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
                 context.coordinator.lastAppliedFilter = nil
             }
         }
-        
+
+        // 배경음악 설정
+        context.coordinator.updateBackgroundMusics(backgroundMusics)
+
         // 재생/일시정지 처리
         if isPlaying {
             context.coordinator.play()
         } else {
             context.coordinator.pause()
         }
-        
+
         // Seek to time 처리
         if let seekTarget = seekTarget {
             context.coordinator.seekToTime(seekTarget)
@@ -225,7 +230,7 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
                 onSeekCompleted()
             }
         }
-        
+
         // 전처리된 비디오를 사용하는 경우 필터는 이미 적용되어 있으므로 스킵
         if preProcessedVideoURL == nil {
             // 원본 비디오 재생 중 - 실시간 필터 적용
@@ -253,6 +258,12 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
         var lastAppliedFilter: VideoFilter?
         var currentPreProcessedURL: URL?  // 현재 로드된 전처리 비디오 URL
         var containerView: UIView?  // 비디오 크기 계산용 컨테이너
+
+        // 배경음악 관련
+        var audioPlayers: [UUID: AVPlayer] = [:]  // 배경음악 ID별 플레이어
+        var currentBackgroundMusics: [EditVideoFeature.BackgroundMusic] = []
+        var currentVideoTime: Double = 0.0
+
         let onTimeUpdate: (Double) -> Void
         let onDurationUpdate: (Double) -> Void
         let onVideoSizeUpdate: (CGSize) -> Void
@@ -373,11 +384,15 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
                 let currentTime = time.seconds
                 // 방어적으로 NaN/Infinite 방지 및 duration 클램프
                 if currentTime.isFinite {
+                    self.currentVideoTime = currentTime
                     if let duration = self.player?.currentItem?.duration.seconds, duration.isFinite {
                         self.onTimeUpdate(min(currentTime, duration))
                     } else {
                         self.onTimeUpdate(currentTime)
                     }
+
+                    // 배경음악 동기화
+                    self.syncBackgroundMusic()
                 }
             }
         }
@@ -405,21 +420,28 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
         
         func play() {
             player?.play()
+            // 배경음악도 동기화하여 재생
+            syncBackgroundMusic()
         }
-        
+
         func pause() {
             player?.pause()
+            audioPlayers.values.forEach { $0.pause() }
         }
-        
+
         func seekToTime(_ time: Double) {
             guard let player = player else { return }
             let targetTime = CMTime(seconds: time, preferredTimescale: 600)
+            currentVideoTime = time
+
             // 즉시 이동하도록 completion handler 사용
             player.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero) { [weak self] completed in
                 if completed {
                     // seek가 완료되면 즉시 시간 업데이트
                     DispatchQueue.main.async {
                         self?.onTimeUpdate(time)
+                        // 배경음악도 동기화
+                        self?.syncBackgroundMusic()
                     }
                 }
             }
@@ -504,6 +526,81 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
             }
         }
 
+        func updateBackgroundMusics(_ backgroundMusics: [EditVideoFeature.BackgroundMusic]) {
+            // 현재 배경음악 ID 목록
+            let currentMusicIDs = Set(backgroundMusics.map { $0.id })
+
+            // 1. 삭제된 배경음악의 플레이어 제거
+            let oldMusicIDs = Set(audioPlayers.keys)
+            let removedMusicIDs = oldMusicIDs.subtracting(currentMusicIDs)
+            for musicID in removedMusicIDs {
+                audioPlayers[musicID]?.pause()
+                audioPlayers.removeValue(forKey: musicID)
+            }
+
+            // 2. 각 배경음악에 대해 플레이어 생성 또는 업데이트
+            for music in backgroundMusics {
+                if let existingPlayer = audioPlayers[music.id] {
+                    // 기존 플레이어 업데이트 (볼륨만)
+                    existingPlayer.volume = music.volume
+                } else {
+                    // 새 플레이어 생성
+                    let audioAsset = AVAsset(url: music.musicURL)
+                    let playerItem = AVPlayerItem(asset: audioAsset)
+                    let newPlayer = AVPlayer(playerItem: playerItem)
+                    newPlayer.volume = music.volume
+                    audioPlayers[music.id] = newPlayer
+                }
+            }
+
+            // 현재 배경음악 목록 업데이트
+            currentBackgroundMusics = backgroundMusics
+
+            // 현재 비디오 시간에 맞춰 동기화
+            syncBackgroundMusic()
+        }
+
+        private func syncBackgroundMusic() {
+            let videoTime = currentVideoTime
+
+            // 각 배경음악에 대해 동기화
+            for music in currentBackgroundMusics {
+                guard let audioPlayer = audioPlayers[music.id] else { continue }
+
+                // 배경음악 재생 범위 내에 있는지 확인
+                if videoTime >= music.startTime && videoTime <= music.endTime {
+                    // 음악 내에서의 상대 시간 계산 (루프를 위해)
+                    let relativeTime = videoTime - music.startTime
+
+                    // 배경음악 재생
+                    if let audioDuration = audioPlayer.currentItem?.asset.duration.seconds,
+                       audioDuration.isFinite {
+                        // 음악 길이로 나눈 나머지로 루프
+                        let loopedTime = relativeTime.truncatingRemainder(dividingBy: audioDuration)
+                        let targetTime = CMTime(seconds: loopedTime, preferredTimescale: 600)
+
+                        // 현재 재생 중인 시간과 목표 시간의 차이가 크면 seek
+                        if let currentTime = audioPlayer.currentItem?.currentTime().seconds,
+                           abs(currentTime - loopedTime) > 0.2 {
+                            audioPlayer.seek(to: targetTime, toleranceBefore: .zero, toleranceAfter: .zero)
+                        }
+
+                        // 비디오가 재생 중이면 배경음악도 재생
+                        if player?.rate ?? 0 > 0 {
+                            if audioPlayer.rate == 0 {
+                                audioPlayer.play()
+                            }
+                        } else {
+                            audioPlayer.pause()
+                        }
+                    }
+                } else {
+                    // 배경음악 범위 밖이면 일시정지
+                    audioPlayer.pause()
+                }
+            }
+        }
+
         deinit {
             if let timeObserver = timeObserver {
                 player?.removeTimeObserver(timeObserver)
@@ -512,6 +609,7 @@ private struct CustomVideoPlayerView: UIViewRepresentable {
                 player?.removeTimeObserver(boundaryObserver)
             }
             player?.pause()
+            audioPlayers.values.forEach { $0.pause() }
         }
     }
 }
@@ -712,7 +810,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
     let trimStartTime: Double
     let trimEndTime: Double
     let subtitles: [EditVideoFeature.Subtitle]
-    let backgroundMusic: EditVideoFeature.BackgroundMusic?
+    let backgroundMusics: [EditVideoFeature.BackgroundMusic]
     let onTrimStartChanged: (Double) -> Void
     let onTrimEndChanged: (Double) -> Void
     let onSeek: (Double) -> Void
@@ -720,9 +818,9 @@ private struct VideoTimelineEditor: UIViewRepresentable {
     let onUpdateSubtitleStartTime: (UUID, Double) -> Void
     let onUpdateSubtitleEndTime: (UUID, Double) -> Void
     let onEditSubtitle: (UUID) -> Void
-    let onRemoveBackgroundMusic: () -> Void
-    let onUpdateBackgroundMusicStartTime: (Double) -> Void
-    let onUpdateBackgroundMusicEndTime: (Double) -> Void
+    let onRemoveBackgroundMusic: (UUID) -> Void
+    let onUpdateBackgroundMusicStartTime: (UUID, Double) -> Void
+    let onUpdateBackgroundMusicEndTime: (UUID, Double) -> Void
     
     // 1초당 픽셀 수
     private let pixelsPerSecond: CGFloat = 50
@@ -967,20 +1065,39 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         if let musicContainer = context.coordinator.backgroundMusicContainer {
             musicContainer.frame = CGRect(x: timelinePadding, y: backgroundMusicOriginY, width: timelineWidth - timelinePadding * 2, height: backgroundMusicHeight)
 
-            // 배경음악 블록 업데이트
-            if let music = backgroundMusic {
-                let contentWidth = timelineWidth - timelinePadding * 2
+            let contentWidth = timelineWidth - timelinePadding * 2
+
+            // 배경음악 블록들 업데이트
+            // 1. 기존 블록 중 삭제된 것 제거
+            let currentMusicIDs = Set(backgroundMusics.map { $0.id })
+            context.coordinator.backgroundMusicBlocks = context.coordinator.backgroundMusicBlocks.filter { blockView in
+                if currentMusicIDs.contains(blockView.backgroundMusic.id) {
+                    return true
+                } else {
+                    blockView.removeFromSuperview()
+                    return false
+                }
+            }
+
+            // 2. 각 배경음악에 대해 블록 생성 또는 업데이트
+            for music in backgroundMusics {
                 let startPosition = safeDuration > 0 ? (music.startTime / safeDuration) * contentWidth : 0
                 let endPosition = safeDuration > 0 ? (music.endTime / safeDuration) * contentWidth : 0
                 let blockWidth = max(endPosition - startPosition, 20) // 최소 너비 20
 
-                if let existingBlock = context.coordinator.backgroundMusicBlock {
+                if let existingBlock = context.coordinator.backgroundMusicBlocks.first(where: { $0.backgroundMusic.id == music.id }) {
                     // 기존 블록 업데이트
+                    let previousURL = existingBlock.backgroundMusic.musicURL
                     existingBlock.backgroundMusic = music
                     existingBlock.duration = safeDuration
                     existingBlock.timelineWidth = contentWidth
                     existingBlock.frame = CGRect(x: startPosition, y: 0, width: blockWidth, height: backgroundMusicHeight)
                     existingBlock.updateLabel()
+
+                    // 음악이 변경되었으면 waveform 다시 그리기
+                    if previousURL != music.musicURL {
+                        existingBlock.updateWaveform()
+                    }
                 } else {
                     // 새 블록 생성
                     let blockView = BackgroundMusicBlockUIView(
@@ -988,19 +1105,19 @@ private struct VideoTimelineEditor: UIViewRepresentable {
                         duration: safeDuration,
                         timelineWidth: contentWidth,
                         pixelsPerSecond: pixelsPerSecond,
-                        onStartTimeChanged: onUpdateBackgroundMusicStartTime,
-                        onEndTimeChanged: onUpdateBackgroundMusicEndTime,
-                        onRemove: onRemoveBackgroundMusic
+                        onStartTimeChanged: { time in
+                            onUpdateBackgroundMusicStartTime(music.id, time)
+                        },
+                        onEndTimeChanged: { time in
+                            onUpdateBackgroundMusicEndTime(music.id, time)
+                        },
+                        onRemove: {
+                            onRemoveBackgroundMusic(music.id)
+                        }
                     )
                     blockView.frame = CGRect(x: startPosition, y: 0, width: blockWidth, height: backgroundMusicHeight)
                     musicContainer.addSubview(blockView)
-                    context.coordinator.backgroundMusicBlock = blockView
-                }
-            } else {
-                // 배경음악이 없으면 블록 제거
-                if let blockView = context.coordinator.backgroundMusicBlock {
-                    blockView.removeFromSuperview()
-                    context.coordinator.backgroundMusicBlock = nil
+                    context.coordinator.backgroundMusicBlocks.append(blockView)
                 }
             }
         }
@@ -1131,7 +1248,7 @@ private struct VideoTimelineEditor: UIViewRepresentable {
         var isUserScrolling = false
         var isSeeking = false  // seek 중인지 추적
         var subtitleBlocks: [UUID: SubtitleBlockUIView] = [:]  // 자막 블록 캐시
-        var backgroundMusicBlock: BackgroundMusicBlockUIView?  // 배경음악 블록
+        var backgroundMusicBlocks: [BackgroundMusicBlockUIView] = []  // 배경음악 블록들
         var loadingIndicatorView: UIView?  // 로딩 indicator (화면 중앙에 배치)
         weak var scrollView: UIScrollView?  // ScrollView 참조
         var timelineOriginY: CGFloat = 0  // 타임라인 Y 위치
@@ -1618,13 +1735,13 @@ private class SubtitleBlockUIView: UIView {
         backgroundColor = UIColor.systemBlue.withAlphaComponent(0.6)
         layer.cornerRadius = 4
         clipsToBounds = true
-        
+
         // 왼쪽 핸들
         leftHandle = UIView()
         leftHandle.backgroundColor = UIColor.systemBlue
         leftHandle.layer.cornerRadius = 4
         addSubview(leftHandle)
-        
+
         // 왼쪽 핸들 그립 라인
         let leftGrip = UIView()
         leftGrip.backgroundColor = .white
@@ -1637,17 +1754,17 @@ private class SubtitleBlockUIView: UIView {
             leftGrip.widthAnchor.constraint(equalToConstant: 2),
             leftGrip.heightAnchor.constraint(equalToConstant: 12)
         ])
-        
+
         let leftPan = UIPanGestureRecognizer(target: self, action: #selector(handleLeftPan(_:)))
         leftHandle.addGestureRecognizer(leftPan)
         leftHandle.isUserInteractionEnabled = true
-        
+
         // 오른쪽 핸들
         rightHandle = UIView()
         rightHandle.backgroundColor = UIColor.systemBlue
         rightHandle.layer.cornerRadius = 4
         addSubview(rightHandle)
-        
+
         // 오른쪽 핸들 그립 라인
         let rightGrip = UIView()
         rightGrip.backgroundColor = .white
@@ -1660,20 +1777,11 @@ private class SubtitleBlockUIView: UIView {
             rightGrip.widthAnchor.constraint(equalToConstant: 2),
             rightGrip.heightAnchor.constraint(equalToConstant: 12)
         ])
-        
+
         let rightPan = UIPanGestureRecognizer(target: self, action: #selector(handleRightPan(_:)))
         rightHandle.addGestureRecognizer(rightPan)
         rightHandle.isUserInteractionEnabled = true
-        
-        // 제거 버튼
-        removeButton = UIButton(type: .custom)
-        removeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        removeButton.tintColor = .white
-        removeButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
-        removeButton.layer.cornerRadius = 8
-        removeButton.addTarget(self, action: #selector(handleRemove), for: .touchUpInside)
-        addSubview(removeButton)
-        
+
         // 텍스트 라벨
         textLabel = UILabel()
         textLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
@@ -1688,23 +1796,32 @@ private class SubtitleBlockUIView: UIView {
         // 텍스트 라벨 탭 제스처 (자막 수정)
         let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
         textLabel.addGestureRecognizer(tapGesture)
+
+        // 제거 버튼
+        removeButton = UIButton(type: .custom)
+        removeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        removeButton.tintColor = .white
+        removeButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        removeButton.layer.cornerRadius = 8
+        removeButton.addTarget(self, action: #selector(handleRemove), for: .touchUpInside)
+        addSubview(removeButton)
     }
     
     override func layoutSubviews() {
         super.layoutSubviews()
-        
+
         // 왼쪽 핸들
         leftHandle.frame = CGRect(x: 0, y: 0, width: handleWidth, height: bounds.height)
-        
+
         // 오른쪽 핸들
         rightHandle.frame = CGRect(x: bounds.width - handleWidth, y: 0, width: handleWidth, height: bounds.height)
-        
+
         // 제거 버튼
         removeButton.frame = CGRect(x: bounds.width - handleWidth - 4 - 16, y: 4, width: 16, height: 16)
-        
-        // 텍스트 라벨 (핸들과 제거 버튼 사이 영역)
+
+        // 텍스트 라벨 (핸들과 제거 버튼 사이 영역, 제거 버튼 공간 제외)
         let textX = handleWidth + 4
-        let textWidth = bounds.width - handleWidth * 2 - 8
+        let textWidth = bounds.width - handleWidth * 2 - 8 - 16 - 4 // 제거 버튼(16) + 간격(4) 제외
         textLabel.frame = CGRect(x: textX, y: 0, width: textWidth, height: bounds.height)
     }
     
@@ -1805,6 +1922,7 @@ private class BackgroundMusicBlockUIView: UIView {
     private var rightHandle: UIView!
     private var removeButton: UIButton!
     private var textLabel: UILabel!
+    private var waveformView: UIView!
 
     init(
         backgroundMusic: EditVideoFeature.BackgroundMusic,
@@ -1882,14 +2000,11 @@ private class BackgroundMusicBlockUIView: UIView {
         rightHandle.addGestureRecognizer(rightPan)
         rightHandle.isUserInteractionEnabled = true
 
-        // 제거 버튼
-        removeButton = UIButton(type: .custom)
-        removeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
-        removeButton.tintColor = .white
-        removeButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
-        removeButton.layer.cornerRadius = 8
-        removeButton.addTarget(self, action: #selector(handleRemove), for: .touchUpInside)
-        addSubview(removeButton)
+        // Waveform 배경 뷰
+        waveformView = UIView()
+        waveformView.backgroundColor = .clear
+        addSubview(waveformView)
+        sendSubviewToBack(waveformView)
 
         // 텍스트 라벨
         textLabel = UILabel()
@@ -1899,10 +2014,23 @@ private class BackgroundMusicBlockUIView: UIView {
         textLabel.numberOfLines = 1
         addSubview(textLabel)
         updateLabel()
+        updateWaveform()
+
+        // 제거 버튼
+        removeButton = UIButton(type: .custom)
+        removeButton.setImage(UIImage(systemName: "xmark.circle.fill"), for: .normal)
+        removeButton.tintColor = .white
+        removeButton.backgroundColor = UIColor.black.withAlphaComponent(0.5)
+        removeButton.layer.cornerRadius = 8
+        removeButton.addTarget(self, action: #selector(handleRemove), for: .touchUpInside)
+        addSubview(removeButton)
     }
 
     override func layoutSubviews() {
         super.layoutSubviews()
+
+        // Waveform 뷰 (전체 영역)
+        waveformView.frame = bounds
 
         // 왼쪽 핸들
         leftHandle.frame = CGRect(x: 0, y: 0, width: handleWidth, height: bounds.height)
@@ -1913,14 +2041,14 @@ private class BackgroundMusicBlockUIView: UIView {
         // 제거 버튼
         removeButton.frame = CGRect(x: bounds.width - handleWidth - 4 - 16, y: 4, width: 16, height: 16)
 
-        // 텍스트 라벨 (핸들과 제거 버튼 사이 영역)
+        // 텍스트 라벨 (핸들과 제거 버튼 사이 영역, 제거 버튼 공간 제외)
         let textX = handleWidth + 4
-        let textWidth = bounds.width - handleWidth * 2 - 8
+        let textWidth = bounds.width - handleWidth * 2 - 8 - 16 - 4 // 제거 버튼(16) + 간격(4) 제외
         textLabel.frame = CGRect(x: textX, y: 0, width: textWidth, height: bounds.height)
     }
 
     func updateLabel() {
-        textLabel.text = "🎵 배경음악"
+        textLabel.text = ""
     }
 
     func updatePosition() {
@@ -1930,6 +2058,106 @@ private class BackgroundMusicBlockUIView: UIView {
         let blockWidth = max(endPosition - startPosition, 20)
 
         self.frame = CGRect(x: startPosition, y: self.frame.origin.y, width: blockWidth, height: self.frame.height)
+    }
+
+    func updateWaveform() {
+        // 기존 레이어 제거
+        waveformView.layer.sublayers?.forEach { $0.removeFromSuperlayer() }
+
+        // 비동기로 waveform 생성
+        Task {
+            let samples = await extractAudioSamples(from: backgroundMusic.musicURL, targetSampleCount: 300)
+            await MainActor.run {
+                drawWaveform(samples: samples)
+            }
+        }
+    }
+
+    private func extractAudioSamples(from url: URL, targetSampleCount: Int) async -> [Float] {
+        let asset = AVAsset(url: url)
+
+        guard let track = try? await asset.loadTracks(withMediaType: .audio).first else {
+            return []
+        }
+
+        let reader: AVAssetReader
+        let readerOutput: AVAssetReaderTrackOutput
+
+        do {
+            reader = try AVAssetReader(asset: asset)
+            let outputSettings: [String: Any] = [
+                AVFormatIDKey: Int(kAudioFormatLinearPCM),
+                AVLinearPCMBitDepthKey: 16,
+                AVLinearPCMIsBigEndianKey: false,
+                AVLinearPCMIsFloatKey: false,
+                AVLinearPCMIsNonInterleaved: false
+            ]
+            readerOutput = AVAssetReaderTrackOutput(track: track, outputSettings: outputSettings)
+            reader.add(readerOutput)
+        } catch {
+            return []
+        }
+
+        reader.startReading()
+
+        var samples: [Float] = []
+        var sampleCount = 0
+        let maxSamples = 100000 // 샘플링할 최대 샘플 수
+
+        while let sampleBuffer = readerOutput.copyNextSampleBuffer() {
+            guard let blockBuffer = CMSampleBufferGetDataBuffer(sampleBuffer) else { continue }
+
+            let length = CMBlockBufferGetDataLength(blockBuffer)
+            var data = Data(count: length)
+
+            _ = data.withUnsafeMutableBytes { ptr in
+                CMBlockBufferCopyDataBytes(blockBuffer, atOffset: 0, dataLength: length, destination: ptr.baseAddress!)
+            }
+
+            let int16Array = data.withUnsafeBytes { $0.bindMemory(to: Int16.self) }
+            for sample in int16Array {
+                if sampleCount >= maxSamples { break }
+                samples.append(Float(sample) / Float(Int16.max))
+                sampleCount += 1
+            }
+
+            if sampleCount >= maxSamples { break }
+        }
+
+        // 다운샘플링하여 targetSampleCount 개로 줄이기
+        if samples.count > targetSampleCount {
+            let step = samples.count / targetSampleCount
+            samples = Swift.stride(from: 0, to: samples.count, by: step).map { samples[$0] }
+        }
+
+        return samples
+    }
+
+    private func drawWaveform(samples: [Float]) {
+        guard !samples.isEmpty, waveformView.bounds.width > 0 else { return }
+
+        let path = UIBezierPath()
+        let width = waveformView.bounds.width
+        let height = waveformView.bounds.height
+        let midY = height / 2
+        let barWidth: CGFloat = max(0.5, width / CGFloat(samples.count))
+        let heightScale = height * 0.9 // 파형 높이 스케일
+
+        for (index, sample) in samples.enumerated() {
+            let x = CGFloat(index) * barWidth
+            let barHeight = CGFloat(abs(sample)) * heightScale
+
+            path.move(to: CGPoint(x: x, y: midY - barHeight / 2))
+            path.addLine(to: CGPoint(x: x, y: midY + barHeight / 2))
+        }
+
+        let shapeLayer = CAShapeLayer()
+        shapeLayer.path = path.cgPath
+        shapeLayer.strokeColor = UIColor.white.withAlphaComponent(0.3).cgColor
+        shapeLayer.lineWidth = max(0.5, barWidth * 0.8)
+        shapeLayer.lineCap = .round
+
+        waveformView.layer.addSublayer(shapeLayer)
     }
 
     @objc private func handleLeftPan(_ gesture: UIPanGestureRecognizer) {
@@ -1975,7 +2203,7 @@ private class BackgroundMusicBlockUIView: UIView {
             // 시작 위치 계산
             let startPosition = (backgroundMusic.startTime / duration) * timelineWidth
 
-            // 최소 너비 유지
+            // 최소 너비 유지 (0.5초에 해당하는 픽셀)
             let minWidth = (0.5 / duration) * timelineWidth
             let clampedPosition = max(newEndPosition, startPosition + minWidth)
 

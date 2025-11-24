@@ -64,7 +64,7 @@ struct EditVideoFeature {
         var trimEndTime: Double = 0.0
         var selectedFilter: VideoFilter? = nil
         var subtitles: [Subtitle] = []
-        var backgroundMusic: BackgroundMusic? = nil
+        var backgroundMusics: [BackgroundMusic] = []
     }
 
     // MARK: - Background Music
@@ -139,10 +139,10 @@ struct EditVideoFeature {
         case showMusicSelection
         case cancelMusicSelection
         case selectMusic(URL)
-        case removeBackgroundMusic
-        case updateBackgroundMusicStartTime(Double)
-        case updateBackgroundMusicEndTime(Double)
-        case updateBackgroundMusicVolume(Float)
+        case removeBackgroundMusic(UUID)
+        case updateBackgroundMusicStartTime(UUID, Double)
+        case updateBackgroundMusicEndTime(UUID, Double)
+        case updateBackgroundMusicVolume(UUID, Float)
 
         // Alert
         case alert(PresentationAction<Alert>)
@@ -514,45 +514,120 @@ struct EditVideoFeature {
                 return .none
 
             case .selectMusic(let url):
-                // 배경음악 추가
+                // 배경음악 추가 (현재 playhead 위치부터 시작)
+                let startTime = state.currentTime
+
+                // 현재 위치가 기존 배경음악 블럭 안에 있는지 확인
+                let isInsideExistingMusic = state.editState.backgroundMusics.contains { music in
+                    startTime >= music.startTime && startTime < music.endTime
+                }
+
+                if isInsideExistingMusic {
+                    state.alert = AlertState {
+                        TextState("배경음악 추가 불가")
+                    } actions: {
+                        ButtonState(action: .confirmSubtitleOverlapError) {
+                            TextState("확인")
+                        }
+                    } message: {
+                        TextState("해당 위치에 이미 배경음악이 존재합니다.")
+                    }
+                    state.isShowingMusicSelection = false
+                    return .none
+                }
+
+                // 비디오 끝까지 (또는 다음 배경음악까지) 전체 영역 사용
+                let desiredEndTime = state.duration
+
+                // 겹치지 않는 영역 찾기
+                let availableEndTime = findAvailableEndTimeForMusic(
+                    startTime: startTime,
+                    desiredEndTime: desiredEndTime,
+                    existingMusics: state.editState.backgroundMusics
+                )
+
+                let endTime = availableEndTime
+
+                // 최소 0.5초 확보 안되면 에러
+                if endTime - startTime < 0.5 {
+                    state.alert = AlertState {
+                        TextState("배경음악 추가 불가")
+                    } actions: {
+                        ButtonState(action: .confirmSubtitleOverlapError) {
+                            TextState("확인")
+                        }
+                    } message: {
+                        TextState("해당 위치에 배경음악을 추가할 공간이 부족합니다. (최소 0.5초 필요)")
+                    }
+                    state.isShowingMusicSelection = false
+                    return .none
+                }
+
                 let backgroundMusic = BackgroundMusic(
                     musicURL: url,
-                    startTime: 0.0,
-                    endTime: min(state.duration, state.editState.trimEndTime),
+                    startTime: startTime,
+                    endTime: endTime,
                     volume: 0.5
                 )
-                state.editState.backgroundMusic = backgroundMusic
+                state.editState.backgroundMusics.append(backgroundMusic)
+                // 시작 시간 기준으로 정렬
+                state.editState.backgroundMusics.sort { $0.startTime < $1.startTime }
                 state.isShowingMusicSelection = false
                 return .none
 
-            case .removeBackgroundMusic:
+            case .removeBackgroundMusic(let id):
                 // 배경음악 제거
-                state.editState.backgroundMusic = nil
+                state.editState.backgroundMusics.removeAll { $0.id == id }
                 return .none
 
-            case .updateBackgroundMusicStartTime(let time):
+            case .updateBackgroundMusicStartTime(let id, let time):
                 // 배경음악 시작 시간 업데이트
-                if var music = state.editState.backgroundMusic {
-                    let clampedTime = max(0, min(time, music.endTime - 0.5))
-                    music.startTime = clampedTime
-                    state.editState.backgroundMusic = music
+                if let index = state.editState.backgroundMusics.firstIndex(where: { $0.id == id }) {
+                    let endTime = state.editState.backgroundMusics[index].endTime
+                    var clampedTime = max(0, min(time, endTime - 0.5))
+
+                    // 왼쪽 인접 배경음악과 겹치지 않도록
+                    let otherMusics = state.editState.backgroundMusics.filter { $0.id != id }
+                    for other in otherMusics {
+                        // 왼쪽에 있는 음악과 겹침 방지
+                        if other.endTime > clampedTime && other.startTime < clampedTime {
+                            clampedTime = max(clampedTime, other.endTime)
+                        }
+                    }
+
+                    // 최소 길이 확보 검증
+                    if endTime - clampedTime >= 0.5 {
+                        state.editState.backgroundMusics[index].startTime = clampedTime
+                    }
                 }
                 return .none
 
-            case .updateBackgroundMusicEndTime(let time):
+            case .updateBackgroundMusicEndTime(let id, let time):
                 // 배경음악 종료 시간 업데이트
-                if var music = state.editState.backgroundMusic {
-                    let clampedTime = min(state.duration, max(time, music.startTime + 0.5))
-                    music.endTime = clampedTime
-                    state.editState.backgroundMusic = music
+                if let index = state.editState.backgroundMusics.firstIndex(where: { $0.id == id }) {
+                    let startTime = state.editState.backgroundMusics[index].startTime
+                    var clampedTime = min(state.duration, max(time, startTime + 0.5))
+
+                    // 오른쪽 인접 배경음악과 겹치지 않도록
+                    let otherMusics = state.editState.backgroundMusics.filter { $0.id != id }
+                    for other in otherMusics {
+                        // 오른쪽에 있는 음악과 겹침 방지
+                        if other.startTime < clampedTime && other.endTime > clampedTime {
+                            clampedTime = min(clampedTime, other.startTime)
+                        }
+                    }
+
+                    // 최소 길이 확보 검증
+                    if clampedTime - startTime >= 0.5 {
+                        state.editState.backgroundMusics[index].endTime = clampedTime
+                    }
                 }
                 return .none
 
-            case .updateBackgroundMusicVolume(let volume):
+            case .updateBackgroundMusicVolume(let id, let volume):
                 // 배경음악 볼륨 업데이트
-                if var music = state.editState.backgroundMusic {
-                    music.volume = max(0, min(1, volume))
-                    state.editState.backgroundMusic = music
+                if let index = state.editState.backgroundMusics.firstIndex(where: { $0.id == id }) {
+                    state.editState.backgroundMusics[index].volume = max(0, min(1, volume))
                 }
                 return .none
 
@@ -580,6 +655,24 @@ struct EditVideoFeature {
         if let nextSubtitle = nextSubtitles.first {
             // 다음 자막과 겹치지 않도록 endTime 조정
             return min(desiredEndTime, nextSubtitle.startTime)
+        }
+
+        return desiredEndTime
+    }
+
+    private func findAvailableEndTimeForMusic(
+        startTime: Double,
+        desiredEndTime: Double,
+        existingMusics: [BackgroundMusic]
+    ) -> Double {
+        // startTime 이후에 있는 배경음악들 중 가장 가까운 음악 찾기
+        let nextMusics = existingMusics
+            .filter { $0.startTime >= startTime }
+            .sorted { $0.startTime < $1.startTime }
+
+        if let nextMusic = nextMusics.first {
+            // 다음 배경음악과 겹치지 않도록 endTime 조정
+            return min(desiredEndTime, nextMusic.startTime)
         }
 
         return desiredEndTime
