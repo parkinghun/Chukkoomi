@@ -52,7 +52,7 @@ struct VideoExporter {
         // 미리 처리된 영상을 사용하는 경우, 필터는 이미 적용되어 있음
         let isFilterAlreadyApplied = editState.selectedFilter == .animeGANHayao && preProcessedVideoURL != nil
 
-        let (composition, videoComposition) = try await applyEdits(
+        let (composition, videoComposition, audioMix) = try await applyEdits(
             to: avAsset,
             editState: editState,
             isFilterAlreadyApplied: isFilterAlreadyApplied
@@ -61,6 +61,7 @@ struct VideoExporter {
         let exportedURL = try await exportComposition(
             composition,
             videoComposition: videoComposition,
+            audioMix: audioMix,
             progressHandler: progressHandler
         )
         return exportedURL
@@ -88,13 +89,19 @@ struct VideoExporter {
         to asset: AVAsset,
         editState: EditVideoFeature.EditState,
         isFilterAlreadyApplied: Bool
-    ) async throws -> (AVAsset, AVVideoComposition?) {
+    ) async throws -> (AVAsset, AVVideoComposition?, AVAudioMix?) {
         let composition = AVMutableComposition()
 
         // 1) Trim만 수행
         let trimmedAsset = try await applyTrim(to: asset, editState: editState, composition: composition)
 
-        // 2) 필터, 자막, 리사이즈 처리
+        // 2) 배경음악 추가
+        var audioMix: AVAudioMix? = nil
+        if !editState.backgroundMusics.isEmpty {
+            audioMix = try await addBackgroundMusic(to: composition, editState: editState)
+        }
+
+        // 3) 필터, 자막, 리사이즈 처리
         let videoComposition: AVVideoComposition?
 
         // AnimeGAN 필터이고 자막이 없고 아직 적용되지 않았으면 VideoFilterManager 사용
@@ -113,7 +120,7 @@ struct VideoExporter {
             videoComposition = try await createResizeOnlyComposition(for: trimmedAsset)
         }
 
-        return (trimmedAsset, videoComposition)
+        return (trimmedAsset, videoComposition, audioMix)
     }
 
     private func applyTrim(
@@ -292,10 +299,63 @@ struct VideoExporter {
         }
     }
 
+    /// 배경음악을 composition에 추가하고 AVAudioMix 반환
+    private func addBackgroundMusic(
+        to composition: AVMutableComposition,
+        editState: EditVideoFeature.EditState
+    ) async throws -> AVAudioMix? {
+        var audioMixInputParameters: [AVMutableAudioMixInputParameters] = []
+
+        for music in editState.backgroundMusics {
+            // 배경음악 asset 로드
+            let musicAsset = AVAsset(url: music.musicURL)
+            guard let musicTrack = try await musicAsset.loadTracks(withMediaType: .audio).first else {
+                continue
+            }
+
+            // 음악 duration 로드
+            let musicDuration = try await musicAsset.load(.duration)
+            let musicDurationSeconds = musicDuration.seconds
+
+            // 배경음악을 추가할 트랙 생성
+            guard let compositionAudioTrack = composition.addMutableTrack(
+                withMediaType: .audio,
+                preferredTrackID: kCMPersistentTrackID_Invalid
+            ) else {
+                continue
+            }
+
+            // 배경음악의 시작 시간
+            let startTime = CMTime(seconds: music.startTime, preferredTimescale: 600)
+            let endTime = CMTime(seconds: music.endTime, preferredTimescale: 600)
+            let musicRangeDuration = CMTimeSubtract(endTime, startTime)
+
+            // 설정한 범위와 음악 파일의 실제 길이 중 짧은 것만큼만 삽입
+            let actualDuration = min(musicDuration, musicRangeDuration)
+            let sourceRange = CMTimeRange(start: .zero, duration: actualDuration)
+            try compositionAudioTrack.insertTimeRange(sourceRange, of: musicTrack, at: startTime)
+
+            // 볼륨 설정을 위한 AudioMixInputParameters 생성
+            let inputParameters = AVMutableAudioMixInputParameters(track: compositionAudioTrack)
+            inputParameters.setVolume(music.volume, at: .zero)
+            audioMixInputParameters.append(inputParameters)
+        }
+
+        // AVAudioMix 생성
+        guard !audioMixInputParameters.isEmpty else {
+            return nil
+        }
+
+        let audioMix = AVMutableAudioMix()
+        audioMix.inputParameters = audioMixInputParameters
+        return audioMix
+    }
+
 
     private func exportComposition(
         _ composition: AVAsset,
         videoComposition: AVVideoComposition?,
+        audioMix: AVAudioMix?,
         progressHandler: @escaping (Double) -> Void
     ) async throws -> URL {
         guard let exportSession = AVAssetExportSession(
@@ -309,6 +369,10 @@ struct VideoExporter {
 
         if let videoComposition = videoComposition {
             exportSession.videoComposition = videoComposition
+        }
+
+        if let audioMix = audioMix {
+            exportSession.audioMix = audioMix
         }
 
         guard let cachesDirectory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else {
