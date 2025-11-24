@@ -47,6 +47,9 @@ struct EditVideoFeature {
         var pendingSubtitleEndTime: Double? = nil
         var editingSubtitleId: UUID? = nil  // 수정 중인 자막 ID
 
+        // 음악 선택 오버레이
+        var isShowingMusicSelection: Bool = false
+
         // Alert
         @Presents var alert: AlertState<Action.Alert>?
 
@@ -133,7 +136,9 @@ struct EditVideoFeature {
         case cancelSubtitleInput
 
         // Background Music
-        case addBackgroundMusic(URL)
+        case showMusicSelection
+        case cancelMusicSelection
+        case selectMusic(URL)
         case removeBackgroundMusic
         case updateBackgroundMusicStartTime(Double)
         case updateBackgroundMusicEndTime(Double)
@@ -498,7 +503,17 @@ struct EditVideoFeature {
                 }
                 return .none
 
-            case .addBackgroundMusic(let url):
+            case .showMusicSelection:
+                // 음악 선택 오버레이 표시
+                state.isShowingMusicSelection = true
+                return .none
+
+            case .cancelMusicSelection:
+                // 음악 선택 오버레이 닫기
+                state.isShowingMusicSelection = false
+                return .none
+
+            case .selectMusic(let url):
                 // 배경음악 추가
                 let backgroundMusic = BackgroundMusic(
                     musicURL: url,
@@ -507,6 +522,7 @@ struct EditVideoFeature {
                     volume: 0.5
                 )
                 state.editState.backgroundMusic = backgroundMusic
+                state.isShowingMusicSelection = false
                 return .none
 
             case .removeBackgroundMusic:

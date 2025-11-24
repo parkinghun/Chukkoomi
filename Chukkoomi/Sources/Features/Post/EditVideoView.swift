@@ -118,7 +118,7 @@ struct EditVideoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbarBackground(.visible, for: .navigationBar)
             .toolbarColorScheme(.light, for: .navigationBar)
-            .navigationBarBackButtonHidden(viewStore.isExporting || viewStore.isShowingSubtitleInput)
+            .navigationBarBackButtonHidden(viewStore.isExporting || viewStore.isShowingSubtitleInput || viewStore.isShowingMusicSelection)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button {
@@ -127,7 +127,7 @@ struct EditVideoView: View {
                         Text("완료")
                             .foregroundStyle(.black)
                     }
-                    .disabled(viewStore.isExporting || viewStore.isShowingSubtitleInput)
+                    .disabled(viewStore.isExporting || viewStore.isShowingSubtitleInput || viewStore.isShowingMusicSelection)
                 }
             }
             .overlay {
@@ -145,6 +145,17 @@ struct EditVideoView: View {
                         errorMessage: viewStore.subtitleInputValidationError,
                         onConfirm: { viewStore.send(.confirmSubtitleInput) },
                         onCancel: { viewStore.send(.cancelSubtitleInput) }
+                    )
+                    .ignoresSafeArea()
+                }
+            }
+            .overlay {
+                if viewStore.isShowingMusicSelection {
+                    MusicSelectionOverlayView(
+                        onSelectMusic: { url in
+                            viewStore.send(.selectMusic(url))
+                        },
+                        onCancel: { viewStore.send(.cancelMusicSelection) }
                     )
                     .ignoresSafeArea()
                 }
@@ -607,7 +618,7 @@ private struct EditControlsView: View {
 
             // 배경음악 추가 버튼
             Button {
-                // TODO: 음악 선택 화면 표시
+                viewStore.send(.showMusicSelection)
             } label: {
                 EditGuideView(editType: .music)
             }
@@ -2058,7 +2069,6 @@ private struct ExportingOverlayView: View {
     var body: some View {
         ZStack {
             Color.black.opacity(0.5)
-                .ignoresSafeArea()
             
             VStack(spacing: AppPadding.large) {
                 ProgressView()
@@ -2077,6 +2087,138 @@ private struct ExportingOverlayView: View {
             .background(Color.black.opacity(0.8))
             .cornerRadius(12)
         }
+    }
+}
+
+// MARK: - Music Selection Overlay View
+private struct MusicSelectionOverlayView: View {
+    let onSelectMusic: (URL) -> Void
+    let onCancel: () -> Void
+
+    @State private var playingMusicURL: URL? = nil
+    @State private var audioPlayer: AVPlayer? = nil
+
+    private let availableMusic: [(name: String, url: URL, duration: String)] = [
+        (
+            name: "ailawyer 15/12",
+            url: Bundle.main.url(forResource: "ailawyer-1512", withExtension: "mp3")!,
+            duration: "02:40"
+        ),
+        (
+            name: "Lament of Eleusis",
+            url: Bundle.main.url(forResource: "lament-of-eleusis", withExtension: "mp3")!,
+            duration: "01:41"
+        )
+    ]
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.7)
+
+            VStack(spacing: 0) {
+                // 헤더
+                HStack {
+                    Text("배경음악 선택")
+                        .font(.headline)
+                        .foregroundStyle(.black)
+
+                    Spacer()
+
+                    Button {
+                        onCancel()
+                    } label: {
+                        AppIcon.xmark
+                            .foregroundStyle(.gray)
+                    }
+                }
+                .padding()
+                .background(Color.white)
+
+                Divider()
+
+                // 음악 목록
+                ScrollView {
+                    VStack(spacing: 0) {
+                        ForEach(availableMusic, id: \.url) { music in
+                            Button {
+                                onSelectMusic(music.url)
+                            } label: {
+                                HStack {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        Text(music.name)
+                                            .font(.body)
+                                            .foregroundStyle(.black)
+
+                                        Text(music.duration)
+                                            .font(.caption)
+                                            .foregroundStyle(.gray)
+                                    }
+
+                                    Spacer()
+
+                                    Button {
+                                        togglePlayMusic(url: music.url)
+                                    } label: {
+                                        AppIcon.speaker
+                                            .foregroundStyle(playingMusicURL == music.url ? .blue : .gray)
+                                    }
+                                }
+                                .padding()
+                            }
+
+                            if music.url != availableMusic.last?.url {
+                                Divider()
+                            }
+                        }
+                    }
+                }
+                .background(Color.white)
+            }
+            .frame(width: 320, height: 300)
+            .background(Color.white)
+            .cornerRadius(12)
+            .shadow(radius: 20)
+        }
+        .onDisappear {
+            stopMusic()
+        }
+    }
+
+    private func togglePlayMusic(url: URL) {
+        if playingMusicURL == url {
+            // 같은 음악을 다시 누르면 정지
+            stopMusic()
+        } else {
+            // 다른 음악 재생
+            playMusic(url: url)
+        }
+    }
+
+    private func playMusic(url: URL) {
+        // 기존 재생 중지
+        audioPlayer?.pause()
+
+        // 새 음악 재생
+        let playerItem = AVPlayerItem(url: url)
+        let player = AVPlayer(playerItem: playerItem)
+        audioPlayer = player
+        playingMusicURL = url
+        player.play()
+
+        // 음악 종료 감지
+        NotificationCenter.default.addObserver(
+            forName: .AVPlayerItemDidPlayToEndTime,
+            object: playerItem,
+            queue: .main
+        ) { _ in
+            playingMusicURL = nil
+        }
+    }
+
+    private func stopMusic() {
+        audioPlayer?.pause()
+        audioPlayer = nil
+        playingMusicURL = nil
     }
 }
 

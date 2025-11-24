@@ -1,6 +1,15 @@
 {
-  "originHash" : "8b52ca4651f8061cc0adbd351df741156f2ec0604a65b0435a88787ca1db7688",
+  "originHash" : "23fcb737e0c25c94a38a167b1c92a2a4b9cc977ec9de4a5bdd6cac90bce03fd4",
   "pins" : [
+    {
+      "identity" : "alamofire",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/Alamofire/Alamofire.git",
+      "state" : {
+        "revision" : "513364f870f6bfc468f9d2ff0a95caccc10044c5",
+        "version" : "5.10.2"
+      }
+    },
     {
       "identity" : "combine-schedulers",
       "kind" : "remoteSourceControl",
@@ -11,12 +20,12 @@
       }
     },
     {
-      "identity" : "opencombine",
+      "identity" : "kakao-ios-sdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/OpenCombine/OpenCombine.git",
+      "location" : "https://github.com/kakao/kakao-ios-sdk.git",
       "state" : {
-        "revision" : "8576f0d579b27020beccbccc3ea6844f3ddfc2c2",
-        "version" : "0.14.0"
+        "revision" : "f04b5655f3528e8c21a0ff7db047eeb138135394",
+        "version" : "2.26.0"
       }
     },
     {
@@ -67,7 +76,7 @@
     {
       "identity" : "swift-composable-architecture",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/pointfreeco/swift-composable-architecture",
+      "location" : "https://github.com/pointfreeco/swift-composable-architecture.git",
       "state" : {
         "revision" : "5b0890fabfd68a2d375d68502bc3f54a8548c494",
         "version" : "1.23.1"
