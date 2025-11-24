@@ -9,6 +9,7 @@ import ComposableArchitecture
 import Foundation
 import KakaoSDKAuth
 import KakaoSDKUser
+import AuthenticationServices
 
 @Reducer
 struct LoginFeature {
@@ -30,6 +31,8 @@ struct LoginFeature {
         case loginResponse(Result<SignResponse, Error>)
         case kakaoLoginButtonTapped
         case kakaoLoginResponse(Result<SignResponse, Error>)
+        case appleLoginButtonTapped
+        case appleLoginResponse(Result<SignResponse, Error>)
         case clearFields // 필드 초기화
     }
 
@@ -148,6 +151,43 @@ struct LoginFeature {
 
                 return .none
 
+            case .appleLoginButtonTapped:
+                state.isLoading = true
+                state.errorMessage = nil
+
+                return .run { send in
+                    await send(.appleLoginResponse(
+                        Result {
+                            try await networkClient.signInWithApple()
+                        }
+                    ))
+                }
+
+            case let .appleLoginResponse(.success(response)):
+                state.isLoading = false
+
+                // Keychain에 토큰 저장
+                KeychainManager.shared.save(response.accessToken, for: .accessToken)
+                KeychainManager.shared.save(response.refreshToken, for: .refreshToken)
+
+                // UserDefaults에 userId 저장
+                UserDefaultsHelper.userId = response.userId
+
+                state.isLoginSuccessful = true
+                return .none
+
+            case let .appleLoginResponse(.failure(error)):
+                state.isLoading = false
+
+                // 에러 메시지 표시
+                if let networkError = error as? NetworkError {
+                    state.errorMessage = networkError.errorDescription ?? "Apple 로그인에 실패했습니다."
+                } else {
+                    state.errorMessage = "Apple 로그인에 실패했습니다."
+                }
+
+                return .none
+
             case .clearFields:
                 state.email = ""
                 state.password = ""
@@ -163,6 +203,7 @@ struct LoginFeature {
 struct NetworkClient {
     var signInWithEmail: @Sendable (String, String) async throws -> SignResponse
     var signInWithKakao: @Sendable () async throws -> SignResponse
+    var signInWithApple: @Sendable () async throws -> SignResponse
 }
 
 extension NetworkClient: DependencyKey {
@@ -200,6 +241,38 @@ extension NetworkClient: DependencyKey {
             let router = UserRouter.signInWithKakao(oauthToken: oauthToken)
             let responseDTO = try await NetworkManager.shared.performRequest(router, as: SignResponseDTO.self)
             return responseDTO.toDomain
+        },
+        signInWithApple: {
+            // Apple Sign In 처리
+            let appleIDProvider = ASAuthorizationAppleIDProvider()
+            let request = appleIDProvider.createRequest()
+            request.requestedScopes = [.fullName, .email]
+
+            let authorizationController = ASAuthorizationController(authorizationRequests: [request])
+
+            // Delegate를 통해 결과 받기
+            let result = try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<ASAuthorization, Error>) in
+                Task { @MainActor in
+                    let delegate = AppleSignInDelegate(continuation: continuation)
+                    authorizationController.delegate = delegate
+                    authorizationController.presentationContextProvider = delegate
+                    authorizationController.performRequests()
+
+                    // delegate를 메모리에 유지
+                    objc_setAssociatedObject(authorizationController, "delegate", delegate, .OBJC_ASSOCIATION_RETAIN)
+                }
+            }
+
+            guard let appleIDCredential = result.credential as? ASAuthorizationAppleIDCredential,
+                  let identityTokenData = appleIDCredential.identityToken,
+                  let identityToken = String(data: identityTokenData, encoding: .utf8) else {
+                throw NSError(domain: "AppleSignIn", code: -1, userInfo: [NSLocalizedDescriptionKey: "Apple ID 토큰을 가져올 수 없습니다."])
+            }
+
+            // 서버에 Identity Token 전송
+            let router = UserRouter.signInWithApple(idToken: identityToken)
+            let responseDTO = try await NetworkManager.shared.performRequest(router, as: SignResponseDTO.self)
+            return responseDTO.toDomain
         }
     )
 }
@@ -208,5 +281,30 @@ extension DependencyValues {
     var networkClient: NetworkClient {
         get { self[NetworkClient.self] }
         set { self[NetworkClient.self] = newValue }
+    }
+}
+
+// MARK: - Apple Sign In Delegate
+private class AppleSignInDelegate: NSObject, ASAuthorizationControllerDelegate, ASAuthorizationControllerPresentationContextProviding {
+    let continuation: CheckedContinuation<ASAuthorization, Error>
+
+    init(continuation: CheckedContinuation<ASAuthorization, Error>) {
+        self.continuation = continuation
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithAuthorization authorization: ASAuthorization) {
+        continuation.resume(returning: authorization)
+    }
+
+    func authorizationController(controller: ASAuthorizationController, didCompleteWithError error: Error) {
+        continuation.resume(throwing: error)
+    }
+
+    func presentationAnchor(for controller: ASAuthorizationController) -> ASPresentationAnchor {
+        guard let windowScene = UIApplication.shared.connectedScenes.first as? UIWindowScene,
+              let window = windowScene.windows.first else {
+            return UIWindow()
+        }
+        return window
     }
 }

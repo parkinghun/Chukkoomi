@@ -162,7 +162,7 @@ struct LoginView: View {
 
                         // 애플 로그인
                         Button {
-                            // TODO: 애플 로그인
+                            viewStore.send(.appleLoginButtonTapped)
                         } label: {
                             Image(systemName: "apple.logo")
                                 .resizable()
@@ -173,6 +173,7 @@ struct LoginView: View {
                                 .background(Color.black)
                                 .clipShape(Circle())
                         }
+                        .disabled(viewStore.isLoading)
                     }
 
                     // 이메일 회원가입
