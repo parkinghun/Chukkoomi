@@ -13,22 +13,42 @@ struct PostCellView: View {
     let store: StoreOf<PostCellFeature>
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 0) {
             headerView
+                .padding(.bottom,AppPadding.medium)
+
+            // 미디어 + 액션바 (가로 배치)
+            HStack(alignment: .center, spacing: 0) {
+                mediaContentView
+                    .frame(maxWidth: .infinity)
+
+                actionBarView
+                    .padding(.leading, 4)
+            }
+            .padding(.bottom,AppPadding.medium)
 
             titleView
+                .padding(.bottom,AppPadding.medium)
 
-            mediaContentView
-
-            actionBarView
+            // 좋아요한 사람 프로필 이미지 + 좋아요 수
+            if store.likeCount > 0 {
+                likedUsersView
+            }
         }
-        .padding(.vertical, 8)
+        .padding(12)
+        .background(Color.white)
+        .cornerRadius(12)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
         .confirmationDialog(
             store: store.scope(state: \.$menu, action: \.menu)
         )
         .alert(
             store: store.scope(state: \.$deleteAlert, action: \.deleteAlert)
         )
+        .onAppear {
+            store.send(.loadLikedUsers)
+        }
     }
 
     // MARK: - Header
@@ -45,6 +65,10 @@ struct PostCellView: View {
                         onImageLoaded: { _ in }
                     )
                     .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+                    )
                 } else {
                     Circle()
                         .fill(Color.gray.opacity(0.3))
@@ -52,6 +76,10 @@ struct PostCellView: View {
                         .overlay(
                             Image(systemName: "person.fill")
                                 .foregroundColor(.gray)
+                        )
+                        .overlay(
+                            Circle()
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                         )
                 }
 
@@ -74,14 +102,9 @@ struct PostCellView: View {
 
             Spacer()
 
-            // 본인 게시글이면 메뉴 버튼, 아니면 팔로우 버튼
-            if store.isMyPost {
-                menuButtonView()
-            } else {
-                followButtonView()
-            }
+            // 항상 메뉴 버튼 표시
+            menuButtonView()
         }
-        .padding(.horizontal, 16)
     }
 
     // MARK: - Title
@@ -105,7 +128,6 @@ struct PostCellView: View {
                 }
             }
         }
-        .padding(.horizontal, 16)
     }
 
     // MARK: - Media Content (Image or Video)
@@ -117,57 +139,46 @@ struct PostCellView: View {
             if isVideo {
                 // 비디오 재생
                 URLMediaPlayerView(mediaPath: firstFile)
-                    .frame(height: 300)
+                    .aspectRatio(16/9, contentMode: .fit)
+                    .clipped()
+                    .cornerRadius(12)
             } else {
                 // 이미지 표시
-                GeometryReader { geometry in
-                    AsyncMediaImageView(
-                        imagePath: firstFile,
-                        width: geometry.size.width,
-                        height: 300
-                    )
-                }
-                .frame(height: 300)
+                AsyncMediaImageView(
+                    imagePath: firstFile,
+                    width: 320,
+                    height: 180
+                )
+                .aspectRatio(16/9, contentMode: .fit)
+                .clipped()
+                .cornerRadius(12)
             }
         }
     }
 
-    // MARK: - Action Bar
+    // MARK: - Action Bar (세로 배치)
     private var actionBarView: some View {
-        HStack(spacing: 16) {
-            // 좋아요
-            HStack(spacing: 4) {
-                Image(systemName: store.isLiked ? "heart.fill" : "heart")
-                    .font(.system(size: 20))
-                    .foregroundColor(store.isLiked ? .red : .primary)
-                Text("\(store.likeCount)")
-                    .font(.caption)
-            }
-            .buttonWrapper {
-                store.send(.likeTapped)
-            }
+        VStack(spacing: 8) {
+            Spacer()
+            Image(systemName: store.isLiked ? "heart.fill" : "heart")
+                .font(.system(size: 20))
+                .foregroundColor(store.isLiked ? .red : .primary)
+                .buttonWrapper {
+                    store.send(.likeTapped)
+                }
 
-            // 댓글
-            HStack(spacing: 4) {
-                AppIcon.comment
-                    .font(.system(size: 20))
-                Text("\(store.commentCount)")
-                    .font(.caption)
-            }
-            .buttonWrapper {
-                store.send(.commentTapped)
-            }
+            AppIcon.comment
+                .font(.system(size: 20))
+                .buttonWrapper {
+                    store.send(.commentTapped)
+                }
 
-            // 공유
             AppIcon.share
                 .font(.system(size: 20))
                 .buttonWrapper {
                     store.send(.shareTapped)
                 }
 
-            Spacer()
-
-            // 북마크
             Image(systemName: store.isBookmarked ? "bookmark.fill" : "bookmark")
                 .font(.system(size: 20))
                 .foregroundColor(store.isBookmarked ? .blue : .primary)
@@ -176,7 +187,7 @@ struct PostCellView: View {
                 }
         }
         .foregroundColor(.primary)
-        .padding(.horizontal, 16)
+        .padding(.vertical, 4)
     }
     
     private func followButtonView() -> some View {
@@ -198,12 +209,83 @@ struct PostCellView: View {
             .font(.system(size: 20))
             .frame(width: 40, height: 40)
             .foregroundStyle(.black)
+            .rotationEffect(.degrees(90))
             .buttonWrapper {
                 store.send(.menuTapped)
             }
     }
 
+    // MARK: - Liked Users View
+    private var likedUsersView: some View {
+        HStack(spacing: 8) {
+            // 프로필 이미지들 (겹쳐서 표시)
+            ZStack(alignment: .leading) {
+                ForEach(Array(store.likedUsers.prefix(3).enumerated()), id: \.offset) { index, user in
+                    if let profileImagePath = user.profileImage {
+                        AsyncMediaImageView(
+                            imagePath: profileImagePath,
+                            width: 24,
+                            height: 24,
+                            onImageLoaded: { _ in }
+                        )
+                        .clipShape(Circle())
+                        .overlay(
+                            Circle()
+                                .stroke(Color.gray.opacity(0.3), lineWidth: 1)
+
+                        )
+                        .offset(x: CGFloat(index) * 16)
+                    } else {
+                        Circle()
+                            .fill(Color.gray.opacity(0.3))
+                            .frame(width: 24, height: 24)
+                            .overlay(
+                                Circle()
+                                    .stroke(Color.white, lineWidth: 2)
+                            )
+                            .offset(x: CGFloat(index) * 16)
+                    }
+                }
+            }
+            .frame(width: CGFloat(max(1, store.likedUsers.count)) * 16 + 8)
+            .padding(.trailing, 4)
+
+//            Spacer()
+            // 좋아요 텍스트
+            if let firstName = store.likedUsers.first?.nickname {
+                if store.likeCount == 1{
+                    Text("\(firstName)님이 좋아합니다.")
+                        .font(.caption)
+                        .foregroundColor(.primary)
+                } else {
+                    Text("\(firstName)님 외 \(formatLikeCount(store.likeCount - 1))명이 좋아합니다.")
+                        .font(.caption)
+                        .foregroundColor(.primary)
+                }
+            } else {
+                Text("\(formatLikeCount(store.likeCount))명이 좋아요를 눌렀습니다")
+                    .font(.caption)
+                    .foregroundColor(.primary)
+            }
+
+            Spacer()
+        }
+    }
+
     // MARK: - 헬퍼 메서드
+
+    /// 좋아요 수 포맷 (1000 -> 1k)
+    private func formatLikeCount(_ count: Int) -> String {
+        if count >= 1000 {
+            let thousands = Double(count) / 1000.0
+            if thousands.truncatingRemainder(dividingBy: 1) == 0 {
+                return "\(Int(thousands))k"
+            } else {
+                return String(format: "%.1fk", thousands)
+            }
+        }
+        return "\(count)"
+    }
 
     /// 컨텐츠에서 해시태그를 제거하고 본문만 추출
     private func extractContentWithoutHashtags(from fullContent: String) -> String {

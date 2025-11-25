@@ -27,4 +27,8 @@ extension ProfileDTO {
     var toDomain: Profile {
         return Profile(userId: user_id, email: email, nickname: nick, profileImage: profileImage, introduce: info1, followers: followers.map { $0.toDomain }, following: following.map { $0.toDomain }, posts: posts)
     }
+
+    var toUser: User {
+        return User(userId: user_id, nickname: nick, profileImage: profileImage)
+    }
 }

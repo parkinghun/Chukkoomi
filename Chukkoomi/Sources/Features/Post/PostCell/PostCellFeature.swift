@@ -19,6 +19,8 @@ struct PostCellFeature {
         var commentCount: Int
         var isBookmarked: Bool
         var isFollowing: Bool
+        var likedUsers: [User] = [] // 좋아요 누른 사용자들 (최대 3명)
+        var isLoadingLikedUsers: Bool = false
 
         @Presents var menu: ConfirmationDialogState<Action.Menu>?
         @Presents var deleteAlert: AlertState<Action.DeleteAlert>?
@@ -93,6 +95,10 @@ struct PostCellFeature {
         // Follow Status Update
         case updateFollowStatus(Bool) // 팔로우 상태 업데이트
 
+        // Liked Users Loading
+        case loadLikedUsers
+        case likedUsersResponse(Result<[User], Error>)
+
         // Menu Actions
         case menu(PresentationAction<Menu>)
 
@@ -110,6 +116,7 @@ struct PostCellFeature {
         enum Menu: Equatable {
             case editPost
             case deletePost
+            case toggleFollow
         }
 
         enum DeleteAlert: Equatable {
@@ -137,7 +144,8 @@ struct PostCellFeature {
                  (.shareTapped, .shareTapped),
                  (.bookmarkTapped, .bookmarkTapped),
                  (.followTapped, .followTapped),
-                 (.menuTapped, .menuTapped):
+                 (.menuTapped, .menuTapped),
+                 (.loadLikedUsers, .loadLikedUsers):
                 return true
             case let (.hashtagTapped(lhs), .hashtagTapped(rhs)):
                 return lhs == rhs
@@ -145,6 +153,8 @@ struct PostCellFeature {
                 return lhs == rhs
             case let (.updateFollowStatus(lhs), .updateFollowStatus(rhs)):
                 return lhs == rhs
+            case (.likedUsersResponse, .likedUsersResponse):
+                return true
             case let (.menu(lhs), .menu(rhs)):
                 return lhs == rhs
             case let (.deleteAlert(lhs), .deleteAlert(rhs)):
@@ -225,6 +235,64 @@ struct PostCellFeature {
                 state.isFollowing = isFollowing
                 return .none
 
+            case .loadLikedUsers:
+                // 이미 로딩 중이거나 이미 로드했으면 스킵
+                guard !state.isLoadingLikedUsers && state.likedUsers.isEmpty else {
+                    return .none
+                }
+
+                // likes가 없거나 비어있으면 스킵
+                guard let likes = state.post.likes, !likes.isEmpty else {
+                    return .none
+                }
+
+                // 처음 3명만 가져오기
+                let userIdsToFetch = Array(likes.prefix(3))
+                state.isLoadingLikedUsers = true
+
+                return .run { send in
+                    do {
+                        // 병렬로 프로필 조회
+                        let users = try await withThrowingTaskGroup(of: User?.self) { group in
+                            for userId in userIdsToFetch {
+                                group.addTask {
+                                    do {
+                                        let response = try await NetworkManager.shared.performRequest(
+                                            ProfileRouter.lookupOther(id: userId),
+                                            as: ProfileDTO.self
+                                        )
+                                        return response.toUser
+                                    } catch {
+                                        print("프로필 로드 실패 (userId: \(userId)): \(error)")
+                                        return nil
+                                    }
+                                }
+                            }
+
+                            var fetchedUsers: [User] = []
+                            for try await user in group {
+                                if let user = user {
+                                    fetchedUsers.append(user)
+                                }
+                            }
+                            return fetchedUsers
+                        }
+
+                        await send(.likedUsersResponse(.success(users)))
+                    } catch {
+                        await send(.likedUsersResponse(.failure(error)))
+                    }
+                }
+
+            case let .likedUsersResponse(.success(users)):
+                state.isLoadingLikedUsers = false
+                state.likedUsers = users
+                return .none
+
+            case .likedUsersResponse(.failure):
+                state.isLoadingLikedUsers = false
+                return .none
+
             case .shareTapped:
                 guard let postId = state.postId else { return .none }
                 return .send(.delegate(.sharePost(postId)))
@@ -238,17 +306,32 @@ struct PostCellFeature {
                     .debounce(id: ToggleType.follow, for: .milliseconds(300), scheduler: DispatchQueue.main)
 
             case .menuTapped:
-                state.menu = ConfirmationDialogState {
-                    TextState("게시글 관리")
-                } actions: {
-                    ButtonState(action: .editPost) {
-                        TextState("수정하기")
+                if state.isMyPost {
+                    // 내 게시물: 수정하기/삭제하기
+                    state.menu = ConfirmationDialogState {
+                        TextState("게시글 관리")
+                    } actions: {
+                        ButtonState(action: .editPost) {
+                            TextState("수정하기")
+                        }
+                        ButtonState(role: .destructive, action: .deletePost) {
+                            TextState("삭제하기")
+                        }
+                        ButtonState(role: .cancel) {
+                            TextState("취소")
+                        }
                     }
-                    ButtonState(role: .destructive, action: .deletePost) {
-                        TextState("삭제하기")
-                    }
-                    ButtonState(role: .cancel) {
-                        TextState("취소")
+                } else {
+                    // 다른 사람 게시물: 팔로우/팔로잉
+                    state.menu = ConfirmationDialogState {
+                        TextState("사용자 관리")
+                    } actions: {
+                        ButtonState(action: .toggleFollow) {
+                            TextState(state.isFollowing ? "팔로우 취소" : "팔로우")
+                        }
+                        ButtonState(role: .cancel) {
+                            TextState("취소")
+                        }
                     }
                 }
                 return .none
@@ -272,6 +355,10 @@ struct PostCellFeature {
                     TextState("삭제한 게시글을 복구할 수 없습니다.")
                 }
                 return .none
+
+            case .menu(.presented(.toggleFollow)):
+                // 팔로우 토글
+                return .send(.followTapped)
 
             case .menu:
                 return .none

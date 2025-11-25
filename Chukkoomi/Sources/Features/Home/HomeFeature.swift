@@ -70,6 +70,13 @@ struct HomeFeature {
 
             state.isLoadingMatches = true
 
+            // ⚠️ 개발용: 더미 데이터만 사용 (API 호출 주석 처리)
+            return .run { send in
+                // 더미 데이터를 바로 반환
+                await send(.loadMatchesResponse(.success([])))
+            }
+
+            /* 실제 API 호출 로직 (주석 처리됨)
             return .run { send in
                 // 1. 먼저 캐시 확인
                 if let cachedMatches = MatchCacheManager.loadMatches() {
@@ -144,6 +151,7 @@ struct HomeFeature {
                     await send(.loadMatchesResponse(.failure(error)))
                 }
             }
+            */
 
             case .toggleShowAllTeams:
                 state.isShowingAllTeams.toggle()
@@ -198,31 +206,62 @@ extension HomeFeature {
         let today = Date()
         let calendar = Calendar.current
 
-        // 더미 경기 3개 생성
+        let ulsanName = FootballTeams.ulsan.kLeagueTeam?.englishName ?? "Ulsan Hyundai FC"
+        let jeonbukName = FootballTeams.jeonbuk.kLeagueTeam?.englishName ?? "Jeonbuk Motors"
+        let pohangName = FootballTeams.pohang.kLeagueTeam?.englishName ?? "Pohang Steelers"
+        let seoulName = FootballTeams.seoul.kLeagueTeam?.englishName ?? "FC Seoul"
+        let jejuName = FootballTeams.jeju.kLeagueTeam?.englishName ?? "Jeju United"
+        let suwonFCName = FootballTeams.suwonFC.kLeagueTeam?.englishName ?? "Suwon City FC"
+
+        // 더미 경기 3개 생성 (이벤트 포함)
         return [
+            // 경기 1: 울산 vs 전북 (3:3)
             Match(
                 id: -1,
-                date: calendar.date(byAdding: .hour, value: 2, to: today) ?? today,
-                homeTeamName: FootballTeams.ulsan.kLeagueTeam?.englishName ?? "Ulsan Hyundai FC",
-                awayTeamName: FootballTeams.jeonbuk.kLeagueTeam?.englishName ?? "Jeonbuk Motors",
-                homeScore: nil,
-                awayScore: nil
+                date: calendar.date(byAdding: .hour, value: -2, to: today) ?? today,
+                homeTeamName: ulsanName,
+                awayTeamName: jeonbukName,
+                homeScore: 3,
+                awayScore: 3,
+                events: [
+                    MatchEvent(type: .goal, playerName: "Aubameyang", minute: 19, teamName: ulsanName),
+                    MatchEvent(type: .goal, playerName: "Enzo", minute: 65, teamName: ulsanName),
+                    MatchEvent(type: .yellowCard, playerName: "Silva", minute: 42, teamName: ulsanName),
+                    MatchEvent(type: .goal, playerName: "Saka", minute: 25, teamName: jeonbukName),
+                    MatchEvent(type: .goal, playerName: "Lewas", minute: 78, teamName: jeonbukName),
+                    MatchEvent(type: .goal, playerName: "Kane", minute: 88, teamName: jeonbukName),
+                    MatchEvent(type: .yellowCard, playerName: "Bruno", minute: 55, teamName: jeonbukName)
+                ]
             ),
+            // 경기 2: 포항 vs 서울 (2:1)
             Match(
                 id: -2,
-                date: calendar.date(byAdding: .hour, value: 5, to: today) ?? today,
-                homeTeamName: FootballTeams.pohang.kLeagueTeam?.englishName ?? "Pohang Steelers",
-                awayTeamName: FootballTeams.seoul.kLeagueTeam?.englishName ?? "FC Seoul",
-                homeScore: nil,
-                awayScore: nil
+                date: calendar.date(byAdding: .hour, value: 2, to: today) ?? today,
+                homeTeamName: pohangName,
+                awayTeamName: seoulName,
+                homeScore: 2,
+                awayScore: 1,
+                events: [
+                    MatchEvent(type: .goal, playerName: "Son", minute: 12, teamName: pohangName),
+                    MatchEvent(type: .goal, playerName: "Lee", minute: 67, teamName: pohangName),
+                    MatchEvent(type: .goal, playerName: "Park", minute: 45, teamName: seoulName),
+                    MatchEvent(type: .yellowCard, playerName: "Kim", minute: 30, teamName: seoulName),
+                    MatchEvent(type: .redCard, playerName: "Choi", minute: 82, teamName: seoulName)
+                ]
             ),
+            // 경기 3: 제주 vs 수원FC (0:0)
             Match(
                 id: -3,
-                date: calendar.date(byAdding: .hour, value: 7, to: today) ?? today,
-                homeTeamName: FootballTeams.jeju.kLeagueTeam?.englishName ?? "Jeju United",
-                awayTeamName: FootballTeams.suwonFC.kLeagueTeam?.englishName ?? "Suwon City FC",
-                homeScore: nil,
-                awayScore: nil
+                date: calendar.date(byAdding: .hour, value: 5, to: today) ?? today,
+                homeTeamName: jejuName,
+                awayTeamName: suwonFCName,
+                homeScore: 0,
+                awayScore: 0,
+                events: [
+                    MatchEvent(type: .yellowCard, playerName: "Jung", minute: 23, teamName: jejuName),
+                    MatchEvent(type: .yellowCard, playerName: "Kang", minute: 67, teamName: jejuName),
+                    MatchEvent(type: .yellowCard, playerName: "Hwang", minute: 51, teamName: suwonFCName)
+                ]
             )
         ]
     }

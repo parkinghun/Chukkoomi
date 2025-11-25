@@ -92,11 +92,11 @@ struct PostView: View {
                     store.scope(state: \.postCells, action: \.postCell)
                 ) { cellStore in
                     PostCellView(store: cellStore)
-                    Divider()
-                        .padding(.vertical, 8)
                 }
             }
+            .padding(.top, 8)
         }
+        .background(Color(uiColor: .systemGray6))
     }
 
     // MARK: - Empty State

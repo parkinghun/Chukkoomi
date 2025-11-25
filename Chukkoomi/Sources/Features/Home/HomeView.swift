@@ -7,28 +7,46 @@
 
 import SwiftUI
 import ComposableArchitecture
+import AVKit
 
 struct HomeView: View {
     let store: StoreOf<HomeFeature>
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 24) {
-                cheeringSection()
+            VStack(alignment: .leading, spacing: 0) {
+                // 영상 섹션 (lightGray 배경 영역)
+                VStack(spacing: 0) {
+                    videoSection()
+                        .padding(.top, 16)
+                        .padding(.bottom, 24)
+                }
+                .background(Color(uiColor: .systemGray6))
 
-                matchScheduleSection()
+                VStack(alignment: .leading, spacing: 24) {
+                    teamsSection()
+                        .padding(.top, 24)
 
-                teamsSection()
+                    matchScheduleSection()
+                }
+                .padding(.bottom, 40)
+                .background(Color.white)
+                .clipShape(
+                    .rect(
+                        topLeadingRadius: 30,
+                        bottomLeadingRadius: 0,
+                        bottomTrailingRadius: 0,
+                        topTrailingRadius: 24
+                    )
+                )
             }
-            .padding(.top, 16)
         }
+        .background(Color(uiColor: .systemGray6))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .topBarLeading) {
-                    Image("Chukkoomi")
-                        .renderingMode(.original)
-                        .resizable()
-                        .frame(width: 158, height: 28)
+                Text("CHUKKOOMI")
+                    .font(.luckiestGuyLarge)
             }
         }
         .onAppear {
@@ -37,39 +55,58 @@ struct HomeView: View {
         // 네비게이션 연결
         .modifier(HomeNavigation(store: store))
     }
-    
-    // MARK: - 응원 섹션
-    private func cheeringSection() -> some View {
-        HStack(spacing: 12) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("ooo님 우리팀")
-                    .font(.title3)
-                    .fontWeight(.bold)
-                Text("응원하러 가볼까요?")
-                    .font(.title3)
-                    .fontWeight(.bold)
-            }
 
-            Spacer()
-
-            // 대체 이미지 (축구공 캐릭터)
-            Image(systemName: "figure.soccer")
-                .font(.system(size: 80))
-                .foregroundColor(.red)
+    // MARK: - 영상 섹션
+    private func videoSection() -> some View {
+        VStack(spacing: 0) {
+            // 영상 플레이어 (16:9 비율)
+            Color.black
+                .aspectRatio(16/9, contentMode: .fit)
+                .overlay {
+                    // TODO: 실제 영상 URL을 받아서 VideoPlayer 구현
+                    VStack {
+                        Image(systemName: "play.circle.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.white.opacity(0.8))
+                        Text("영상 플레이어")
+                            .font(.headline)
+                            .foregroundColor(.white.opacity(0.8))
+                            .padding(.top, 8)
+                    }
+                }
+                .cornerRadius(20)
+                .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(Color(.systemGray6))
-        .cornerRadius(12)
-        .padding(.horizontal, 20)
+    }
+
+    // MARK: - 구단 목록 섹션
+    private func teamsSection() -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("TEAM")
+                .font(.luckiestGuyMedium)
+//                .font(.title2)
+//                .fontWeight(.bold)
+                .padding(.horizontal, 20)
+
+            // 가로 스크롤
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 16) {
+                    ForEach(store.teams, id: \.self) { team in
+                        TeamLogoButton(team: team, onTap: {
+                            store.send(.teamTapped(team))
+                        })
+                    }
+                }
+                .padding(.horizontal, 20)
+            }
+        }
     }
 
     // MARK: - 경기 일정 섹션
     private func matchScheduleSection() -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text("오늘 경기 일정")
-                .font(.title2)
-                .fontWeight(.bold)
+        VStack(alignment: .leading, spacing: 16) {
+            Text("TODAY'S")
+                .font(.luckiestGuyMedium)
                 .padding(.horizontal, 20)
 
             if store.isLoadingMatches {
@@ -88,56 +125,14 @@ struct HomeView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
             } else {
-                TabView {
+                // 모든 경기 표시 (스크롤 가능)
+                VStack(spacing: 16) {
                     ForEach(store.matches) { match in
                         MatchCard(match: match)
                             .padding(.horizontal, 20)
                     }
                 }
-                .tabViewStyle(.page(indexDisplayMode: .always))
-                .frame(height: 180)
             }
-        }
-    }
-
-    // MARK: - 구단 목록 섹션
-    private func teamsSection() -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Text("구단 목록")
-                    .font(.title2)
-                    .fontWeight(.bold)
-
-                Spacer()
-
-                Text(store.isShowingAllTeams ? "접기" : "더보기")
-                    .font(.subheadline)
-                    .foregroundColor(AppColor.divider)
-                    .buttonWrapper {
-                        store.send(.toggleShowAllTeams)
-                    }
-            }
-            .padding(.horizontal, 20)
-
-            let columns = [
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-                GridItem(.flexible()),
-                GridItem(.flexible())
-            ]
-
-            let displayedTeams = store.isShowingAllTeams
-                ? store.teams
-                : Array(store.teams.prefix(4))
-
-            LazyVGrid(columns: columns, spacing: 20) {
-                ForEach(displayedTeams, id: \.self) { team in
-                    TeamLogoButton(team: team, onTap: {
-                        store.send(.teamTapped(team))
-                    })
-                }
-            }
-            .padding(.horizontal, 20)
         }
     }
 }
@@ -188,14 +183,22 @@ struct MatchCard: View {
         KLeagueTeam.find(by: match.awayTeamName)
     }
 
-    var body: some View {
-        VStack(spacing: 16) {
-            // 경기 날짜/시간 (수평 센터)
-            Text(match.date.matchDateString)
-                .font(.subheadline)
-                .foregroundColor(AppColor.divider)
-                .frame(maxWidth: .infinity, alignment: .center)
+    // 홈팀 이벤트 (골/카드)
+    private var homeTeamEvents: [MatchEvent] {
+        match.events
+            .filter { $0.teamName == match.homeTeamName }
+            .sorted { $0.minute < $1.minute }
+    }
 
+    // 원정팀 이벤트 (골/카드)
+    private var awayTeamEvents: [MatchEvent] {
+        match.events
+            .filter { $0.teamName == match.awayTeamName }
+            .sorted { $0.minute < $1.minute }
+    }
+
+    var body: some View {
+        VStack(spacing: 12) {
             // 경기 정보
             HStack(spacing: 20) {
                 // 홈 팀
@@ -222,8 +225,7 @@ struct MatchCard: View {
                 // 스코어
                 if let homeScore = match.homeScore, let awayScore = match.awayScore {
                     Text("\(homeScore) : \(awayScore)")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                        .font(.luckiestGuyLarge)
                         .foregroundColor(.primary)
                 } else {
                     Text("VS")
@@ -252,9 +254,102 @@ struct MatchCard: View {
                 }
                 .frame(maxWidth: .infinity)
             }
+
+            // 경기 이벤트 표시
+            if !match.events.isEmpty {
+                Divider()
+                    .padding(.vertical, 8)
+
+                HStack(alignment: .top, spacing: 16) {
+                    // 홈팀 이벤트 (가운데로 몰리게 - trailing 정렬)
+                    VStack(alignment: .trailing, spacing: 8) {
+                        ForEach(homeTeamEvents) { event in
+                            EventRow(event: event, isHomeTeam: true)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+
+                    // 원정팀 이벤트 (가운데로 몰리게 - leading 정렬)
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(awayTeamEvents) { event in
+                            EventRow(event: event, isHomeTeam: false)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
         }
         .padding(16)
+        .background(Color.white)
         .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color(uiColor: .systemGray5), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - 이벤트 행
+struct EventRow: View {
+    let event: MatchEvent
+    let isHomeTeam: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            if isHomeTeam {
+                // 홈팀: 이름 - 아이콘 - 시간 (trailing 정렬)
+                Text(event.playerName)
+                    .font(.caption)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+
+                eventIcon
+                    .frame(width: 20, height: 20)
+
+                Text("\(event.minute)'")
+                    .font(.caption2)
+                    .foregroundColor(AppColor.divider)
+            } else {
+                // 원정팀: 시간 - 아이콘 - 이름 (leading 정렬)
+                Text("\(event.minute)'")
+                    .font(.caption2)
+                    .foregroundColor(AppColor.divider)
+
+                eventIcon
+                    .frame(width: 20, height: 20)
+
+                Text(event.playerName)
+                    .font(.caption)
+                    .foregroundColor(.primary)
+                    .lineLimit(1)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var eventIcon: some View {
+        switch event.type {
+        case .goal:
+            // 골 아이콘 - "기본 프로필2" 이미지 사용
+            Image("기본 프로필2")
+                .resizable()
+                .scaledToFit()
+                .clipShape(Circle())
+
+        case .yellowCard:
+            // 옐로우 카드 - 나중에 이미지로 대체 예정
+            Rectangle()
+                .fill(Color.yellow)
+                .frame(width: 14, height: 18)
+                .cornerRadius(2)
+
+        case .redCard:
+            // 레드 카드 - 나중에 이미지로 대체 예정
+            Rectangle()
+                .fill(Color.red)
+                .frame(width: 14, height: 18)
+                .cornerRadius(2)
+        }
     }
 }
 
