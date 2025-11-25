@@ -20,6 +20,11 @@ struct HomeFeature {
         var isLoading: Bool = false
         var isLoadingMatches: Bool = false
 
+        // 비디오 관련
+        var videoThumbnailURL: String? = nil // 나중에 서버에서 받을 썸네일 URL
+        var videoURL: String? = nil // 나중에 서버에서 받을 비디오 URL
+        var isShowingFullscreenVideo: Bool = false
+
         // PostView 네비게이션
         @Presents var postList: PostFeature.State?
 
@@ -36,6 +41,10 @@ struct HomeFeature {
         case teamTapped(FootballTeams) // 팀 카테고리
         case matchTapped(Match) // match
 
+        // 비디오 관련
+        case videoThumbnailTapped
+        case dismissFullscreenVideo
+
         // PostView 네비게이션
         case postList(PresentationAction<PostFeature.Action>)
 
@@ -46,7 +55,9 @@ struct HomeFeature {
             switch (lhs, rhs) {
             case (.onAppear, .onAppear),
                  (.toggleShowAllTeams, .toggleShowAllTeams),
-                 (.loadMatches, .loadMatches):
+                 (.loadMatches, .loadMatches),
+                 (.videoThumbnailTapped, .videoThumbnailTapped),
+                 (.dismissFullscreenVideo, .dismissFullscreenVideo):
                 return true
             case let (.teamTapped(lhsTeam), .teamTapped(rhsTeam)):
                 return lhsTeam == rhsTeam
@@ -203,6 +214,14 @@ struct HomeFeature {
             case let .loadMatchesResponse(.failure(error)):
                 state.isLoadingMatches = false
                 print("경기 데이터 로드 실패: \(error)")
+                return .none
+
+            case .videoThumbnailTapped:
+                state.isShowingFullscreenVideo = true
+                return .none
+
+            case .dismissFullscreenVideo:
+                state.isShowingFullscreenVideo = false
                 return .none
 
             case .postList:
