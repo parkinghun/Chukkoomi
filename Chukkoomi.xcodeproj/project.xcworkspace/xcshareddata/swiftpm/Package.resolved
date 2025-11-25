@@ -1,5 +1,5 @@
 {
-  "originHash" : "a9e56cd2c42a3d5bb20cd7f74e2838c445866081159d202cb6e757d1fd551397",
+  "originHash" : "6a4e63cb8dc12eb5fc89a3dd7175b695757a5d4507cc0ef33661f877de8f36e6",
   "pins" : [
     {
       "identity" : "alamofire",
@@ -22,7 +22,7 @@
     {
       "identity" : "kakao-ios-sdk",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/kakao/kakao-ios-sdk",
+      "location" : "https://github.com/kakao/kakao-ios-sdk.git",
       "state" : {
         "revision" : "f04b5655f3528e8c21a0ff7db047eeb138135394",
         "version" : "2.26.0"
@@ -53,6 +53,24 @@
       "state" : {
         "revision" : "6260534683132eb981338c7c39fd5e69205876e6",
         "version" : "20.0.3"
+      }
+    },
+    {
+      "identity" : "socket.io-client-swift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/socketio/socket.io-client-swift",
+      "state" : {
+        "revision" : "42da871d9369f290d6ec4930636c40672143905b",
+        "version" : "16.1.1"
+      }
+    },
+    {
+      "identity" : "starscream",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/daltoniam/Starscream",
+      "state" : {
+        "revision" : "c6bfd1af48efcc9a9ad203665db12375ba6b145a",
+        "version" : "4.0.8"
       }
     },
     {

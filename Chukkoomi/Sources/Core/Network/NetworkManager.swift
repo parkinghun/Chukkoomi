@@ -39,8 +39,7 @@ extension NetworkManager {
             // 토큰 갱신 성공 -> 원래 요청 재시도
             return try await performRequestWithoutInterception(router, as: type, progress: progress)
         } catch NetworkError.statusCode(418, _) {
-            // 418 에러 (RefreshToken 만료) -> 자동 로그아웃
-            await TokenRefreshManager.shared.handleTokenExpiration()
+            // 418 에러 (RefreshToken 만료) -> 에러만 throw
             throw NetworkError.refreshTokenExpired
         }
     }
@@ -60,8 +59,7 @@ extension NetworkManager {
             // 토큰 갱신 성공 -> 원래 요청 재시도
             try await performRequestWithoutResponseAndInterception(router)
         } catch NetworkError.statusCode(418, _) {
-            // 418 에러 (RefreshToken 만료) -> 자동 로그아웃
-            await TokenRefreshManager.shared.handleTokenExpiration()
+            // 418 에러 (RefreshToken 만료) -> 에러만 throw
             throw NetworkError.refreshTokenExpired
         }
     }

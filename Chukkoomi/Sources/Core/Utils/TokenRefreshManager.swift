@@ -52,7 +52,6 @@ actor TokenRefreshManager {
     private func performTokenRefresh() async -> Bool {
         // Keychain에서 RefreshToken 가져오기
         guard let refreshToken = KeychainManager.shared.load(for: .refreshToken) else {
-            await handleLogout()
             return false
         }
 
@@ -71,44 +70,11 @@ actor TokenRefreshManager {
 
             return true
 
-        } catch let error as NetworkError {
-            // NetworkError인 경우 에러 종류에 따라 처리
-            switch error {
-            case .statusCode(418, _), .statusCode(401, _), .refreshTokenExpired:
-                // RefreshToken 만료 또는 인증 실패 - 로그아웃 필요
-                await handleLogout()
-                return false
-
-            default:
-                // 기타 서버 에러 또는 네트워크 에러 - 로그아웃하지 않음
-                return false
-            }
         } catch {
-            // 기타 에러 (URLError 등) - 로그아웃하지 않음
+            // 토큰 갱신 실패 - 단순히 실패 반환
+            // 로그아웃 처리는 상위 레벨에서 refreshTokenExpired 에러를 받아 처리
             return false
         }
     }
 
-    // MARK: - 토큰 만료 처리 (외부 호출용)
-    /// RefreshToken 만료 시 호출되는 메서드 (418 에러)
-    func handleTokenExpiration() async {
-        await handleLogout()
-    }
-
-    // MARK: - 로그아웃 처리
-    private func handleLogout() async {
-        // Keychain 토큰 삭제
-        KeychainManager.shared.deleteAll()
-
-        // 메인 스레드에서 로그아웃 처리
-        await MainActor.run {
-            // TODO: 로그아웃 상태로 전환 (예: 로그인 화면으로 이동)
-            NotificationCenter.default.post(name: .userDidLogout, object: nil)
-        }
-    }
-}
-
-// MARK: - Notification Name
-extension Notification.Name {
-    static let userDidLogout = Notification.Name("userDidLogout")
 }

@@ -38,20 +38,16 @@ struct AppFeature {
             case .onAppear:
                 // 앱 시작 시 인증 상태 체크
                 return .run { send in
-                    var hasValidToken = await checkAuthentication()
-
-                    // 토큰은 있는데 userId가 없으면 프로필 조회
-                    if hasValidToken, UserDefaultsHelper.userId == nil {
-                        do {
-                            let profile = try await NetworkManager.shared.performRequest(ProfileRouter.lookupMe, as: ProfileDTO.self).toDomain
-                            UserDefaultsHelper.userId = profile.userId
-                        } catch {
-                            // 프로필 조회 실패 시 로그인 화면으로
-                            hasValidToken = false
-                        }
+                    do {
+                        let hasValidToken = try await checkAuthentication()
+                        await send(.checkAuthenticationResult(hasValidToken))
+                    } catch NetworkError.refreshTokenExpired {
+                        // RefreshToken 만료 - 로그아웃 처리
+                        await send(.logout)
+                    } catch {
+                        // 기타 에러 - 로그인 화면으로
+                        await send(.checkAuthenticationResult(false))
                     }
-
-                    await send(.checkAuthenticationResult(hasValidToken))
                 }
 
             case let .checkAuthenticationResult(isAuthenticated):
@@ -122,20 +118,42 @@ struct AppFeature {
     }
 
     // MARK: - Helper Methods
-    /// 인증 상태를 확인합니다 (Keychain에 토큰 존재 여부)
-    private func checkAuthentication() async -> Bool {
-        // Keychain에서 accessToken 확인
+    /// 인증 상태를 확인합니다 (실제 API 호출로 토큰 유효성 검증)
+    private func checkAuthentication() async throws -> Bool {
+        // 1. Keychain에서 토큰 확인
         guard let accessToken = KeychainManager.shared.load(for: .accessToken),
               !accessToken.isEmpty else {
             return false
         }
 
-        // refreshToken도 확인
         guard let refreshToken = KeychainManager.shared.load(for: .refreshToken),
               !refreshToken.isEmpty else {
             return false
         }
 
-        return true
+        // 2. 실제 API 호출로 토큰 유효성 검증 (프로필 조회)
+        do {
+            let profile = try await NetworkManager.shared.performRequest(
+                ProfileRouter.lookupMe,
+                as: ProfileDTO.self
+            ).toDomain
+
+            // 프로필 조회 성공 - userId 저장
+            UserDefaultsHelper.userId = profile.userId
+            return true
+
+        } catch NetworkError.refreshTokenExpired {
+            // RefreshToken 만료 (418) - 에러를 상위로 전파하여 로그아웃 처리
+            throw NetworkError.refreshTokenExpired
+
+        } catch NetworkError.unauthorized {
+            // 토큰 갱신 실패 - 로그인 필요
+            return false
+
+        } catch {
+            // 기타 에러 (네트워크 에러 등) - 일단 로그인 상태로 간주
+            // 실제 API 호출 시 다시 검증됨
+            return true
+        }
     }
 }

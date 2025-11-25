@@ -34,8 +34,5 @@ struct AppView: View {
         .onAppear {
             store.send(.onAppear)
         }
-        .onReceive(NotificationCenter.default.publisher(for: .userDidLogout)) { _ in
-            store.send(.logout)
-        }
     }
 }
