@@ -24,4 +24,8 @@ extension Font {
     /// 유효성 검사
     static var appCaption: Font = .system(size: 13, weight: .semibold)
     
+    //MARK: - luckiestGuy 폰트
+    static var luckiestGuyLarge: Font = .custom("LuckiestGuy-Regular", size: 30)
+    static var luckiestGuyMedium: Font = .custom("LuckiestGuy-Regular", size: 24)
+    
 }
