@@ -68,20 +68,9 @@ struct MatchInfoFeature {
                         )
 
                         let matchDetail = try response.toDomain
-                        print("✅ Match Detail 받아오기 성공:")
-                        print("ID: \(matchDetail.id)")
-                        print("홈 골키퍼: \(matchDetail.homeKeeper.name)(\(matchDetail.homeKeeper.number))")
-                        print("홈 수비수: \(matchDetail.homeDefends.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
-                        print("홈 미드필더: \(matchDetail.homeMidFields.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
-                        print("홈 공격수: \(matchDetail.homeForwards.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
-                        print("원정 골키퍼: \(matchDetail.awayKeeper.name)(\(matchDetail.awayKeeper.number))")
-                        print("원정 수비수: \(matchDetail.awayDefends.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
-                        print("원정 미드필더: \(matchDetail.awayMidFields.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
-                        print("원정 공격수: \(matchDetail.awayForwards.map { "\($0.name)(\($0.number))" }.joined(separator: ","))")
-
                         await send(.fetchMatchDetailResponse(.success(matchDetail)))
                     } catch {
-                        print("❌ Match Detail 받아오기 실패: \(error)")
+                        print("Match Detail 받아오기 실패: \(error)")
                         await send(.fetchMatchDetailResponse(.failure(error)))
                     }
                 }
