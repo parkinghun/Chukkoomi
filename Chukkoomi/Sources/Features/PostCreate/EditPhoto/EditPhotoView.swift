@@ -338,7 +338,7 @@ struct EditPhotoView: View {
                 Text(mode.rawValue)
                     .font(Font.caption)
             }
-            .foregroundColor(store.selectedEditMode == mode ? Color.blue : Color.gray)
+            .foregroundColor(store.selectedEditMode == mode ? Color.black : Color.gray)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
         }
