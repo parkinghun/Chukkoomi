@@ -68,7 +68,6 @@ struct PostCellView: View {
                     .overlay(
                         Circle()
                             .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-//                            .stroke(Color.black.opacity(0.8), lineWidth: 1)
                     )
                 } else {
                     Circle()
@@ -233,7 +232,6 @@ struct PostCellView: View {
                         .overlay(
                             Circle()
                                 .stroke(Color.gray.opacity(0.3), lineWidth: 1)
-//                                .stroke(Color.black.opacity(0.8), lineWidth: 1)
 
                         )
                         .offset(x: CGFloat(index) * 16)
