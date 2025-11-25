@@ -224,9 +224,9 @@ struct ChatListProfileImageView: View {
         let imageName: String = {
             switch selectedTheme {
             case .theme2, .theme3:
-                return "기본 프로필2"
+                return "DefaultProfile2"
             default:
-                return "기본 프로필"
+                return "DefaultProfile"
             }
         }()
 

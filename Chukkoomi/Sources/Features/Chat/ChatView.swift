@@ -1052,7 +1052,7 @@ struct SharedPostCardView: View {
                             .resizable()
                             .scaledToFill()
                     } else {
-                        Image("기본 프로필")
+                        Image("DefaultProfile")
                             .resizable()
                             .scaledToFill()
                     }
@@ -1171,9 +1171,9 @@ struct ProfileImageView: View {
         let imageName: String = {
             switch selectedTheme {
             case .theme2, .theme3:
-                return "기본 프로필2"
+                return "DefaultProfile2"
             default:
-                return "기본 프로필"
+                return "DefaultProfile"
             }
         }()
 

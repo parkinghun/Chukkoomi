@@ -23,7 +23,7 @@ struct PostCellView: View {
                     .frame(maxWidth: .infinity)
 
                 actionBarView
-                    .padding(.leading, 4)
+                    .padding(.leading, 6)
             }
             .padding(.bottom,AppPadding.medium)
 
@@ -136,23 +136,32 @@ struct PostCellView: View {
         if let firstFile = store.post.files.first {
             let isVideo = MediaTypeHelper.isVideoPath(firstFile)
 
-            if isVideo {
-                // 비디오 재생
-                URLMediaPlayerView(mediaPath: firstFile)
+            GeometryReader { geometry in
+                let availableWidth = geometry.size.width
+                let imageHeight = availableWidth / (16.0 / 9.0)
+
+                if isVideo {
+                    // 비디오 재생
+                    URLMediaPlayerView(mediaPath: firstFile)
+                        .aspectRatio(16/9, contentMode: .fit)
+                        .clipped()
+                        .cornerRadius(12)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                } else {
+                    // 이미지 표시
+                    AsyncMediaImageView(
+                        imagePath: firstFile,
+                        width: availableWidth,
+                        height: imageHeight,
+                        onImageLoaded: { _ in }
+                    )
                     .aspectRatio(16/9, contentMode: .fit)
                     .clipped()
                     .cornerRadius(12)
-            } else {
-                // 이미지 표시
-                AsyncMediaImageView(
-                    imagePath: firstFile,
-                    width: 320,
-                    height: 180
-                )
-                .aspectRatio(16/9, contentMode: .fit)
-                .clipped()
-                .cornerRadius(12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
             }
+            .aspectRatio(16/9, contentMode: .fit)
         }
     }
 
@@ -207,17 +216,18 @@ struct PostCellView: View {
     private func menuButtonView() -> some View {
         AppIcon.ellipsis
             .font(.system(size: 20))
-            .frame(width: 40, height: 40)
+            .frame(width: 20, height: 40)
             .foregroundStyle(.black)
             .rotationEffect(.degrees(90))
             .buttonWrapper {
                 store.send(.menuTapped)
             }
+            .padding(.trailing, 4)
     }
 
     // MARK: - Liked Users View
     private var likedUsersView: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 0) {
             // 프로필 이미지들 (겹쳐서 표시)
             ZStack(alignment: .leading) {
                 ForEach(Array(store.likedUsers.prefix(3).enumerated()), id: \.offset) { index, user in
@@ -240,28 +250,34 @@ struct PostCellView: View {
                             .fill(Color.gray.opacity(0.3))
                             .frame(width: 24, height: 24)
                             .overlay(
+                                Image(systemName: "person.fill")
+                                    .font(.system(size: 12))
+                                    .foregroundColor(.gray)
+                            )
+                            .overlay(
                                 Circle()
-                                    .stroke(Color.white, lineWidth: 2)
+                                    .stroke(Color.gray.opacity(0.3), lineWidth: 1)
                             )
                             .offset(x: CGFloat(index) * 16)
                     }
                 }
             }
-            .frame(width: CGFloat(max(1, store.likedUsers.count)) * 16 + 8)
-            .padding(.trailing, 4)
+            .frame(
+                width: CGFloat(max(1, store.likedUsers.count) - 1) * 16 + 24,
+                alignment: .leading
+            )
 
-//            Spacer()
+            // 고정된 간격 (8px)
+            Spacer()
+                .frame(width: 8)
+
             // 좋아요 텍스트
             if let firstName = store.likedUsers.first?.nickname {
-                if store.likeCount == 1{
-                    Text("\(firstName)님이 좋아합니다.")
-                        .font(.caption)
-                        .foregroundColor(.primary)
-                } else {
-                    Text("\(firstName)님 외 \(formatLikeCount(store.likeCount - 1))명이 좋아합니다.")
-                        .font(.caption)
-                        .foregroundColor(.primary)
-                }
+                Text(store.likeCount == 1
+                    ? "\(firstName)님이 좋아합니다."
+                    : "\(firstName)님 외 \(formatLikeCount(store.likeCount - 1))명이 좋아합니다.")
+                    .font(.caption)
+                    .foregroundColor(.primary)
             } else {
                 Text("\(formatLikeCount(store.likeCount))명이 좋아요를 눌렀습니다")
                     .font(.caption)

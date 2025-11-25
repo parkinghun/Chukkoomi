@@ -13,7 +13,6 @@ struct Post: Identifiable, Equatable {
     let title: String
     let price: Int
     let content: String
-#warning("values - 데이터 확정 시 수정 필요")
     let values: [String]
     let createdAt: Date?
     let creator: User?

@@ -54,11 +54,11 @@ struct ChatFeature: Reducer {
 
         var imageName: String? {
             switch self {
-            case .default: return "기본 테마"
-            case .theme1: return "테마1"
-            case .theme2: return "테마2"
-            case .theme3: return "테마3"
-            case .theme4: return "테마4"
+            case .default: return "Default Theme"
+            case .theme1: return "Theme1"
+            case .theme2: return "Theme2"
+            case .theme3: return "Theme3"
+            case .theme4: return "Theme4"
             }
         }
     }
@@ -291,14 +291,13 @@ struct ChatFeature: Reducer {
         case .messageSent(let message, let localId):
             state.isSending = false
 
-            // localId가 있으면 임시 메시지를 교체, 없으면 새로 추가 (페이지네이션으로 로드된 메시지)
+            // localId가 있으면 임시 메시지를 교체
+            // localId가 없으면 무시 (WebSocket이나 페이지네이션에서 처리)
             if let localId = localId,
                let index = state.messages.firstIndex(where: { $0.localId == localId }) {
                 state.messages[index] = message
                 // 파일 Data 정리
                 state.pendingFileUploads.removeValue(forKey: localId)
-            } else {
-                state.messages.append(message)
             }
 
             // Realm에 저장
@@ -647,6 +646,11 @@ struct ChatFeature: Reducer {
         case .webSocketMessageReceived(let newMessages):
             // 실시간으로 받은 메시지를 추가
             for message in newMessages {
+                // 내가 보낸 메시지는 무시 (.messageSent에서 이미 처리됨)
+                guard message.sender.userId != state.myUserId else {
+                    continue
+                }
+
                 // 중복 메시지 체크 (chatId 기준)
                 if !state.messages.contains(where: { $0.chatId == message.chatId }) {
                     state.messages.append(message)
@@ -665,16 +669,6 @@ struct ChatFeature: Reducer {
                             }
                         }
                     }
-                }
-
-                // localId로 전송 중인 메시지가 있다면 교체 (내가 보낸 메시지가 서버에서 다시 돌아온 경우)
-                if let index = state.messages.firstIndex(where: {
-                    $0.localId != nil &&
-                    $0.sender.userId == message.sender.userId &&
-                    $0.content == message.content &&
-                    $0.sendStatus == .sending
-                }) {
-                    state.messages[index] = message
                 }
             }
             return .none

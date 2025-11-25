@@ -2,10 +2,6 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-	<key>UIAppFonts</key>
-	<array>
-		<string>LuckiestGuy.ttf</string>
-	</array>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
@@ -32,17 +28,21 @@
 	</dict>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>프로필 사진 및 게시물에 사용할 사진을 선택하기 위해 앨범 접근 권한이 필요합니다.</string>
+	<key>UIAppFonts</key>
+	<array>
+		<string>LuckiestGuy.ttf</string>
+	</array>
 	<key>UTExportedTypeDeclarations</key>
 	<array>
 		<dict>
-			<key>UTTypeIdentifier</key>
-			<string>com.chukkoomi.imagefilter</string>
-			<key>UTTypeDescription</key>
-			<string>Image Filter Type</string>
 			<key>UTTypeConformsTo</key>
 			<array>
 				<string>public.data</string>
 			</array>
+			<key>UTTypeDescription</key>
+			<string>Image Filter Type</string>
+			<key>UTTypeIdentifier</key>
+			<string>com.chukkoomi.imagefilter</string>
 		</dict>
 	</array>
 </dict>

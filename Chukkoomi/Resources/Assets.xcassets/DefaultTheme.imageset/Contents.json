@@ -1,17 +1,17 @@
 {
   "images" : [
     {
-      "filename" : "Chukkoomi 캐릭터.png",
+      "filename" : "field1.png",
       "idiom" : "universal",
       "scale" : "1x"
     },
     {
-      "filename" : "Chukkoomi 캐릭터 1.png",
+      "filename" : "field2.png",
       "idiom" : "universal",
       "scale" : "2x"
     },
     {
-      "filename" : "Chukkoomi 캐릭터 2.png",
+      "filename" : "field3.png",
       "idiom" : "universal",
       "scale" : "3x"
     }

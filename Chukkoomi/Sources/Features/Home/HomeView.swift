@@ -59,23 +59,45 @@ struct HomeView: View {
     // MARK: - 영상 섹션
     private func videoSection() -> some View {
         VStack(spacing: 0) {
-            // 영상 플레이어 (16:9 비율)
-            Color.black
-                .aspectRatio(16/9, contentMode: .fit)
-                .overlay {
-                    // TODO: 실제 영상 URL을 받아서 VideoPlayer 구현
-                    VStack {
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.white.opacity(0.8))
-                        Text("영상 플레이어")
-                            .font(.headline)
-                            .foregroundColor(.white.opacity(0.8))
-                            .padding(.top, 8)
-                    }
+            // 비디오 썸네일 (16:9 비율)
+            ZStack {
+                // 썸네일 이미지 (나중에 서버에서 받을 예정)
+                if let thumbnailURL = store.videoThumbnailURL {
+                    AsyncMediaImageView(
+                        imagePath: thumbnailURL,
+                        width: 350,
+                        height: 197
+                    )
+                    .aspectRatio(16/9, contentMode: .fill)
+                    .clipped()
+                } else {
+                    // 썸네일이 없을 때 플레이스홀더
+                    Image("highlight2")
+                        .resizable()
+//                    Color.black
+                        .aspectRatio(16/9, contentMode: .fit)
                 }
-                .cornerRadius(20)
-                .padding(.horizontal, 20)
+
+                // 재생 버튼 오버레이
+//                Image(systemName: "play.circle.fill")
+//                    .font(.system(size: 60))
+//                    .foregroundColor(.white.opacity(0.8))
+            }
+            .cornerRadius(20)
+            .padding(.horizontal, 20)
+            .buttonWrapper {
+                store.send(.videoThumbnailTapped)
+            }
+        }
+        .fullScreenCover(isPresented: Binding(
+            get: { store.isShowingFullscreenVideo },
+            set: { if !$0 { store.send(.dismissFullscreenVideo) } }
+        )) {
+            if let videoURL = store.videoURL {
+                FullscreenVideoPlayerView(videoURL: videoURL) {
+                    store.send(.dismissFullscreenVideo)
+                }
+            }
         }
     }
 
@@ -341,7 +363,7 @@ struct EventRow: View {
         switch event.type {
         case .goal:
             // 골 아이콘 - "기본 프로필2" 이미지 사용
-            Image("기본 프로필2")
+            Image("DefaultProfile2")
                 .resizable()
                 .scaledToFit()
                 .clipShape(Circle())
@@ -359,6 +381,117 @@ struct EventRow: View {
                 .fill(Color.red)
                 .frame(width: 14, height: 18)
                 .cornerRadius(2)
+        }
+    }
+}
+
+// MARK: - Fullscreen Video Player
+struct FullscreenVideoPlayerView: View {
+    let videoURL: String
+    let onDismiss: () -> Void
+
+    @State private var player: AVPlayer?
+    @State private var isLoading = true
+
+    var body: some View {
+        ZStack {
+            Color.black.ignoresSafeArea()
+
+            if let player = player {
+                VideoPlayer(player: player)
+                    .ignoresSafeArea()
+                    .onAppear {
+                        player.play()
+                    }
+                    .onDisappear {
+                        player.pause()
+                    }
+            } else if isLoading {
+                ProgressView()
+                    .tint(.white)
+                    .scaleEffect(1.5)
+            } else {
+                // 로드 실패
+                VStack(spacing: 16) {
+                    Image(systemName: "exclamationmark.triangle")
+                        .font(.system(size: 50))
+                        .foregroundColor(.white)
+                    Text("동영상을 불러올 수 없습니다")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                }
+            }
+
+            // 닫기 버튼
+            VStack {
+                HStack {
+                    Spacer()
+                    Button {
+                        onDismiss()
+                    } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 20, weight: .semibold))
+                            .foregroundColor(.white)
+                            .frame(width: 44, height: 44)
+                            .background(Color.black.opacity(0.5))
+                            .clipShape(Circle())
+                    }
+                    .padding()
+                }
+                Spacer()
+            }
+        }
+        .task {
+            await loadVideo()
+        }
+    }
+
+    private func loadVideo() async {
+        isLoading = true
+
+        do {
+            let videoData: Data
+
+            // 외부 URL 또는 서버 데이터 로드
+            if videoURL.hasPrefix("http://") || videoURL.hasPrefix("https://") {
+                // 외부 URL: URLSession으로 다운로드
+                guard let url = URL(string: videoURL) else {
+                    isLoading = false
+                    return
+                }
+                let (data, _) = try await URLSession.shared.data(from: url)
+                videoData = data
+            } else {
+                // 서버에서 다운로드
+                videoData = try await NetworkManager.shared.download(
+                    MediaRouter.getData(path: videoURL)
+                )
+            }
+
+            // 임시 파일로 저장 (AVPlayer는 URL 필요)
+            let tempURL = FileManager.default.temporaryDirectory
+                .appendingPathComponent(UUID().uuidString)
+                .appendingPathExtension("mp4")
+
+            try videoData.write(to: tempURL)
+
+            // AVPlayer 생성
+            let playerItem = AVPlayerItem(url: tempURL)
+            let avPlayer = AVPlayer(playerItem: playerItem)
+
+            await MainActor.run {
+                self.player = avPlayer
+                self.isLoading = false
+            }
+        } catch is CancellationError {
+            await MainActor.run {
+                self.isLoading = false
+            }
+        } catch {
+            print("동영상 로드 실패: \(error)")
+            await MainActor.run {
+                self.isLoading = false
+            }
         }
     }
 }
