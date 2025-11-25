@@ -103,15 +103,23 @@ enum FootballTeams: String, CaseIterable {
 
     // 숨김 카테고리 (결제 전용)
     case payment = "결제"
+    
+    // match 카테고리 (경기 정보)
+    case match = "경기 정보"
 
     /// UI에서 숨겨야 하는 카테고리인지
     var isHidden: Bool {
-        self == .payment
+        self == .payment || self == .match
     }
 
     /// 사용자에게 보여질 카테고리 목록
     static var visibleCategories: [FootballTeams] {
         allCases.filter { !$0.isHidden }
+    }
+    
+    /// 서버 헤더에 넣을 팀 카테고리 목록
+    static var teamsForHeader: [String] {
+        visibleCategories.map { $0.identifier }
     }
 
     /// 서버 전송용 카테고리 identifier (공백 없는 영어 이름)
@@ -131,6 +139,7 @@ enum FootballTeams: String, CaseIterable {
         case .daejeon: return "daejeon"
         case .daegu: return "daegu"
         case .payment: return "payment"
+        case .match: return "match"
         }
     }
 
@@ -151,6 +160,7 @@ enum FootballTeams: String, CaseIterable {
         case .daejeon: return "team_daejeon"
         case .daegu: return "team_daegu"
         case .payment: return ""  // 숨김 카테고리
+        case .match: return ""  // 숨김 카테고리
         }
     }
 
@@ -169,7 +179,7 @@ enum FootballTeams: String, CaseIterable {
         case .gwangju: return KLeagueTeam.allTeams.first { $0.koreanName == "광주 FC" }
         case .daejeon: return KLeagueTeam.allTeams.first { $0.koreanName == "대전 하나 시티즌" }
         case .daegu: return KLeagueTeam.allTeams.first { $0.koreanName == "대구 FC" }
-        case .all, .payment: return nil
+        case .all, .payment, .match: return nil
         }
     }
 

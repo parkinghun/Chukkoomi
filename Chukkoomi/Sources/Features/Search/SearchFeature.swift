@@ -59,12 +59,16 @@ struct SearchFeature {
                 // 초기 목록은 fetchPosts (limit = 12)
                 return .run { send in
                     do {
-                        let query = PostRouter.ListQuery(next: nil, limit: 12, category: nil)
+                        let query = PostRouter.ListQuery(next: nil, limit: 12, category: FootballTeams.teamsForHeader)
                         let response = try await PostService.shared.fetchPosts(query: query)
 
                         let posts = response.data.compactMap { dto -> PostItem? in
-                            guard let firstFile = dto.files.first else { return nil }
-                            return PostItem(id: dto.postId, imagePath: firstFile)
+                            let post = dto.toDomain
+                            guard post.files.count >= 2 else { return nil }
+                            let thumbnailPath = post.files[1] // 썸네일
+                            let originalPath = post.files[0] // 원본
+                            let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                            return PostItem(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                         }
 
                         await send(.postsLoaded(posts, response.nextCursor))
@@ -221,12 +225,16 @@ struct SearchFeature {
                 state.isLoadingNextPage = true
                 return .run { send in
                     do {
-                        let query = PostRouter.ListQuery(next: next, limit: 12, category: nil)
+                        let query = PostRouter.ListQuery(next: next, limit: 12, category: FootballTeams.teamsForHeader)
                         let response = try await PostService.shared.fetchPosts(query: query)
 
                         let posts = response.data.compactMap { dto -> PostItem? in
-                            guard let firstFile = dto.files.first else { return nil }
-                            return PostItem(id: dto.postId, imagePath: firstFile)
+                            let post = dto.toDomain
+                            guard post.files.count >= 2 else { return nil }
+                            let thumbnailPath = post.files[1] // 썸네일
+                            let originalPath = post.files[0] // 원본
+                            let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                            return PostItem(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                         }
 
                         await send(.nextPageLoaded(posts, response.nextCursor))
@@ -298,10 +306,10 @@ extension SearchFeature {
         let imagePath: String
         let isVideo: Bool
 
-        init(id: String, imagePath: String) {
+        init(id: String, imagePath: String, isVideo: Bool = false) {
             self.id = id
             self.imagePath = imagePath
-            self.isVideo = MediaTypeHelper.isVideoPath(imagePath)
+            self.isVideo = isVideo
         }
     }
 }

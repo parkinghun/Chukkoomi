@@ -188,6 +188,21 @@ struct GalleryPickerView: View {
             LazyVGrid(columns: columns, spacing: 4) {
                 ForEach(viewStore.mediaItems) { item in
                     mediaGridItem(item: item, viewStore: viewStore)
+                        .onAppear {
+                            if item.id == viewStore.mediaItems.last?.id {
+                                viewStore.send(.loadMoreMediaItems)
+                            }
+                        }
+                }
+
+                if viewStore.isLoadingMore {
+                    HStack {
+                        Spacer()
+                        ProgressView()
+                            .padding()
+                        Spacer()
+                    }
+                    .gridCellColumns(3)
                 }
             }
         }

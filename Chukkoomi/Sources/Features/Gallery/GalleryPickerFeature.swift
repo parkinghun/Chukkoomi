@@ -21,6 +21,9 @@ struct GalleryPickerFeature {
         var selectedImage: UIImage?
         var authorizationStatus: PHAuthorizationStatus = .notDetermined
         var isLoading: Bool = false
+        var isLoadingMore: Bool = false
+        var hasMoreItems: Bool = true
+        var currentOffset: Int = 0
         var pickerMode: PickerMode = .profileImage
         @Presents var editVideo: EditVideoFeature.State?
         @Presents var editPhoto: EditPhotoFeature.State?
@@ -56,7 +59,8 @@ struct GalleryPickerFeature {
         case requestPhotoLibraryAccess
         case authorizationStatusReceived(PHAuthorizationStatus)
         case loadMediaItems
-        case mediaItemsLoaded([MediaItem])
+        case loadMoreMediaItems
+        case mediaItemsLoaded([MediaItem], hasMore: Bool)
         case mediaItemSelected(MediaItem)
         case selectedImageLoaded(UIImage)
         case confirmSelection
@@ -104,28 +108,72 @@ struct GalleryPickerFeature {
 
             case .loadMediaItems:
                 state.isLoading = true
+                state.currentOffset = 0
+                state.mediaItems = []
                 return .run { [allowsVideo = state.pickerMode.allowsVideo] send in
                     let fetchOptions = PHFetchOptions()
                     fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
-                    fetchOptions.fetchLimit = 100
 
-                    let fetchResult = PHAsset.fetchAssets(with: fetchOptions)
+                    let pageSize = 50
+                    let allAssets = PHAsset.fetchAssets(with: fetchOptions)
+                    let totalCount = allAssets.count
+
                     var mediaItems: [MediaItem] = []
+                    let endIndex = min(pageSize, totalCount)
 
-                    fetchResult.enumerateObjects { asset, _, _ in
-                        // allowsVideo가 false면 사진만 필터링
+                    for i in 0..<endIndex {
+                        let asset = allAssets.object(at: i)
                         if !allowsVideo && asset.mediaType != .image {
-                            return
+                            continue
                         }
                         mediaItems.append(MediaItem(asset: asset))
                     }
 
-                    await send(.mediaItemsLoaded(mediaItems))
+                    let hasMore = endIndex < totalCount
+                    await send(.mediaItemsLoaded(mediaItems, hasMore: hasMore))
                 }
 
-            case .mediaItemsLoaded(let items):
-                state.mediaItems = items
+            case .loadMoreMediaItems:
+                guard state.hasMoreItems && !state.isLoadingMore else {
+                    return .none
+                }
+
+                state.isLoadingMore = true
+                return .run { [allowsVideo = state.pickerMode.allowsVideo, offset = state.currentOffset] send in
+                    let fetchOptions = PHFetchOptions()
+                    fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+
+                    let pageSize = 50
+                    let allAssets = PHAsset.fetchAssets(with: fetchOptions)
+                    let totalCount = allAssets.count
+
+                    let startIndex = offset + pageSize
+                    let endIndex = min(startIndex + pageSize, totalCount)
+
+                    var mediaItems: [MediaItem] = []
+                    for i in startIndex..<endIndex {
+                        let asset = allAssets.object(at: i)
+                        if !allowsVideo && asset.mediaType != .image {
+                            continue
+                        }
+                        mediaItems.append(MediaItem(asset: asset))
+                    }
+
+                    let hasMore = endIndex < totalCount
+                    await send(.mediaItemsLoaded(mediaItems, hasMore: hasMore))
+                }
+
+            case .mediaItemsLoaded(let items, let hasMore):
+                if state.isLoading {
+                    state.mediaItems = items
+                    state.currentOffset = 0
+                } else {
+                    state.mediaItems.append(contentsOf: items)
+                    state.currentOffset += 50
+                }
+                state.hasMoreItems = hasMore
                 state.isLoading = false
+                state.isLoadingMore = false
                 return .none
 
             case .mediaItemSelected(let item):

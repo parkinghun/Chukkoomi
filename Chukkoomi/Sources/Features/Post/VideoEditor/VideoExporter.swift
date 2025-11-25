@@ -315,7 +315,6 @@ struct VideoExporter {
 
             // 음악 duration 로드
             let musicDuration = try await musicAsset.load(.duration)
-            let musicDurationSeconds = musicDuration.seconds
 
             // 배경음악을 추가할 트랙 생성
             guard let compositionAudioTrack = composition.addMutableTrack(

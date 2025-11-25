@@ -224,30 +224,52 @@ struct PostCreateFeature {
                         postId = state.editingPostId!,
                         imageData = state.selectedImageData,
                         videoURL = state.selectedVideoURL,
+                        videoThumbnailData = state.videoThumbnailData,
                         originalImageUrl = state.originalImageUrl,
                         category = state.selectedCategory,
                         content = state.content
                     ] send in
                         do {
                             // 업로드할 미디어 데이터 준비
-                            var mediaData: Data? = nil
+                            var originalMediaData: Data? = nil
+                            var sourceThumbnailData: Data? = nil
 
                             if let videoURL = videoURL {
                                 // 영상이 있으면 영상 데이터 읽기
-                                mediaData = try Data(contentsOf: videoURL)
+                                originalMediaData = try Data(contentsOf: videoURL)
+                                sourceThumbnailData = videoThumbnailData
                             } else if let imageData = imageData {
                                 // 이미지가 있으면 이미지 데이터 사용
-                                mediaData = imageData
+                                originalMediaData = imageData
+                                sourceThumbnailData = imageData
                             }
 
                             // 기존 파일 URL 처리:
                             // - 새 미디어를 선택하지 않았고, 기존 파일이 있으면 기존 URL 유지
                             // - 새 미디어를 선택했으면 빈 배열 (새 파일이 업로드되어 추가됨)
                             let files: [String]
-                            if mediaData == nil, let originalUrl = originalImageUrl {
+                            if originalMediaData == nil, let originalUrl = originalImageUrl {
                                 files = [originalUrl]
                             } else {
                                 files = []
+                            }
+
+                            // images 배열 준비: 원본 + 썸네일
+                            var imagesToUpload: [Data] = []
+                            if let mediaData = originalMediaData {
+                                imagesToUpload.append(mediaData)
+
+                                // 썸네일 압축
+                                if let sourceData = sourceThumbnailData {
+                                    if let compressedThumbnail = await CompressHelper.compressImage(
+                                        sourceData,
+                                        maxSizeInBytes: 100_000,
+                                        maxWidth: 300,
+                                        maxHeight: 300
+                                    ) {
+                                        imagesToUpload.append(compressedThumbnail)
+                                    }
+                                }
                             }
 
                             // PostRequestDTO 생성
@@ -272,11 +294,10 @@ struct PostCreateFeature {
                             )
 
                             // PostService를 사용해서 게시글 수정
-                            let images = mediaData != nil ? [mediaData!] : []
                             let response = try await PostService.shared.updatePost(
                                 postId: postId,
                                 post: postRequest,
-                                images: images
+                                images: imagesToUpload
                             )
 
                             print("게시글 수정 성공: \(response.postId)")
@@ -291,20 +312,44 @@ struct PostCreateFeature {
                     return .run { [
                         imageData = state.selectedImageData,
                         videoURL = state.selectedVideoURL,
+                        videoThumbnailData = state.videoThumbnailData,
                         category = state.selectedCategory,
                         content = state.content
                     ] send in
                         do {
                             // 업로드할 미디어 데이터 준비
-                            let mediaData: Data
+                            let originalMediaData: Data
+                            let sourceThumbnailData: Data?
+
                             if let videoURL = videoURL {
                                 // 영상이 있으면 영상 데이터 읽기
-                                mediaData = try Data(contentsOf: videoURL)
+                                originalMediaData = try Data(contentsOf: videoURL)
+                                sourceThumbnailData = videoThumbnailData
                             } else if let imageData = imageData {
                                 // 이미지가 있으면 이미지 데이터 사용
-                                mediaData = imageData
+                                originalMediaData = imageData
+                                sourceThumbnailData = imageData
                             } else {
                                 throw NSError(domain: "PostCreate", code: -1, userInfo: [NSLocalizedDescriptionKey: "미디어가 없습니다"])
+                            }
+
+                            // 썸네일 압축
+                            let compressedThumbnail: Data?
+                            if let sourceData = sourceThumbnailData {
+                                compressedThumbnail = await CompressHelper.compressImage(
+                                    sourceData,
+                                    maxSizeInBytes: 100_000,
+                                    maxWidth: 300,
+                                    maxHeight: 300
+                                )
+                            } else {
+                                compressedThumbnail = nil
+                            }
+
+                            // images 배열: 0번 원본, 1번 썸네일
+                            var imagesToUpload = [originalMediaData]
+                            if let thumbnail = compressedThumbnail {
+                                imagesToUpload.append(thumbnail)
                             }
 
                             // PostRequestDTO 생성
@@ -331,7 +376,7 @@ struct PostCreateFeature {
                             // PostService를 사용해서 게시글 생성 (이미지/영상 업로드 포함)
                             let response = try await PostService.shared.createPost(
                                 post: postRequest,
-                                images: [mediaData]
+                                images: imagesToUpload
                             )
 
                             print("게시글 업로드 성공: \(response.postId)")

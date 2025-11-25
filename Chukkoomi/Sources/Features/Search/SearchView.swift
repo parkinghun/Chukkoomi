@@ -126,8 +126,11 @@ struct SearchView: View {
                         if blockPosts.count > 2 {
                             postItem(post: blockPosts[2], width: cellSize, height: cellSize, viewStore: viewStore)
                         }
+                        Spacer(minLength: 0)
                     }
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             // Row 2: 작은 셀 3개
@@ -142,7 +145,9 @@ struct SearchView: View {
                     if blockPosts.count > 5 {
                         postItem(post: blockPosts[5], width: cellSize, height: cellSize, viewStore: viewStore)
                     }
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             // Row 3-4: 작은 셀 2개(왼쪽) + 큰 셀(오른쪽)
@@ -155,12 +160,15 @@ struct SearchView: View {
                         if blockPosts.count > 7 {
                             postItem(post: blockPosts[7], width: cellSize, height: cellSize, viewStore: viewStore)
                         }
+                        Spacer(minLength: 0)
                     }
 
                     if blockPosts.count > 8 {
                         postItem(post: blockPosts[8], width: cellSize * 2 + 4, height: cellSize * 2 + 4, viewStore: viewStore)
                     }
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
 
             // Row 5: 작은 셀 3개
@@ -175,20 +183,24 @@ struct SearchView: View {
                     if blockPosts.count > 11 {
                         postItem(post: blockPosts[11], width: cellSize, height: cellSize, viewStore: viewStore)
                     }
+                    Spacer(minLength: 0)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
     }
 
     // MARK: - 게시물 아이템
     private func postItem(post: SearchFeature.PostItem, width: CGFloat, height: CGFloat, viewStore: ViewStoreOf<SearchFeature>) -> some View {
-        AsyncMediaImageView(
-            imagePath: post.imagePath,
-            width: width,
-            height: height
-        )
-        .onTapGesture {
+        Button {
             viewStore.send(.postTapped(post.id))
+        } label: {
+            AsyncMediaImageView(
+                imagePath: post.imagePath,
+                width: width,
+                height: height,
+                isVideo: post.isVideo
+            )
         }
         .onAppear {
             viewStore.send(.postItemAppeared(post.id))

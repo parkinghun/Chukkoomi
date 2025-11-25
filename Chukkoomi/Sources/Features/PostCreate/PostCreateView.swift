@@ -7,6 +7,7 @@
 
 import SwiftUI
 import ComposableArchitecture
+import AVKit
 
 struct PostCreateView: View {
     let store: StoreOf<PostCreateFeature>
@@ -85,29 +86,18 @@ struct PostCreateView: View {
     // MARK: - Media Selection Section
     private var mediaSelectionSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            if let thumbnailData = store.videoThumbnailData,
-               let uiImage = UIImage(data: thumbnailData) {
-                // 영상 썸네일 표시
+            if let videoURL = store.selectedVideoURL {
+                // 영상 플레이어 표시
                 ZStack(alignment: .topTrailing) {
-                    ZStack {
-                        GeometryReader { geometry in
-                            Image(uiImage: uiImage)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: geometry.size.width, height: geometry.size.width / 16 * 9)
-                                .clipped()
-                        }
-                        .frame(maxWidth: .infinity)
-                        .aspectRatio(16/9, contentMode: .fill)
-                        .background(Color.black)
-                        .cornerRadius(12)
-
-                        // 재생 아이콘 오버레이
-                        Image(systemName: "play.circle.fill")
-                            .font(.system(size: 50))
-                            .foregroundColor(.white)
-                            .shadow(radius: 5)
+                    GeometryReader { geometry in
+                        VideoPlayerView(videoURL: videoURL)
+                            .frame(width: geometry.size.width, height: geometry.size.width / 16 * 9)
+                            .clipped()
                     }
+                    .frame(maxWidth: .infinity)
+                    .aspectRatio(16/9, contentMode: .fill)
+                    .background(Color.black)
+                    .cornerRadius(12)
 
                     // 제거 버튼
                     Button {
@@ -420,6 +410,35 @@ struct FlowLayout: Layout {
                 width: maxWidth,
                 height: currentY + lineHeight
             )
+        }
+    }
+}
+
+// MARK: - VideoPlayerView
+private struct VideoPlayerView: View {
+    let videoURL: URL
+    @State private var player: AVPlayer?
+
+    var body: some View {
+        ZStack {
+            Color.black
+
+            if let player = player {
+                VideoPlayer(player: player)
+                    .onAppear {
+                        player.play()
+                    }
+                    .onDisappear {
+                        player.pause()
+                    }
+            }
+        }
+        .onAppear {
+            player = AVPlayer(url: videoURL)
+        }
+        .onDisappear {
+            player?.pause()
+            player = nil
         }
     }
 }

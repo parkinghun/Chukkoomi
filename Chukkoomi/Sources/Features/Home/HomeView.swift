@@ -128,8 +128,13 @@ struct HomeView: View {
                 // 모든 경기 표시 (스크롤 가능)
                 VStack(spacing: 16) {
                     ForEach(store.matches) { match in
-                        MatchCard(match: match)
-                            .padding(.horizontal, 20)
+                        Button {
+                            store.send(.matchTapped(match))
+                        } label: {
+                            MatchCard(match: match)
+                                .foregroundStyle(.black)
+                                .padding(.horizontal, 20)
+                        }
                     }
                 }
             }
@@ -166,6 +171,11 @@ private struct HomeNavigation: ViewModifier {
                 store: store.scope(state: \.$postList, action: \.postList)
             ) { store in
                 PostView(store: store)
+            }
+            .navigationDestination(
+                store: store.scope(state: \.$matchInfo, action: \.matchInfo)
+            ) { store in
+                MatchInfoView(store: store)
             }
     }
 }

@@ -244,15 +244,19 @@ struct OtherProfileFeature {
 
             return .run { send in
                 do {
-                    let query = PostRouter.ListQuery(next: nil, limit: 12, category: nil)
+                    let query = PostRouter.ListQuery(next: nil, limit: 12, category: FootballTeams.teamsForHeader)
                     let response = try await NetworkManager.shared.performRequest(
                         PostRouter.fetchUserPosts(userId: userId, query),
                         as: PostListResponseDTO.self
                     )
 
                     let postImages = response.data.compactMap { dto -> PostImage? in
-                        guard let firstFile = dto.files.first else { return nil }
-                        return PostImage(id: dto.postId, imagePath: firstFile)
+                        let post = dto.toDomain
+                        guard post.files.count >= 2 else { return nil }
+                        let thumbnailPath = post.files[1] // 썸네일
+                        let originalPath = post.files[0] // 원본
+                        let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                        return PostImage(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                     }
 
                     await send(.postImagesLoaded(postImages, response.nextCursor))
@@ -275,15 +279,19 @@ struct OtherProfileFeature {
 
             return .run { send in
                 do {
-                    let query = PostRouter.ListQuery(next: next, limit: 12, category: nil)
+                    let query = PostRouter.ListQuery(next: next, limit: 12, category: FootballTeams.teamsForHeader)
                     let response = try await NetworkManager.shared.performRequest(
                         PostRouter.fetchUserPosts(userId: userId, query),
                         as: PostListResponseDTO.self
                     )
 
                     let postImages = response.data.compactMap { dto -> PostImage? in
-                        guard let firstFile = dto.files.first else { return nil }
-                        return PostImage(id: dto.postId, imagePath: firstFile)
+                        let post = dto.toDomain
+                        guard post.files.count >= 2 else { return nil }
+                        let thumbnailPath = post.files[1] // 썸네일
+                        let originalPath = post.files[0] // 원본
+                        let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                        return PostImage(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                     }
 
                     await send(.postImagesLoaded(postImages, response.nextCursor))
@@ -354,10 +362,10 @@ extension OtherProfileFeature {
         let imagePath: String
         let isVideo: Bool
 
-        init(id: String, imagePath: String) {
+        init(id: String, imagePath: String, isVideo: Bool = false) {
             self.id = id
             self.imagePath = imagePath
-            self.isVideo = MediaTypeHelper.isVideoPath(imagePath)
+            self.isVideo = isVideo
         }
     }
 }

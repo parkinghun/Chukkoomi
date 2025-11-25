@@ -83,6 +83,7 @@
 				B5CC0CDD2EBA3E81003B6A27 /* .gitignore */,
 				B5CC0CCB2EBA3C6D003B6A27 /* Chukkoomi */,
 				B5CC0CCA2EBA3C6D003B6A27 /* Products */,
+				15890C4B2ED349A800238746 /* Secrets.xcconfig */,
 			);
 			sourceTree = "<group>";
 		};

@@ -22,6 +22,9 @@ struct HomeFeature {
 
         // PostView 네비게이션
         @Presents var postList: PostFeature.State?
+
+        // MatchInfoView 네비게이션
+        @Presents var matchInfo: MatchInfoFeature.State?
     }
 
     // MARK: - Action
@@ -31,9 +34,13 @@ struct HomeFeature {
         case loadMatches
         case loadMatchesResponse(Result<[Match], Error>)
         case teamTapped(FootballTeams) // 팀 카테고리
+        case matchTapped(Match) // match
 
         // PostView 네비게이션
         case postList(PresentationAction<PostFeature.Action>)
+
+        // MatchInfoView 네비게이션
+        case matchInfo(PresentationAction<MatchInfoFeature.Action>)
 
         static func == (lhs: Action, rhs: Action) -> Bool {
             switch (lhs, rhs) {
@@ -43,9 +50,13 @@ struct HomeFeature {
                 return true
             case let (.teamTapped(lhsTeam), .teamTapped(rhsTeam)):
                 return lhsTeam == rhsTeam
+            case let (.matchTapped(lhsMatch), .matchTapped(rhsMatch)):
+                return lhsMatch.id == rhsMatch.id
             case (.loadMatchesResponse, .loadMatchesResponse):
                 return true
             case (.postList, .postList):
+                return true
+            case (.matchInfo, .matchInfo):
                 return true
             default:
                 return false
@@ -170,6 +181,12 @@ struct HomeFeature {
                 }
                 return .none
 
+            case let .matchTapped(match):
+                // MatchInfoView로 네비게이션 (경기 정보 전달)
+                print("Match tapped: \(match.id)")
+                state.matchInfo = MatchInfoFeature.State(match: match)
+                return .none
+
             case let .loadMatchesResponse(.success(matches)):
                 state.isLoadingMatches = false
 
@@ -190,10 +207,16 @@ struct HomeFeature {
 
             case .postList:
                 return .none
+
+            case .matchInfo:
+                return .none
             }
         }
         .ifLet(\.$postList, action: \.postList) {
             PostFeature()
+        }
+        .ifLet(\.$matchInfo, action: \.matchInfo) {
+            MatchInfoFeature()
         }
     }
 }

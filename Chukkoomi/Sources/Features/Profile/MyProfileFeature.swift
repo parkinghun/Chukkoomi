@@ -220,15 +220,20 @@ struct MyProfileFeature {
 
                 return .run { send in
                     do {
-                        let query = PostRouter.ListQuery(next: nil, limit: 12, category: nil)
+                        let query = PostRouter.ListQuery(next: nil, limit: 12, category: ["all", "ulsan", "jeonbuk", "pohang", "suwonFC", "kimcheon", "gangwon", "jeju", "anyang", "seoul", "gwangju", "daejeon", "daegu"])
                         let response = try await NetworkManager.shared.performRequest(
                             PostRouter.fetchUserPosts(userId: userId, query),
                             as: PostListResponseDTO.self
                         )
-
+                        dump(response)
                         let postImages = response.data.compactMap { dto -> PostImage? in
-                            guard let firstFile = dto.files.first else { return nil }
-                            return PostImage(id: dto.postId, imagePath: firstFile)
+                            let post = dto.toDomain
+                            print(post)
+                            guard post.files.count >= 2 else { return nil }
+                            let thumbnailPath = post.files[1] // 썸네일
+                            let originalPath = post.files[0] // 원본
+                            let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                            return PostImage(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                         }
 
                         await send(.postImagesLoaded(postImages, response.nextCursor))
@@ -247,10 +252,14 @@ struct MyProfileFeature {
                             as: PostListResponseDTO.self
                         )
 
-                        // PostImage 배열로 변환 (첫 번째 파일만)
+                        // PostImage 배열로 변환 (썸네일 사용)
                         let bookmarkImages = response.data.compactMap { dto -> PostImage? in
-                            guard let firstFile = dto.files.first else { return nil }
-                            return PostImage(id: dto.postId, imagePath: firstFile)
+                            let post = dto.toDomain
+                            guard post.files.count >= 2 else { return nil }
+                            let thumbnailPath = post.files[1] // 썸네일
+                            let originalPath = post.files[0] // 원본
+                            let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                            return PostImage(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                         }
 
                         await send(.bookmarkImagesLoaded(bookmarkImages, response.nextCursor))
@@ -272,15 +281,19 @@ struct MyProfileFeature {
                 state.isLoadingNextPage = true
                 return .run { send in
                     do {
-                        let query = PostRouter.ListQuery(next: next, limit: 12, category: nil)
+                        let query = PostRouter.ListQuery(next: next, limit: 12, category: FootballTeams.teamsForHeader)
                         let response = try await NetworkManager.shared.performRequest(
                             PostRouter.fetchUserPosts(userId: userId, query),
                             as: PostListResponseDTO.self
                         )
 
                         let postImages = response.data.compactMap { dto -> PostImage? in
-                            guard let firstFile = dto.files.first else { return nil }
-                            return PostImage(id: dto.postId, imagePath: firstFile)
+                            let post = dto.toDomain
+                            guard post.files.count >= 2 else { return nil }
+                            let thumbnailPath = post.files[1] // 썸네일
+                            let originalPath = post.files[0] // 원본
+                            let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                            return PostImage(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                         }
 
                         await send(.postImagesLoaded(postImages, response.nextCursor))
@@ -307,8 +320,12 @@ struct MyProfileFeature {
                         )
 
                         let bookmarkImages = response.data.compactMap { dto -> PostImage? in
-                            guard let firstFile = dto.files.first else { return nil }
-                            return PostImage(id: dto.postId, imagePath: firstFile)
+                            let post = dto.toDomain
+                            guard post.files.count >= 2 else { return nil }
+                            let thumbnailPath = post.files[1] // 썸네일
+                            let originalPath = post.files[0] // 원본
+                            let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                            return PostImage(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                         }
 
                         await send(.bookmarkImagesLoaded(bookmarkImages, response.nextCursor))
@@ -481,11 +498,11 @@ extension MyProfileFeature {
         var imageData: Data?
         let isVideo: Bool
 
-        init(id: String, imagePath: String, imageData: Data? = nil) {
+        init(id: String, imagePath: String, imageData: Data? = nil, isVideo: Bool = false) {
             self.id = id
             self.imagePath = imagePath
             self.imageData = imageData
-            self.isVideo = MediaTypeHelper.isVideoPath(imagePath)
+            self.isVideo = isVideo
         }
     }
 }

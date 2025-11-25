@@ -1,6 +1,7 @@
 {
   "images" : [
     {
+      "filename" : "Adobe Express - file (7).png",
       "idiom" : "universal",
       "scale" : "1x"
     },
@@ -9,7 +10,6 @@
       "scale" : "2x"
     },
     {
-      "filename" : "team_anyang.png",
       "idiom" : "universal",
       "scale" : "3x"
     }
