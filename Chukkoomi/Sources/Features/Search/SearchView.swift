@@ -114,12 +114,12 @@ struct SearchView: View {
         return VStack(alignment: .leading, spacing: 4) {
             // Row 0-1: 큰 셀(왼쪽) + 작은 셀 2개(오른쪽)
             if !blockPosts.isEmpty {
-                HStack(spacing: 4) {
+                HStack(alignment: .top, spacing: 4) {
                     if blockPosts.count > 0 {
                         postItem(post: blockPosts[0], width: cellSize * 2 + 4, height: cellSize * 2 + 4, viewStore: viewStore)
                     }
 
-                    VStack(spacing: 4) {
+                    VStack(alignment: .leading, spacing: 4) {
                         if blockPosts.count > 1 {
                             postItem(post: blockPosts[1], width: cellSize, height: cellSize, viewStore: viewStore)
                         }
@@ -132,7 +132,7 @@ struct SearchView: View {
 
             // Row 2: 작은 셀 3개
             if blockPosts.count > 3 {
-                HStack(spacing: 4) {
+                HStack(alignment: .top, spacing: 4) {
                     if blockPosts.count > 3 {
                         postItem(post: blockPosts[3], width: cellSize, height: cellSize, viewStore: viewStore)
                     }
@@ -147,8 +147,8 @@ struct SearchView: View {
 
             // Row 3-4: 작은 셀 2개(왼쪽) + 큰 셀(오른쪽)
             if blockPosts.count > 6 {
-                HStack(spacing: 4) {
-                    VStack(spacing: 4) {
+                HStack(alignment: .top, spacing: 4) {
+                    VStack(alignment: .leading, spacing: 4) {
                         if blockPosts.count > 6 {
                             postItem(post: blockPosts[6], width: cellSize, height: cellSize, viewStore: viewStore)
                         }
@@ -165,7 +165,7 @@ struct SearchView: View {
 
             // Row 5: 작은 셀 3개
             if blockPosts.count > 9 {
-                HStack(spacing: 4) {
+                HStack(alignment: .top, spacing: 4) {
                     if blockPosts.count > 9 {
                         postItem(post: blockPosts[9], width: cellSize, height: cellSize, viewStore: viewStore)
                     }

@@ -25,6 +25,12 @@ enum AppIcon {
     // Video
     static let pause = Image(systemName: "pause.circle")
     static let play = Image(systemName: "play.circle")
+    static let trim = Image(systemName: "scissors")
+    static let subtitle = Image(systemName: "textformat")
+    static let music = Image(systemName: "music.note.list")
+    static let filter = Image(systemName: "camera.filters")
+    static let plusCircle = Image(systemName: "plus.circle")
+    static let speaker = Image(systemName: "speaker.wave.1")
     
     // Tab Bar Icons
     static let home = Image(systemName: "house.fill")

@@ -10,6 +10,7 @@
 		1509EB382EC5721200E86228 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 15163D132EC49DB400843A8A /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		15163D142EC49DB400843A8A /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 15163D132EC49DB400843A8A /* RealmSwift */; };
 		154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 154F15AF2EBDE1A20079B157 /* ComposableArchitecture */; };
+		15890C4C2ED349A800238746 /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 15890C4B2ED349A800238746 /* Secrets.xcconfig */; };
 		B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B5CC0CDD2EBA3E81003B6A27 /* .gitignore */; };
 		B5F83E132ED48070005F6511 /* KakaoSDKAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5F83E122ED48070005F6511 /* KakaoSDKAuth */; };
 		B5F83E152ED48070005F6511 /* KakaoSDKCommon in Frameworks */ = {isa = PBXBuildFile; productRef = B5F83E142ED48070005F6511 /* KakaoSDKCommon */; };
@@ -31,6 +32,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		15890C4B2ED349A800238746 /* Secrets.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = Secrets.xcconfig; sourceTree = "<group>"; };
 		B5CC0CC92EBA3C6D003B6A27 /* Chukkoomi.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Chukkoomi.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		B5CC0CDD2EBA3E81003B6A27 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -75,6 +77,7 @@
 		B5CC0CC02EBA3C6D003B6A27 = {
 			isa = PBXGroup;
 			children = (
+				15890C4B2ED349A800238746 /* Secrets.xcconfig */,
 				B5CC0CDD2EBA3E81003B6A27 /* .gitignore */,
 				B5CC0CCB2EBA3C6D003B6A27 /* Chukkoomi */,
 				B5CC0CCA2EBA3C6D003B6A27 /* Products */,
@@ -165,6 +168,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */,
+				15890C4C2ED349A800238746 /* Secrets.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

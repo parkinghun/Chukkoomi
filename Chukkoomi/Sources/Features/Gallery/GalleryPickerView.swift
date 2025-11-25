@@ -129,9 +129,10 @@ struct GalleryPickerView: View {
                         }
                 }
             } else {
-                // 게시물 모드 (16:9 비율)
+                // 게시물 모드
                 Color.clear
-                    .aspectRatio(16/9, contentMode: .fit)
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 300)
                     .overlay {
                         GeometryReader { geometry in
                             let width = geometry.size.width
