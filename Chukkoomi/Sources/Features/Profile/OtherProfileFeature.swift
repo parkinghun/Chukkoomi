@@ -251,8 +251,11 @@ struct OtherProfileFeature {
                     )
 
                     let postImages = response.data.compactMap { dto -> PostImage? in
-                        guard let firstFile = dto.files.first else { return nil }
-                        return PostImage(id: dto.postId, imagePath: firstFile)
+                        guard dto.files.count >= 2 else { return nil }
+                        let thumbnailPath = dto.files[1] // 썸네일
+                        let originalPath = dto.files[0] // 원본
+                        let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                        return PostImage(id: dto.postId, imagePath: thumbnailPath, isVideo: isVideo)
                     }
 
                     await send(.postImagesLoaded(postImages, response.nextCursor))
@@ -282,8 +285,11 @@ struct OtherProfileFeature {
                     )
 
                     let postImages = response.data.compactMap { dto -> PostImage? in
-                        guard let firstFile = dto.files.first else { return nil }
-                        return PostImage(id: dto.postId, imagePath: firstFile)
+                        guard dto.files.count >= 2 else { return nil }
+                        let thumbnailPath = dto.files[1] // 썸네일
+                        let originalPath = dto.files[0] // 원본
+                        let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                        return PostImage(id: dto.postId, imagePath: thumbnailPath, isVideo: isVideo)
                     }
 
                     await send(.postImagesLoaded(postImages, response.nextCursor))
@@ -354,10 +360,10 @@ extension OtherProfileFeature {
         let imagePath: String
         let isVideo: Bool
 
-        init(id: String, imagePath: String) {
+        init(id: String, imagePath: String, isVideo: Bool = false) {
             self.id = id
             self.imagePath = imagePath
-            self.isVideo = MediaTypeHelper.isVideoPath(imagePath)
+            self.isVideo = isVideo
         }
     }
 }

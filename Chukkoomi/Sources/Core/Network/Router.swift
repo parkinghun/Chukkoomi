@@ -46,7 +46,20 @@ extension Router {
         // Query
         if let query {
             var components = URLComponents(url: url, resolvingAgainstBaseURL: false)
-            let queryItems = query.map { URLQueryItem(name: $0.tuple.key, value: $0.tuple.value) }
+            var queryItems: [URLQueryItem] = []
+
+            for httpQuery in query {
+                switch httpQuery {
+                case .category(let categories):
+                    // 배열의 각 항목을 개별 쿼리 파라미터로 추가
+                    for category in categories {
+                        queryItems.append(URLQueryItem(name: httpQuery.tuple.key, value: category))
+                    }
+                default:
+                    queryItems.append(URLQueryItem(name: httpQuery.tuple.key, value: httpQuery.tuple.value))
+                }
+            }
+
             components?.queryItems = queryItems
             url = components?.url ?? url
         }
@@ -136,8 +149,9 @@ enum HTTPQuery {
             return ("next", next)
         case .limit(let num):
             return ("limit", "\(num)")
-        case .category(let category):
-            return ("category", category.joined(separator: ","))
+        case .category:
+            // category는 asURLRequest에서 배열로 직접 처리
+            return ("category", "")
         case .custom(let key, let value):
             return (key, value)
         }

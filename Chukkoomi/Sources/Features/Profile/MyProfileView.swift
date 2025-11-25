@@ -231,7 +231,8 @@ struct MyProfileView: View {
             AsyncMediaImageView(
                 imagePath: postImage.imagePath,
                 width: geometry.size.width,
-                height: geometry.size.width
+                height: geometry.size.width,
+                isVideo: postImage.isVideo
             )
         }
         .aspectRatio(1, contentMode: .fit)

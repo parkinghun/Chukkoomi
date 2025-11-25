@@ -26,24 +26,27 @@ struct AsyncMediaImageView: View {
     let imagePath: String
     let width: CGFloat
     let height: CGFloat
+    let isVideoContent: Bool
     let onImageLoaded: ((Data) -> Void)?
 
     @State private var imageData: Data?
     @State private var isLoading: Bool = true
 
     private var isVideo: Bool {
-        MediaTypeHelper.isVideoPath(imagePath)
+        isVideoContent
     }
 
     init(
         imagePath: String,
         width: CGFloat,
         height: CGFloat,
+        isVideo: Bool? = nil,
         onImageLoaded: ((Data) -> Void)? = nil
     ) {
         self.imagePath = imagePath
         self.width = width
         self.height = height
+        self.isVideoContent = isVideo ?? MediaTypeHelper.isVideoPath(imagePath)
         self.onImageLoaded = onImageLoaded
     }
 
@@ -97,24 +100,23 @@ struct AsyncMediaImageView: View {
                 isLoading = false
                 return
             }
-            
+
             let mediaData = try await NetworkManager.shared.download(
                 MediaRouter.getData(path: imagePath)
             )
 
-            if isVideo {
-                // 동영상이면 썸네일 추출
+            // imagePath가 실제 비디오 파일이면 썸네일 생성, 아니면 그대로 사용
+            if MediaTypeHelper.isVideoPath(imagePath) {
+                // 비디오 파일 → 썸네일 생성
                 if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: mediaData) {
                     imageData = thumbnailData
                     onImageLoaded?(thumbnailData)
-                    // 캐시에 저장
                     await ImageCache.shared.set(imagePath, data: thumbnailData)
                 }
             } else {
-                // 이미지는 그대로 사용
+                // 이미지 파일 → 그대로 사용
                 imageData = mediaData
                 onImageLoaded?(mediaData)
-                // 캐시에 저장
                 await ImageCache.shared.set(imagePath, data: mediaData)
             }
 
