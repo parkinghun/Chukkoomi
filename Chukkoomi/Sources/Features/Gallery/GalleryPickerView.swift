@@ -12,7 +12,6 @@ import AVKit
 
 struct GalleryPickerView: View {
     let store: StoreOf<GalleryPickerFeature>
-    @State private var hasAppeared = false
 
     var body: some View {
         WithViewStore(store, observe: { $0 }) { viewStore in
