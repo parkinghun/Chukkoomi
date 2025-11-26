@@ -19,7 +19,7 @@ struct ValidatePaymentRequestDTO: Encodable {
 }
 
 // MARK: - 결제 Response (검증 + 내역 공통)
-struct PaymentResponseDTO: Decodable {
+struct PaymentResponseDTO: Decodable, Equatable {
     let buyerId: String
     let postId: String
     let merchantUid: String
