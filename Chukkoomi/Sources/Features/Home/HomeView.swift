@@ -64,7 +64,7 @@ struct HomeView: View {
                     .aspectRatio(16/9, contentMode: .fill)
                     .clipped()
                 } else {
-                    Image("highlight2")
+                    Image("mainThumbnail")
                         .resizable()
                         .aspectRatio(16/9, contentMode: .fit)
                 }
