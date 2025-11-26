@@ -54,7 +54,7 @@ struct ChatFeature: Reducer {
 
         var imageName: String? {
             switch self {
-            case .default: return "Default Theme"
+            case .default: return "DefaultTheme"
             case .theme1: return "Theme1"
             case .theme2: return "Theme2"
             case .theme3: return "Theme3"

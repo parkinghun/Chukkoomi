@@ -9,6 +9,7 @@ import SwiftUI
 import ComposableArchitecture
 import KakaoSDKCommon
 import KakaoSDKAuth
+import iamport_ios
 
 @main
 struct ChukkoomiApp: App {
@@ -30,6 +31,8 @@ struct ChukkoomiApp: App {
             .onOpenURL { url in
                 if AuthApi.isKakaoTalkLoginUrl(url) {
                     _ = AuthController.handleOpenUrl(url: url)
+                } else { // Iamport SDK가 처리 가능한 URL인지 확인
+                    Iamport.shared.receivedURL(url)
                 }
             }
         }

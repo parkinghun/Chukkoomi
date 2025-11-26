@@ -12,6 +12,7 @@
 		154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 154F15AF2EBDE1A20079B157 /* ComposableArchitecture */; };
 		15890C4C2ED349A800238746 /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 15890C4B2ED349A800238746 /* Secrets.xcconfig */; };
 		B521765F2ED5BCD100CD0BFA /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = B521765E2ED5BCD100CD0BFA /* SocketIO */; };
+		B5511E102ED6111A00DBEA27 /* iamport-ios in Frameworks */ = {isa = PBXBuildFile; productRef = B5511E0F2ED6111A00DBEA27 /* iamport-ios */; };
 		B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B5CC0CDD2EBA3E81003B6A27 /* .gitignore */; };
 		B5F83E132ED48070005F6511 /* KakaoSDKAuth in Frameworks */ = {isa = PBXBuildFile; productRef = B5F83E122ED48070005F6511 /* KakaoSDKAuth */; };
 		B5F83E152ED48070005F6511 /* KakaoSDKCommon in Frameworks */ = {isa = PBXBuildFile; productRef = B5F83E142ED48070005F6511 /* KakaoSDKCommon */; };
@@ -69,6 +70,7 @@
 				154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */,
 				B5F83E172ED48070005F6511 /* KakaoSDKUser in Frameworks */,
 				B5F83E132ED48070005F6511 /* KakaoSDKAuth in Frameworks */,
+				B5511E102ED6111A00DBEA27 /* iamport-ios in Frameworks */,
 				B521765F2ED5BCD100CD0BFA /* SocketIO in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -79,7 +81,6 @@
 		B5CC0CC02EBA3C6D003B6A27 = {
 			isa = PBXGroup;
 			children = (
-				15890C4B2ED349A800238746 /* Secrets.xcconfig */,
 				B5CC0CDD2EBA3E81003B6A27 /* .gitignore */,
 				B5CC0CCB2EBA3C6D003B6A27 /* Chukkoomi */,
 				B5CC0CCA2EBA3C6D003B6A27 /* Products */,
@@ -122,6 +123,7 @@
 				B5F83E142ED48070005F6511 /* KakaoSDKCommon */,
 				B5F83E162ED48070005F6511 /* KakaoSDKUser */,
 				B521765E2ED5BCD100CD0BFA /* SocketIO */,
+				B5511E0F2ED6111A00DBEA27 /* iamport-ios */,
 			);
 			productName = Chukkoomi;
 			productReference = B5CC0CC92EBA3C6D003B6A27 /* Chukkoomi.app */;
@@ -156,6 +158,7 @@
 				15163D122EC49DB400843A8A /* XCRemoteSwiftPackageReference "realm-swift" */,
 				B5F83E112ED48070005F6511 /* XCRemoteSwiftPackageReference "kakao-ios-sdk" */,
 				B521765D2ED5BCD100CD0BFA /* XCRemoteSwiftPackageReference "socket" */,
+				B5511E0E2ED6111A00DBEA27 /* XCRemoteSwiftPackageReference "iamport-ios" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B5CC0CCA2EBA3C6D003B6A27 /* Products */;
@@ -435,6 +438,14 @@
 				minimumVersion = 16.1.0;
 			};
 		};
+		B5511E0E2ED6111A00DBEA27 /* XCRemoteSwiftPackageReference "iamport-ios" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/iamport/iamport-ios.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 1.4.7;
+			};
+		};
 		B5F83E112ED48070005F6511 /* XCRemoteSwiftPackageReference "kakao-ios-sdk" */ = {
 			isa = XCRemoteSwiftPackageReference;
 			repositoryURL = "https://github.com/kakao/kakao-ios-sdk";
@@ -460,6 +471,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = B521765D2ED5BCD100CD0BFA /* XCRemoteSwiftPackageReference "socket" */;
 			productName = SocketIO;
+		};
+		B5511E0F2ED6111A00DBEA27 /* iamport-ios */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = B5511E0E2ED6111A00DBEA27 /* XCRemoteSwiftPackageReference "iamport-ios" */;
+			productName = "iamport-ios";
 		};
 		B5F83E122ED48070005F6511 /* KakaoSDKAuth */ = {
 			isa = XCSwiftPackageProductDependency;

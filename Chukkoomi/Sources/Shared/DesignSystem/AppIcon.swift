@@ -53,4 +53,8 @@ enum AppIcon {
     static let draw = Image(systemName: "pencil.and.scribble")
     static let undo = Image(systemName: "arrow.uturn.backward.circle")
     static let redo = Image(systemName: "arrow.uturn.right.circle")
+    
+    // payment
+    static let lock = Image(systemName: "lock.fill")
+    static let unlock = Image(systemName: "lock.open.fill")
 }

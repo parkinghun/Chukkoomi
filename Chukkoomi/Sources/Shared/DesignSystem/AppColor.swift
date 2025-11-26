@@ -18,6 +18,8 @@ enum AppColor {
     /// 회색 배경 ex) 팔로우 버튼, 채팅 배경
     static let lightGray = Color(hex: "E7E8E8")
     
+    static let pointColor = Color(hex: "DEFD09")
+    
     /// 보조 텍스트
     static let textSecondary = Color.secondary
     
