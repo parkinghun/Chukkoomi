@@ -108,6 +108,7 @@ struct ChatFeature: Reducer {
         @CasePathable
         enum Alert: Equatable {
             case confirmMessageLoadError
+            case confirmWebSocketError
         }
     }
 
@@ -691,8 +692,16 @@ struct ChatFeature: Reducer {
             }
             return .none
 
-        case .webSocketError:
-            // TODO: 사용자에게 에러 표시 (필요시)
+        case .webSocketError(let errorMessage):
+            state.alert = AlertState {
+                TextState("연결 오류")
+            } actions: {
+                ButtonState(role: .cancel, action: .confirmWebSocketError) {
+                    TextState("확인")
+                }
+            } message: {
+                TextState(errorMessage)
+            }
             return .none
 
         case .alert:
