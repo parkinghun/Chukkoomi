@@ -12,6 +12,7 @@ import ComposableArchitecture
 struct FilterStripView: View {
     let filterThumbnails: [ImageFilter: UIImage]
     let selectedFilter: ImageFilter
+    let purchasedFilterTypes: Set<ImageFilter>  // 구매한 필터 타입
     let onFilterTap: (ImageFilter) -> Void
     let onFilterDragStart: (ImageFilter) -> Void
 
@@ -23,6 +24,7 @@ struct FilterStripView: View {
                         filter: filter,
                         thumbnail: filterThumbnails[filter],
                         isSelected: selectedFilter == filter,
+                        isPurchased: isPurchased(filter),
                         onTap: {
                             onFilterTap(filter)
                         },
@@ -36,6 +38,15 @@ struct FilterStripView: View {
         }
         .frame(height: 120)
     }
+
+    // 필터 구매 여부 확인
+    private func isPurchased(_ filter: ImageFilter) -> Bool {
+        // 유료 필터가 아니면 항상 true
+        guard filter.isPaid else { return true }
+
+        // 캐시된 purchasedFilterTypes에서 확인 (동기적으로)
+        return purchasedFilterTypes.contains(filter)
+    }
 }
 
 // MARK: - Filter Thumbnail View
@@ -43,6 +54,7 @@ struct FilterThumbnailView: View {
     let filter: ImageFilter
     let thumbnail: UIImage?
     let isSelected: Bool
+    let isPurchased: Bool  // 구매 여부
     let onTap: () -> Void
     let onDragStart: () -> Void
 
@@ -64,6 +76,23 @@ struct FilterThumbnailView: View {
                             ProgressView()
                                 .tint(.gray)
                         }
+                }
+
+                // Lock/Unlock 아이콘 (유료 필터인 경우)
+                if filter.isPaid {
+                    VStack {
+                        HStack {
+                            Spacer()
+                            Image(systemName: isPurchased ? "lock.open.fill" : "lock.fill")
+                                .font(.system(size: 14))
+                                .foregroundColor(.white)
+                                .padding(4)
+                                .background(isPurchased ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
+                                .clipShape(Circle())
+                                .padding(6)
+                        }
+                        Spacer()
+                    }
                 }
             }
             .overlay(
