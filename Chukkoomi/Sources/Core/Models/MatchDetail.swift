@@ -7,8 +7,11 @@
 
 import Foundation
 
-struct MatchDetail: Equatable {
+struct MatchDetail: Equatable, Codable {
     let id: String
+    let homeTeamName: String
+    let awayTeamName: String
+    let matchDate: Date
     let homeKeeper: Player
     let homeDefends: [Player]
     let homeMidFields: [Player]
@@ -21,7 +24,7 @@ struct MatchDetail: Equatable {
     let awayUniform: String
 }
 
-struct Player: Equatable {
+struct Player: Equatable, Codable {
     let id: String
     let number: Int
     let name: String

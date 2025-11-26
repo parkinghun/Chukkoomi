@@ -18,16 +18,16 @@ enum MatchEventType: String, Codable, Equatable {
 struct MatchEvent: Identifiable, Equatable, Codable {
     let id: UUID
     let type: MatchEventType
-    let playerName: String
+    let player: Player
     let minute: Int
-    let teamName: String // 홈팀 or 원정팀
+    let isHomeTeam: Bool // true면 홈팀, false면 원정팀
 
-    init(id: UUID = UUID(), type: MatchEventType, playerName: String, minute: Int, teamName: String) {
+    init(id: UUID = UUID(), type: MatchEventType, player: Player, minute: Int, isHomeTeam: Bool) {
         self.id = id
         self.type = type
-        self.playerName = playerName
+        self.player = player
         self.minute = minute
-        self.teamName = teamName
+        self.isHomeTeam = isHomeTeam
     }
 }
 
@@ -42,8 +42,9 @@ struct Match: Identifiable, Equatable, Codable {
     let homeScore: Int?
     let awayScore: Int?
     let events: [MatchEvent]
+    let matchDetail: MatchDetail?
 
-    init(id: Int, date: Date, homeTeamName: String, awayTeamName: String, homeScore: Int?, awayScore: Int?, events: [MatchEvent] = []) {
+    init(id: Int, date: Date, homeTeamName: String, awayTeamName: String, homeScore: Int?, awayScore: Int?, events: [MatchEvent] = [], matchDetail: MatchDetail? = nil) {
         self.id = id
         self.date = date
         self.homeTeamName = homeTeamName
@@ -51,5 +52,6 @@ struct Match: Identifiable, Equatable, Codable {
         self.homeScore = homeScore
         self.awayScore = awayScore
         self.events = events
+        self.matchDetail = matchDetail
     }
 }

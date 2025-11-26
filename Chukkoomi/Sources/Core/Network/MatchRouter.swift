@@ -10,6 +10,7 @@ import Foundation
 // MARK: - 기능
 enum MatchRouter {
     case fetchMatchDetail(title: String)
+    case fetchRecentMatches
 }
 
 // MARK: - 정보
@@ -22,12 +23,14 @@ extension MatchRouter: Router {
         switch self {
         case .fetchMatchDetail:
             return "/\(version)/posts/search"
+        case .fetchRecentMatches:
+            return "/\(version)/posts"
         }
     }
     
     var method: HTTPMethod {
         switch self {
-        case .fetchMatchDetail:
+        case .fetchMatchDetail, .fetchRecentMatches:
             return .get
         }
     }
@@ -38,14 +41,14 @@ extension MatchRouter: Router {
     
     var body: AnyEncodable? {
         switch self {
-        case .fetchMatchDetail:
+        case .fetchMatchDetail, .fetchRecentMatches:
             return nil
         }
     }
     
     var bodyEncoder: BodyEncoder? {
         switch self {
-        case .fetchMatchDetail:
+        case .fetchMatchDetail, .fetchRecentMatches:
             return nil
         }
     }
@@ -55,6 +58,10 @@ extension MatchRouter: Router {
         case .fetchMatchDetail(let title):
             return [
                 .custom(key: "title", value: title),
+                .category(["match"])
+            ]
+        case .fetchRecentMatches:
+            return [
                 .category(["match"])
             ]
         }

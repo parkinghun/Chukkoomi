@@ -22,11 +22,11 @@ struct HomeView: View {
                         .padding(.bottom, 24)
                 }
                 .background(Color(uiColor: .systemGray6))
-
+                
                 VStack(alignment: .leading, spacing: 24) {
                     teamsSection()
                         .padding(.top, 24)
-
+                    
                     matchScheduleSection()
                 }
                 .padding(.bottom, 40)
@@ -42,20 +42,16 @@ struct HomeView: View {
             }
         }
         .background(Color(uiColor: .systemGray6))
+        .navigationBarBackButtonHidden(true)
         .navigationBarTitleDisplayMode(.inline)
-        .toolbar {
-            ToolbarItem(placement: .topBarLeading) {
-                Text("CHUKKOOMI")
-                    .font(.luckiestGuyLarge)
-            }
-        }
+        .background(NavTitleViewSetter(title: "CHUKKOOMI"))
         .onAppear {
             store.send(.onAppear)
         }
         // 네비게이션 연결
         .modifier(HomeNavigation(store: store))
     }
-
+    
     // MARK: - 영상 섹션
     private func videoSection() -> some View {
         VStack(spacing: 0) {
@@ -74,14 +70,14 @@ struct HomeView: View {
                     // 썸네일이 없을 때 플레이스홀더
                     Image("highlight2")
                         .resizable()
-//                    Color.black
+                    //                    Color.black
                         .aspectRatio(16/9, contentMode: .fit)
                 }
-
+                
                 // 재생 버튼 오버레이
-//                Image(systemName: "play.circle.fill")
-//                    .font(.system(size: 60))
-//                    .foregroundColor(.white.opacity(0.8))
+                //                Image(systemName: "play.circle.fill")
+                //                    .font(.system(size: 60))
+                //                    .foregroundColor(.white.opacity(0.8))
             }
             .cornerRadius(20)
             .padding(.horizontal, 20)
@@ -100,16 +96,16 @@ struct HomeView: View {
             }
         }
     }
-
+    
     // MARK: - 구단 목록 섹션
     private func teamsSection() -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("TEAM")
                 .font(.luckiestGuyMedium)
-//                .font(.title2)
-//                .fontWeight(.bold)
+            //                .font(.title2)
+            //                .fontWeight(.bold)
                 .padding(.horizontal, 20)
-
+            
             // 가로 스크롤
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 16) {
@@ -123,14 +119,14 @@ struct HomeView: View {
             }
         }
     }
-
+    
     // MARK: - 경기 일정 섹션
     private func matchScheduleSection() -> some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("TODAY'S")
                 .font(.luckiestGuyMedium)
                 .padding(.horizontal, 20)
-
+            
             if store.isLoadingMatches {
                 ProgressView("경기 일정을 불러오는 중...")
                     .frame(maxWidth: .infinity)
@@ -168,7 +164,7 @@ struct HomeView: View {
 struct TeamLogoButton: View {
     let team: FootballTeams
     let onTap: () -> Void
-
+    
     var body: some View {
         Image(team.logoImageName)
             .resizable()
@@ -186,7 +182,7 @@ struct TeamLogoButton: View {
 // MARK: - Navigation 구성
 private struct HomeNavigation: ViewModifier {
     let store: StoreOf<HomeFeature>
-
+    
     func body(content: Content) -> some View {
         content
             .navigationDestination(
@@ -205,30 +201,30 @@ private struct HomeNavigation: ViewModifier {
 // MARK: - 경기 카드
 struct MatchCard: View {
     let match: Match
-
+    
     // 홈팀, 원정팀 로컬 데이터 찾기
     private var homeTeam: KLeagueTeam? {
         KLeagueTeam.find(by: match.homeTeamName)
     }
-
+    
     private var awayTeam: KLeagueTeam? {
         KLeagueTeam.find(by: match.awayTeamName)
     }
-
+    
     // 홈팀 이벤트 (골/카드)
     private var homeTeamEvents: [MatchEvent] {
         match.events
-            .filter { $0.teamName == match.homeTeamName }
+            .filter { $0.isHomeTeam }
             .sorted { $0.minute < $1.minute }
     }
-
+    
     // 원정팀 이벤트 (골/카드)
     private var awayTeamEvents: [MatchEvent] {
         match.events
-            .filter { $0.teamName == match.awayTeamName }
+            .filter { !$0.isHomeTeam }
             .sorted { $0.minute < $1.minute }
     }
-
+    
     var body: some View {
         VStack(spacing: 12) {
             // 경기 정보
@@ -245,7 +241,7 @@ struct MatchCard: View {
                             .fill(AppColor.divider.opacity(0.2))
                             .frame(width: 50, height: 50)
                     }
-
+                    
                     Text(homeTeam?.koreanName ?? match.homeTeamName)
                         .font(.caption)
                         .fontWeight(.medium)
@@ -253,7 +249,7 @@ struct MatchCard: View {
                         .lineLimit(2)
                 }
                 .frame(maxWidth: .infinity)
-
+                
                 // 스코어
                 if let homeScore = match.homeScore, let awayScore = match.awayScore {
                     Text("\(homeScore) : \(awayScore)")
@@ -264,7 +260,7 @@ struct MatchCard: View {
                         .font(.headline)
                         .foregroundColor(.gray)
                 }
-
+                
                 // 원정 팀
                 VStack(spacing: 8) {
                     if let awayTeam = awayTeam {
@@ -277,7 +273,7 @@ struct MatchCard: View {
                             .fill(AppColor.divider.opacity(0.2))
                             .frame(width: 50, height: 50)
                     }
-
+                    
                     Text(awayTeam?.koreanName ?? match.awayTeamName)
                         .font(.caption)
                         .fontWeight(.medium)
@@ -286,12 +282,12 @@ struct MatchCard: View {
                 }
                 .frame(maxWidth: .infinity)
             }
-
+            
             // 경기 이벤트 표시
             if !match.events.isEmpty {
                 Divider()
                     .padding(.vertical, 8)
-
+                
                 HStack(alignment: .top, spacing: 16) {
                     // 홈팀 이벤트 (가운데로 몰리게 - trailing 정렬)
                     VStack(alignment: .trailing, spacing: 8) {
@@ -300,7 +296,7 @@ struct MatchCard: View {
                         }
                     }
                     .frame(maxWidth: .infinity, alignment: .trailing)
-
+                    
                     // 원정팀 이벤트 (가운데로 몰리게 - leading 정렬)
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(awayTeamEvents) { event in
@@ -325,19 +321,19 @@ struct MatchCard: View {
 struct EventRow: View {
     let event: MatchEvent
     let isHomeTeam: Bool
-
+    
     var body: some View {
         HStack(spacing: 8) {
             if isHomeTeam {
                 // 홈팀: 이름 - 아이콘 - 시간 (trailing 정렬)
-                Text(event.playerName)
+                Text(event.player.name)
                     .font(.caption)
                     .foregroundColor(.primary)
                     .lineLimit(1)
-
+                
                 eventIcon
                     .frame(width: 20, height: 20)
-
+                
                 Text("\(event.minute)'")
                     .font(.caption2)
                     .foregroundColor(AppColor.divider)
@@ -346,18 +342,18 @@ struct EventRow: View {
                 Text("\(event.minute)'")
                     .font(.caption2)
                     .foregroundColor(AppColor.divider)
-
+                
                 eventIcon
                     .frame(width: 20, height: 20)
-
-                Text(event.playerName)
+                
+                Text(event.player.name)
                     .font(.caption)
                     .foregroundColor(.primary)
                     .lineLimit(1)
             }
         }
     }
-
+    
     @ViewBuilder
     private var eventIcon: some View {
         switch event.type {
@@ -367,14 +363,14 @@ struct EventRow: View {
                 .resizable()
                 .scaledToFit()
                 .clipShape(Circle())
-
+            
         case .yellowCard:
             // 옐로우 카드 - 나중에 이미지로 대체 예정
             Rectangle()
                 .fill(Color.yellow)
                 .frame(width: 14, height: 18)
                 .cornerRadius(2)
-
+            
         case .redCard:
             // 레드 카드 - 나중에 이미지로 대체 예정
             Rectangle()
@@ -389,14 +385,14 @@ struct EventRow: View {
 struct FullscreenVideoPlayerView: View {
     let videoURL: String
     let onDismiss: () -> Void
-
+    
     @State private var player: AVPlayer?
     @State private var isLoading = true
-
+    
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-
+            
             if let player = player {
                 VideoPlayer(player: player)
                     .ignoresSafeArea()
@@ -421,7 +417,7 @@ struct FullscreenVideoPlayerView: View {
                         .foregroundColor(.white)
                 }
             }
-
+            
             // 닫기 버튼
             VStack {
                 HStack {
@@ -445,13 +441,13 @@ struct FullscreenVideoPlayerView: View {
             await loadVideo()
         }
     }
-
+    
     private func loadVideo() async {
         isLoading = true
-
+        
         do {
             let videoData: Data
-
+            
             // 외부 URL 또는 서버 데이터 로드
             if videoURL.hasPrefix("http://") || videoURL.hasPrefix("https://") {
                 // 외부 URL: URLSession으로 다운로드
@@ -467,18 +463,18 @@ struct FullscreenVideoPlayerView: View {
                     MediaRouter.getData(path: videoURL)
                 )
             }
-
+            
             // 임시 파일로 저장 (AVPlayer는 URL 필요)
             let tempURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension("mp4")
-
+            
             try videoData.write(to: tempURL)
-
+            
             // AVPlayer 생성
             let playerItem = AVPlayerItem(url: tempURL)
             let avPlayer = AVPlayer(playerItem: playerItem)
-
+            
             await MainActor.run {
                 self.player = avPlayer
                 self.isLoading = false
@@ -492,6 +488,81 @@ struct FullscreenVideoPlayerView: View {
             await MainActor.run {
                 self.isLoading = false
             }
+        }
+    }
+}
+
+// UIKit NavTitleView
+final class NavTitleView: UIView {
+    private let titleLabel: UILabel
+
+    init(title: String) {
+        self.titleLabel = UILabel()
+        super.init(frame: .zero)
+
+        titleLabel.text = title
+        titleLabel.font = UIFont(name: "LuckiestGuy-Regular", size: 28)
+        titleLabel.textColor = .label
+        titleLabel.sizeToFit()
+
+        addSubview(titleLabel)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+
+        NSLayoutConstraint.activate([
+            titleLabel.leadingAnchor.constraint(equalTo: leadingAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: centerYAnchor)
+        ])
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
+
+// SwiftUI에서 navigationItem.titleView 설정
+private struct NavTitleViewSetter: UIViewControllerRepresentable {
+    let title: String
+
+    func makeUIViewController(context: Context) -> TitleSetterViewController {
+        TitleSetterViewController(title: title)
+    }
+
+    func updateUIViewController(_ uiViewController: TitleSetterViewController, context: Context) {
+        uiViewController.updateTitle(title)
+    }
+
+    class TitleSetterViewController: UIViewController {
+        private var titleText: String
+
+        init(title: String) {
+            self.titleText = title
+            super.init(nibName: nil, bundle: nil)
+        }
+
+        required init?(coder: NSCoder) {
+            fatalError("init(coder:) has not been implemented")
+        }
+
+        override func viewWillAppear(_ animated: Bool) {
+            super.viewWillAppear(animated)
+            setupTitle()
+        }
+
+        func updateTitle(_ title: String) {
+            titleText = title
+            setupTitle()
+        }
+
+        private func setupTitle() {
+            guard let parent = parent,
+                  let navigationController = parent.navigationController else {
+                return
+            }
+
+            let titleView = NavTitleView(title: titleText)
+            let width = navigationController.navigationBar.bounds.width
+            titleView.frame = CGRect(x: 0, y: 0, width: width, height: 44)
+            parent.navigationItem.titleView = titleView
         }
     }
 }

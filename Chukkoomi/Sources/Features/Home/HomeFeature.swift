@@ -92,10 +92,20 @@ struct HomeFeature {
 
             state.isLoadingMatches = true
 
-            // ⚠️ 개발용: 더미 데이터만 사용 (API 호출 주석 처리)
             return .run { send in
-                // 더미 데이터를 바로 반환
-                await send(.loadMatchesResponse(.success([])))
+                do {
+                    let response = try await NetworkManager.shared.performRequest(
+                        MatchRouter.fetchRecentMatches,
+                        as: MatchDetailListDTO.self
+                    )
+
+                    let matches = response.toMatches
+                    print("경기 데이터 로드 완료: \(matches.count)개")
+                    await send(.loadMatchesResponse(.success(matches)))
+                } catch {
+                    print("경기 데이터 로드 실패: \(error)")
+                    await send(.loadMatchesResponse(.failure(error)))
+                }
             }
 
             /* 실제 API 호출 로직 (주석 처리됨)
@@ -200,13 +210,11 @@ struct HomeFeature {
 
             case let .loadMatchesResponse(.success(matches)):
                 state.isLoadingMatches = false
+                state.matches = matches
 
-                // 경기가 없으면 더미 데이터 사용
                 if matches.isEmpty {
-                    state.matches = HomeFeature.createDummyMatches()
-                    print("⚠️ 오늘 경기가 없어 더미 데이터 표시: \(state.matches.count)개")
+                    print("경기 데이터가 없습니다.")
                 } else {
-                    state.matches = matches
                     print("경기 데이터 로드 완료: \(matches.count)개")
                 }
                 return .none
@@ -266,13 +274,13 @@ extension HomeFeature {
                 homeScore: 3,
                 awayScore: 3,
                 events: [
-                    MatchEvent(type: .goal, playerName: "Aubameyang", minute: 19, teamName: ulsanName),
-                    MatchEvent(type: .goal, playerName: "Enzo", minute: 65, teamName: ulsanName),
-                    MatchEvent(type: .yellowCard, playerName: "Silva", minute: 42, teamName: ulsanName),
-                    MatchEvent(type: .goal, playerName: "Saka", minute: 25, teamName: jeonbukName),
-                    MatchEvent(type: .goal, playerName: "Lewas", minute: 78, teamName: jeonbukName),
-                    MatchEvent(type: .goal, playerName: "Kane", minute: 88, teamName: jeonbukName),
-                    MatchEvent(type: .yellowCard, playerName: "Bruno", minute: 55, teamName: jeonbukName)
+                    MatchEvent(type: .goal, player: Player(id: UUID().uuidString, number: 9, name: "Aubameyang"), minute: 19, isHomeTeam: true),
+                    MatchEvent(type: .goal, player: Player(id: UUID().uuidString, number: 8, name: "Enzo"), minute: 65, isHomeTeam: true),
+                    MatchEvent(type: .yellowCard, player: Player(id: UUID().uuidString, number: 7, name: "Silva"), minute: 42, isHomeTeam: true),
+                    MatchEvent(type: .goal, player: Player(id: UUID().uuidString, number: 11, name: "Saka"), minute: 25, isHomeTeam: false),
+                    MatchEvent(type: .goal, player: Player(id: UUID().uuidString, number: 9, name: "Lewas"), minute: 78, isHomeTeam: false),
+                    MatchEvent(type: .goal, player: Player(id: UUID().uuidString, number: 10, name: "Kane"), minute: 88, isHomeTeam: false),
+                    MatchEvent(type: .yellowCard, player: Player(id: UUID().uuidString, number: 8, name: "Bruno"), minute: 55, isHomeTeam: false)
                 ]
             ),
             // 경기 2: 포항 vs 서울 (2:1)
@@ -284,11 +292,11 @@ extension HomeFeature {
                 homeScore: 2,
                 awayScore: 1,
                 events: [
-                    MatchEvent(type: .goal, playerName: "Son", minute: 12, teamName: pohangName),
-                    MatchEvent(type: .goal, playerName: "Lee", minute: 67, teamName: pohangName),
-                    MatchEvent(type: .goal, playerName: "Park", minute: 45, teamName: seoulName),
-                    MatchEvent(type: .yellowCard, playerName: "Kim", minute: 30, teamName: seoulName),
-                    MatchEvent(type: .redCard, playerName: "Choi", minute: 82, teamName: seoulName)
+                    MatchEvent(type: .goal, player: Player(id: UUID().uuidString, number: 7, name: "Son"), minute: 12, isHomeTeam: true),
+                    MatchEvent(type: .goal, player: Player(id: UUID().uuidString, number: 10, name: "Lee"), minute: 67, isHomeTeam: true),
+                    MatchEvent(type: .goal, player: Player(id: UUID().uuidString, number: 9, name: "Park"), minute: 45, isHomeTeam: false),
+                    MatchEvent(type: .yellowCard, player: Player(id: UUID().uuidString, number: 5, name: "Kim"), minute: 30, isHomeTeam: false),
+                    MatchEvent(type: .redCard, player: Player(id: UUID().uuidString, number: 4, name: "Choi"), minute: 82, isHomeTeam: false)
                 ]
             ),
             // 경기 3: 제주 vs 수원FC (0:0)
@@ -300,9 +308,9 @@ extension HomeFeature {
                 homeScore: 0,
                 awayScore: 0,
                 events: [
-                    MatchEvent(type: .yellowCard, playerName: "Jung", minute: 23, teamName: jejuName),
-                    MatchEvent(type: .yellowCard, playerName: "Kang", minute: 67, teamName: jejuName),
-                    MatchEvent(type: .yellowCard, playerName: "Hwang", minute: 51, teamName: suwonFCName)
+                    MatchEvent(type: .yellowCard, player: Player(id: UUID().uuidString, number: 6, name: "Jung"), minute: 23, isHomeTeam: true),
+                    MatchEvent(type: .yellowCard, player: Player(id: UUID().uuidString, number: 8, name: "Kang"), minute: 67, isHomeTeam: true),
+                    MatchEvent(type: .yellowCard, player: Player(id: UUID().uuidString, number: 3, name: "Hwang"), minute: 51, isHomeTeam: false)
                 ]
             )
         ]

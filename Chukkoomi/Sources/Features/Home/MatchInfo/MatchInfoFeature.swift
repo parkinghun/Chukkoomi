@@ -17,7 +17,11 @@ struct MatchInfoFeature {
         let match: Match
         var selectedTeam: TeamType = .home
         var matchDetail: MatchDetail?
-        var isLoading: Bool = false
+
+        init(match: Match) {
+            self.match = match
+            self.matchDetail = match.matchDetail
+        }
 
         enum TeamType {
             case home
@@ -29,18 +33,13 @@ struct MatchInfoFeature {
     enum Action: Equatable {
         case onAppear
         case selectTeam(State.TeamType)
-        case fetchMatchDetail
-        case fetchMatchDetailResponse(Result<MatchDetail, Error>)
 
         static func == (lhs: Action, rhs: Action) -> Bool {
             switch (lhs, rhs) {
-            case (.onAppear, .onAppear),
-                 (.fetchMatchDetail, .fetchMatchDetail):
+            case (.onAppear, .onAppear):
                 return true
             case let (.selectTeam(lhsType), .selectTeam(rhsType)):
                 return lhsType == rhsType
-            case (.fetchMatchDetailResponse, .fetchMatchDetailResponse):
-                return true
             default:
                 return false
             }
@@ -52,37 +51,10 @@ struct MatchInfoFeature {
         Reduce { state, action in
             switch action {
             case .onAppear:
-                return .send(.fetchMatchDetail)
+                return .none
 
             case let .selectTeam(teamType):
                 state.selectedTeam = teamType
-                return .none
-
-            case .fetchMatchDetail:
-                state.isLoading = true
-                return .run { send in
-                    do {
-                        let response = try await NetworkManager.shared.performRequest(
-                            MatchRouter.fetchMatchDetail(title: "1138378"),
-                            as: MatchDetailListDTO.self
-                        )
-
-                        let matchDetail = try response.toDomain
-                        await send(.fetchMatchDetailResponse(.success(matchDetail)))
-                    } catch {
-                        print("Match Detail 받아오기 실패: \(error)")
-                        await send(.fetchMatchDetailResponse(.failure(error)))
-                    }
-                }
-
-            case let .fetchMatchDetailResponse(.success(matchDetail)):
-                state.isLoading = false
-                state.matchDetail = matchDetail
-                return .none
-
-            case let .fetchMatchDetailResponse(.failure(error)):
-                state.isLoading = false
-                print("Error: \(error.localizedDescription)")
                 return .none
             }
         }
