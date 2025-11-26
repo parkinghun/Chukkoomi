@@ -352,6 +352,7 @@ private struct FieldPlayerRowView: View {
             }
         }
         .padding(.horizontal, AppPadding.large)
+        .tint(.white)
     }
 }
 
