@@ -247,9 +247,6 @@ struct PostCreateFeature {
                 state.errorMessage = nil
 
                 let logPrefix = state.isEditMode ? "게시글 수정 시작" : "게시글 업로드 시작"
-                print(logPrefix)
-                print("   카테고리: \(state.selectedCategory.rawValue)")
-                print("   내용: \(state.content)")
 
                 // 수정 모드인지 작성 모드인지에 따라 분기
                 if state.isEditMode {

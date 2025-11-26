@@ -14,12 +14,10 @@ struct CommentView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 헤더
             headerView
 
             Divider()
 
-            // 댓글 리스트
             if store.isLoading {
                 Spacer()
                 ProgressView()
@@ -32,7 +30,6 @@ struct CommentView: View {
 
             Divider()
 
-            // 댓글 입력 필드
             commentInputView
         }
         .background(Color(uiColor: .systemBackground))
@@ -101,9 +98,7 @@ struct CommentView: View {
         let isMyComment = comment.creator.userId == UserDefaultsHelper.userId
 
         return HStack(alignment: .top, spacing: 12) {
-            // 프로필 영역 (이미지 + 이름/시간/내용)
             HStack(alignment: .top, spacing: 12) {
-                // 프로필 이미지
                 if let profileImagePath = comment.creator.profileImage {
                     AsyncMediaImageView(
                         imagePath: profileImagePath,
@@ -122,7 +117,6 @@ struct CommentView: View {
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
-                    // 이름 + 날짜
                     HStack(spacing: 8) {
                         Text(comment.creator.nickname)
                             .font(.subheadline)
@@ -134,7 +128,6 @@ struct CommentView: View {
                             .foregroundColor(.gray)
                     }
 
-                    // 댓글 내용
                     Text(comment.content)
                         .font(.appBody)
                         .foregroundColor(.black)
@@ -147,7 +140,6 @@ struct CommentView: View {
 
             Spacer()
 
-            // 내 댓글이면 메뉴 버튼
             if isMyComment {
                 Button {
                     store.send(.commentMenuTapped(comment.id))
@@ -166,7 +158,6 @@ struct CommentView: View {
     // MARK: - Comment Input
     private var commentInputView: some View {
         VStack(spacing: 8) {
-            // 수정 모드 헤더
             if store.isEditMode {
                 HStack {
                     Text("댓글 수정 중")
@@ -187,7 +178,6 @@ struct CommentView: View {
             }
 
             HStack(spacing: 12) {
-                // 텍스트 필드
                 HStack(spacing: 8) {
                     TextField(
                         store.isEditMode ? "댓글 수정" : "\(store.postCreatorName)님에게 댓글 추가",

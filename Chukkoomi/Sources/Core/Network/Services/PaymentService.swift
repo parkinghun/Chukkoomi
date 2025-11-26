@@ -27,7 +27,7 @@ final class PaymentService: PaymentServiceProtocol {
     
     // MARK: - Iamport 설정 (나중에 AppInfo로 이동 가능)
     private let iamportUserCode = APIInfo.iamportUserCode
-    private let appScheme = "portone" // TODO: Info.plist의 URL Scheme과 동일하게 설정
+    private let appScheme = "portone"
     
     init(networkManager: NetworkManager = .shared) {
         self.networkManager = networkManager

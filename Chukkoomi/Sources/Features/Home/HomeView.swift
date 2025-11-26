@@ -15,7 +15,6 @@ struct HomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 0) {
-                // 영상 섹션 (lightGray 배경 영역)
                 VStack(spacing: 0) {
                     videoSection()
                         .padding(.top, 16)
@@ -47,7 +46,6 @@ struct HomeView: View {
         .onAppear {
             store.send(.onAppear)
         }
-        // 네비게이션 연결
         .modifier(HomeNavigation(store: store))
     }
     
@@ -81,6 +79,7 @@ struct HomeView: View {
                     .buttonWrapper {
                         store.send(.videoThumbnailTapped)
                     }
+                    .disabled(true)
             }
             .cornerRadius(20)
             .padding(.horizontal, 20)
@@ -223,9 +222,7 @@ struct MatchCard: View {
     
     var body: some View {
         VStack(spacing: 12) {
-            // 경기 정보
             HStack(spacing: 20) {
-                // 홈 팀
                 VStack(spacing: 8) {
                     if let homeTeam = homeTeam {
                         Image(homeTeam.logoImageName)
@@ -246,7 +243,6 @@ struct MatchCard: View {
                 }
                 .frame(maxWidth: .infinity)
                 
-                // 스코어
                 if let homeScore = match.homeScore, let awayScore = match.awayScore {
                     Text("\(homeScore) : \(awayScore)")
                         .font(.luckiestGuyLarge)
@@ -257,7 +253,6 @@ struct MatchCard: View {
                         .foregroundColor(.gray)
                 }
                 
-                // 원정 팀
                 VStack(spacing: 8) {
                     if let awayTeam = awayTeam {
                         Image(awayTeam.logoImageName)
@@ -279,7 +274,6 @@ struct MatchCard: View {
                 .frame(maxWidth: .infinity)
             }
             
-            // 경기 이벤트 표시
             if !match.events.isEmpty {
                 Divider()
                     .padding(.vertical, 8)
@@ -321,7 +315,6 @@ struct EventRow: View {
     var body: some View {
         HStack(spacing: 8) {
             if isHomeTeam {
-                // 홈팀: 이름 - 아이콘 - 시간 (trailing 정렬)
                 Text(event.player.name)
                     .font(.caption)
                     .foregroundColor(.primary)
@@ -334,7 +327,6 @@ struct EventRow: View {
                     .font(.caption2)
                     .foregroundColor(AppColor.divider)
             } else {
-                // 원정팀: 시간 - 아이콘 - 이름 (leading 정렬)
                 Text("\(event.minute)'")
                     .font(.caption2)
                     .foregroundColor(AppColor.divider)
@@ -354,21 +346,18 @@ struct EventRow: View {
     private var eventIcon: some View {
         switch event.type {
         case .goal:
-            // 골 아이콘 - "기본 프로필2" 이미지 사용
             Image("DefaultProfile2")
                 .resizable()
                 .scaledToFit()
                 .clipShape(Circle())
             
         case .yellowCard:
-            // 옐로우 카드 - 나중에 이미지로 대체 예정
             Rectangle()
                 .fill(Color.yellow)
                 .frame(width: 14, height: 18)
                 .cornerRadius(2)
             
         case .redCard:
-            // 레드 카드 - 나중에 이미지로 대체 예정
             Rectangle()
                 .fill(Color.red)
                 .frame(width: 14, height: 18)
@@ -403,7 +392,6 @@ struct FullscreenVideoPlayerView: View {
                     .tint(.white)
                     .scaleEffect(1.5)
             } else {
-                // 로드 실패
                 VStack(spacing: 16) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 50))
@@ -414,7 +402,6 @@ struct FullscreenVideoPlayerView: View {
                 }
             }
             
-            // 닫기 버튼
             VStack {
                 HStack {
                     Spacer()
@@ -444,9 +431,7 @@ struct FullscreenVideoPlayerView: View {
         do {
             let videoData: Data
             
-            // 외부 URL 또는 서버 데이터 로드
             if videoURL.hasPrefix("http://") || videoURL.hasPrefix("https://") {
-                // 외부 URL: URLSession으로 다운로드
                 guard let url = URL(string: videoURL) else {
                     isLoading = false
                     return
@@ -454,20 +439,17 @@ struct FullscreenVideoPlayerView: View {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 videoData = data
             } else {
-                // 서버에서 다운로드
                 videoData = try await NetworkManager.shared.download(
                     MediaRouter.getData(path: videoURL)
                 )
             }
             
-            // 임시 파일로 저장 (AVPlayer는 URL 필요)
             let tempURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension("mp4")
             
             try videoData.write(to: tempURL)
             
-            // AVPlayer 생성
             let playerItem = AVPlayerItem(url: tempURL)
             let avPlayer = AVPlayer(playerItem: playerItem)
             
