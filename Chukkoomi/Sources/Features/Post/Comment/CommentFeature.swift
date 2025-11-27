@@ -146,7 +146,6 @@ struct CommentFeature {
                         let comments = response.data.map { $0.toDomain }
                         await send(.commentsLoaded(.success(comments)))
                     } catch {
-                        print("❌ 댓글 로드 실패: \(error)")
                         await send(.commentsLoaded(.failure(error)))
                     }
                 }
@@ -154,7 +153,6 @@ struct CommentFeature {
             case let .commentsLoaded(.success(comments)):
                 state.isLoading = false
                 state.comments = comments
-                print("✅ 댓글 로드 완료: \(comments.count)개")
                 return .none
 
             case .commentsLoaded(.failure):
@@ -177,7 +175,6 @@ struct CommentFeature {
                 }
 
             case .sendComment:
-                // 수정 모드일 경우 updateComment로 분기
                 if state.isEditMode {
                     return .send(.updateComment)
                 }
@@ -198,7 +195,6 @@ struct CommentFeature {
                         let comment = response.toDomain
                         await send(.commentSent(.success(comment)))
                     } catch {
-                        print("❌ 댓글 작성 실패: \(error)")
                         await send(.commentSent(.failure(error)))
                     }
                 }
@@ -206,13 +202,11 @@ struct CommentFeature {
             case let .commentSent(.success(comment)):
                 state.isSending = false
                 state.commentText = ""
-                state.comments.insert(comment, at: 0) // 최신 댓글이 위로
-                print("✅ 댓글 작성 완료")
-                return .send(.delegate(.commentCountChanged(1))) // 댓글 수 +1
+                state.comments.insert(comment, at: 0)
+                return .send(.delegate(.commentCountChanged(1)))
 
             case .commentSent(.failure):
                 state.isSending = false
-                // TODO: 에러 토스트 표시
                 return .none
 
             case .updateComment:
@@ -234,7 +228,6 @@ struct CommentFeature {
                         let comment = response.toDomain
                         await send(.commentUpdated(.success(comment)))
                     } catch {
-                        print("❌ 댓글 수정 실패: \(error)")
                         await send(.commentUpdated(.failure(error)))
                     }
                 }
@@ -249,12 +242,10 @@ struct CommentFeature {
                 if let index = state.comments.firstIndex(where: { $0.id == comment.id }) {
                     state.comments[index] = comment
                 }
-                print("✅ 댓글 수정 완료")
                 return .none
 
             case .commentUpdated(.failure):
                 state.isSending = false
-                // TODO: 에러 토스트 표시
                 return .none
 
             case .cancelEdit:
@@ -281,7 +272,6 @@ struct CommentFeature {
                 return .none
 
             case .menu(.presented(.edit)):
-                // 수정 모드 진입
                 guard let commentId = state.editingCommentId,
                       let comment = state.comments.first(where: { $0.id == commentId }) else {
                     return .none
@@ -291,7 +281,6 @@ struct CommentFeature {
                 return .none
 
             case .menu(.presented(.delete)):
-                // 삭제 확인 Alert 표시
                 state.deleteAlert = AlertState {
                     TextState("댓글을 삭제하시겠어요?")
                 } actions: {
@@ -310,7 +299,7 @@ struct CommentFeature {
                 return .none
 
             case .deleteAlert(.presented(.confirmDelete)):
-                guard let commentId = state.editingCommentId else { return .none }
+                guard state.editingCommentId != nil else { return .none }
                 return .send(.deleteComment)
 
             case .deleteAlert:
@@ -324,23 +313,19 @@ struct CommentFeature {
                         try await NetworkManager.shared.performRequestWithoutResponse(CommentRouter.deleteComment(postId: postId, commentId: commentId))
                         await send(.deleteCommentResponse(.success(())))
                     } catch {
-                        print("❌ 댓글 삭제 실패: \(error)")
                         await send(.deleteCommentResponse(.failure(error)))
                     }
                 }
 
             case .deleteCommentResponse(.success):
-                // 댓글 목록에서 제거
                 if let commentId = state.editingCommentId {
                     state.comments.removeAll { $0.id == commentId }
-                    print("✅ 댓글 삭제 완료")
                 }
                 state.editingCommentId = nil
-                return .send(.delegate(.commentCountChanged(-1))) // 댓글 수 -1
+                return .send(.delegate(.commentCountChanged(-1)))
 
             case .deleteCommentResponse(.failure):
                 state.editingCommentId = nil
-                // TODO: 에러 토스트 표시
                 return .none
 
             case .myProfile:

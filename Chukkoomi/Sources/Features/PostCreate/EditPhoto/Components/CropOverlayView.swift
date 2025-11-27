@@ -32,7 +32,6 @@ struct CropOverlayView: View {
             )
 
             ZStack {
-                // 어두운 오버레이 (자를 영역 제외)
                 Color.black.opacity(0.5)
                     .mask {
                         ZStack {
@@ -51,7 +50,6 @@ struct CropOverlayView: View {
                     }
                     .allowsHitTesting(false)
 
-                // Crop 영역 테두리
                 Rectangle()
                     .stroke(Color.white, lineWidth: 2)
                     .frame(width: actualRect.width, height: actualRect.height)
@@ -61,16 +59,13 @@ struct CropOverlayView: View {
                     )
                     .allowsHitTesting(false)
 
-                // 그리드 라인 (3x3)
                 Path { path in
-                    // 세로 라인 2개
                     let thirdWidth = actualRect.width / 3
                     path.move(to: CGPoint(x: actualRect.minX + thirdWidth, y: actualRect.minY))
                     path.addLine(to: CGPoint(x: actualRect.minX + thirdWidth, y: actualRect.maxY))
                     path.move(to: CGPoint(x: actualRect.minX + thirdWidth * 2, y: actualRect.minY))
                     path.addLine(to: CGPoint(x: actualRect.minX + thirdWidth * 2, y: actualRect.maxY))
 
-                    // 가로 라인 2개
                     let thirdHeight = actualRect.height / 3
                     path.move(to: CGPoint(x: actualRect.minX, y: actualRect.minY + thirdHeight))
                     path.addLine(to: CGPoint(x: actualRect.maxX, y: actualRect.minY + thirdHeight))
@@ -80,7 +75,6 @@ struct CropOverlayView: View {
                 .stroke(Color.white.opacity(0.5), lineWidth: 1)
                 .allowsHitTesting(false)
 
-                // 이동 가능한 중앙 영역
                 Rectangle()
                     .fill(Color.clear)
                     .frame(width: actualRect.width, height: actualRect.height)
@@ -103,7 +97,6 @@ struct CropOverlayView: View {
                                 newRect.origin.x += normalizedTranslation.x
                                 newRect.origin.y += normalizedTranslation.y
 
-                                // 경계 체크
                                 newRect.origin.x = max(0, min(newRect.origin.x, 1.0 - newRect.width))
                                 newRect.origin.y = max(0, min(newRect.origin.y, 1.0 - newRect.height))
 
@@ -114,13 +107,11 @@ struct CropOverlayView: View {
                             }
                     )
 
-                // 코너 핸들
                 cornerHandle(at: actualRect.origin, type: .topLeft, in: geometry)
                 cornerHandle(at: CGPoint(x: actualRect.maxX, y: actualRect.minY), type: .topRight, in: geometry)
                 cornerHandle(at: CGPoint(x: actualRect.minX, y: actualRect.maxY), type: .bottomLeft, in: geometry)
                 cornerHandle(at: CGPoint(x: actualRect.maxX, y: actualRect.maxY), type: .bottomRight, in: geometry)
 
-                // 엣지 핸들
                 edgeHandle(at: CGPoint(x: actualRect.midX, y: actualRect.minY), type: .top, in: geometry)
                 edgeHandle(at: CGPoint(x: actualRect.midX, y: actualRect.maxY), type: .bottom, in: geometry)
                 edgeHandle(at: CGPoint(x: actualRect.minX, y: actualRect.midY), type: .left, in: geometry)
@@ -129,7 +120,6 @@ struct CropOverlayView: View {
         }
     }
 
-    // 코너 핸들
     @ViewBuilder
     private func cornerHandle(at position: CGPoint, type: DragType, in geometry: GeometryProxy) -> some View {
         Circle()
@@ -155,7 +145,6 @@ struct CropOverlayView: View {
             )
     }
 
-    // 엣지 핸들
     @ViewBuilder
     private func edgeHandle(at position: CGPoint, type: DragType, in geometry: GeometryProxy) -> some View {
         let isHorizontal = type == .left || type == .right
@@ -186,7 +175,6 @@ struct CropOverlayView: View {
             )
     }
 
-    // 코너 드래그 처리
     private func handleCornerDrag(_ value: DragGesture.Value, type: DragType, geometry: GeometryProxy) {
         let translation = value.translation
         let normalizedTranslation = CGPoint(

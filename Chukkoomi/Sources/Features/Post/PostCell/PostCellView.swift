@@ -17,7 +17,6 @@ struct PostCellView: View {
             headerView
                 .padding(.bottom,AppPadding.medium)
 
-            // 미디어 + 액션바 (가로 배치)
             HStack(alignment: .center, spacing: 0) {
                 mediaContentView
                     .frame(maxWidth: .infinity)
@@ -30,7 +29,6 @@ struct PostCellView: View {
             titleView
                 .padding(.bottom,AppPadding.medium)
 
-            // 좋아요한 사람 프로필 이미지 + 좋아요 수
             if store.likeCount > 0 {
                 likedUsersView
             }
@@ -60,9 +58,7 @@ struct PostCellView: View {
     // MARK: - Header
     private var headerView: some View {
         HStack(spacing: 12) {
-            // 프로필 영역 (이미지 + 이름/시간)
             HStack(spacing: 12) {
-                // 프로필 이미지
                 if let profileImagePath = store.post.creator?.profileImage {
                     AsyncMediaImageView(
                         imagePath: profileImagePath,
@@ -108,7 +104,6 @@ struct PostCellView: View {
 
             Spacer()
 
-            // 항상 메뉴 버튼 표시
             menuButtonView()
         }
     }
@@ -116,11 +111,9 @@ struct PostCellView: View {
     // MARK: - Title
     private var titleView: some View {
         VStack(alignment: .leading, spacing: 8) {
-            // 해시태그 제외한 본문만 표시
             Text(extractContentWithoutHashtags(from: store.post.content))
                 .font(Font.appSubBody)
 
-            // 해시태그 표시 (버튼)
             if !store.post.hashTags.isEmpty {
                 HashtagFlowLayout(spacing: 8) {
                     ForEach(store.post.hashTags, id: \.self) { tag in
@@ -147,14 +140,12 @@ struct PostCellView: View {
                 let imageHeight = availableWidth / (16.0 / 9.0)
 
                 if isVideo {
-                    // 비디오 재생
                     URLMediaPlayerView(mediaPath: firstFile)
                         .aspectRatio(16/9, contentMode: .fit)
                         .clipped()
                         .cornerRadius(12)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 } else {
-                    // 이미지 표시
                     AsyncMediaImageView(
                         imagePath: firstFile,
                         width: availableWidth,
@@ -241,7 +232,6 @@ struct PostCellView: View {
     // MARK: - Liked Users View
     private var likedUsersView: some View {
         HStack(spacing: 0) {
-            // 프로필 이미지들 (겹쳐서 표시)
             ZStack(alignment: .leading) {
                 ForEach(Array(store.likedUsers.prefix(3).enumerated()), id: \.offset) { index, user in
                     if let profileImagePath = user.profileImage {
@@ -280,11 +270,9 @@ struct PostCellView: View {
                 alignment: .leading
             )
 
-            // 고정된 간격 (8px)
             Spacer()
                 .frame(width: 8)
 
-            // 좋아요 텍스트
             if let firstName = store.likedUsers.first?.nickname {
                 Text(store.likeCount == 1
                     ? "\(firstName)님이 좋아합니다."
@@ -318,7 +306,6 @@ struct PostCellView: View {
 
     /// 컨텐츠에서 해시태그를 제거하고 본문만 추출
     private func extractContentWithoutHashtags(from fullContent: String) -> String {
-        // 정규식으로 해시태그 패턴 제거 (#으로 시작하고 공백이나 #이 아닌 문자들)
         let pattern = "#[^\\s#]+"
         guard let regex = try? NSRegularExpression(pattern: pattern, options: []) else {
             return fullContent
@@ -332,7 +319,6 @@ struct PostCellView: View {
             withTemplate: ""
         )
 
-        // 여러 개의 연속된 공백을 하나로 줄이고 양쪽 공백 제거
         return result
             .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -378,7 +364,6 @@ struct URLMediaPlayerView: View {
                 ProgressView()
                     .tint(.white)
             } else {
-                // 로드 실패
                 VStack(spacing: 8) {
                     Image(systemName: "exclamationmark.triangle")
                         .font(.system(size: 40))
@@ -402,7 +387,6 @@ struct URLMediaPlayerView: View {
 
             // TODO: picsum 테스트용 임시 코드 - 나중에 삭제
             if mediaPath.hasPrefix("http://") || mediaPath.hasPrefix("https://") {
-                // 외부 URL: URLSession으로 직접 다운로드
                 guard let url = URL(string: mediaPath) else {
                     isLoading = false
                     return
@@ -410,20 +394,17 @@ struct URLMediaPlayerView: View {
                 let (data, _) = try await URLSession.shared.data(from: url)
                 videoData = data
             } else {
-                // 실제 사용 코드: 서버에서 다운로드
                 videoData = try await NetworkManager.shared.download(
                     MediaRouter.getData(path: mediaPath)
                 )
             }
 
-            // 임시 파일로 저장 (AVPlayer는 URL이 필요)
             let tempURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension("mp4")
 
             try videoData.write(to: tempURL)
 
-            // AVPlayer 생성
             let playerItem = AVPlayerItem(url: tempURL)
             let avPlayer = AVPlayer(playerItem: playerItem)
 
@@ -432,7 +413,6 @@ struct URLMediaPlayerView: View {
                 self.isLoading = false
             }
         } catch is CancellationError {
-            // Task가 취소되었을 때는 로그를 남기지 않음
             await MainActor.run {
                 self.isLoading = false
             }
@@ -486,7 +466,6 @@ struct HashtagFlowLayout: Layout {
                 let size = subview.sizeThatFits(.unspecified)
 
                 if currentX + size.width > maxWidth && currentX > 0 {
-                    // 다음 줄로
                     currentX = 0
                     currentY += lineHeight + spacing
                     lineHeight = 0

@@ -16,11 +16,3 @@ extension User {
         return UserDTO(user_id: userId, nick: nickname, profileImage: profileImage)
     }
 }
-
-/*
-{
-    "user_id": "690c9f66ff94927948fe9e06",
-    "nick": "nickname",
-    "profileImage": "/data/profiles/1762438647744.png"
-}
-*/

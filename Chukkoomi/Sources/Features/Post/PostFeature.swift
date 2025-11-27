@@ -318,7 +318,6 @@ struct PostFeature {
                     return .none
                 case .postShared:
                     state.sharePost = nil
-                    // TODO: 공유 성공 토스트 표시
                     return .none
                 }
 

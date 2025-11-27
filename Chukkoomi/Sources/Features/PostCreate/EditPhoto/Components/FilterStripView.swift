@@ -12,10 +12,10 @@ import ComposableArchitecture
 struct FilterStripView: View {
     let filterThumbnails: [ImageFilter: UIImage]
     let selectedFilter: ImageFilter
-    let purchasedFilterTypes: Set<ImageFilter>  // 구매한 필터 타입
+    let purchasedFilterTypes: Set<ImageFilter>
     let onFilterTap: (ImageFilter) -> Void
     let onFilterDragStart: (ImageFilter) -> Void
-
+    
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
@@ -38,12 +38,10 @@ struct FilterStripView: View {
         }
         .frame(height: 120)
     }
-
-    // 필터 구매 여부 확인
+    
     private func isPurchased(_ filter: ImageFilter) -> Bool {
-        // 유료 필터가 아니면 항상 true
         guard filter.isPaid else { return true }
-
+        
         // 캐시된 purchasedFilterTypes에서 확인 (동기적으로)
         return purchasedFilterTypes.contains(filter)
     }
@@ -54,14 +52,13 @@ struct FilterThumbnailView: View {
     let filter: ImageFilter
     let thumbnail: UIImage?
     let isSelected: Bool
-    let isPurchased: Bool  // 구매 여부
+    let isPurchased: Bool
     let onTap: () -> Void
     let onDragStart: () -> Void
-
+    
     var body: some View {
         VStack(spacing: 8) {
-            // 썸네일 이미지
-            ZStack {
+            ZStack(alignment: .topTrailing) {
                 if let thumbnail = thumbnail {
                     Image(uiImage: thumbnail)
                         .resizable()
@@ -77,32 +74,23 @@ struct FilterThumbnailView: View {
                                 .tint(.gray)
                         }
                 }
-
-                // Lock/Unlock 아이콘 (유료 필터인 경우)
+                
                 if filter.isPaid {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            Image(systemName: isPurchased ? "lock.open.fill" : "lock.fill")
-                                .font(.system(size: 14))
-                                .foregroundColor(.white)
-                                .padding(4)
-                                .background(isPurchased ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
-                                .clipShape(Circle())
-                                .padding(6)
-                        }
-                        Spacer()
-                    }
+                    (isPurchased ? AppIcon.unlock : AppIcon.lock)
+                        .font(.system(size: 14))
+                        .foregroundColor(.white)
+                        .padding(4)
+                        .background(isPurchased ? Color.green.opacity(0.8) : Color.red.opacity(0.8))
+                        .clipShape(Circle())
+                        .padding(6)
                 }
             }
             .overlay(
-                // 선택 인디케이터
                 RoundedRectangle(cornerRadius: 8)
                     .strokeBorder(isSelected ? Color.gray : Color.clear, lineWidth: 3)
                     .frame(width: 80, height: 80)
             )
             .draggable(filter) {
-                // 드래그 중 미리보기
                 VStack(spacing: 4) {
                     if let thumbnail = thumbnail {
                         Image(uiImage: thumbnail)
@@ -125,8 +113,7 @@ struct FilterThumbnailView: View {
             .onTapGesture {
                 onTap()
             }
-
-            // 필터 이름
+            
             Text(filter.rawValue)
                 .font(.caption)
                 .fontWeight(isSelected ? .semibold : .regular)
@@ -134,7 +121,3 @@ struct FilterThumbnailView: View {
         }
     }
 }
-
-//TODO: - 선택된게 업데이트 가 안됨 -> 텍스트 및 frame
-//TODO: - 스티커는 do/undo가 안되는 이유
-//TODO: - 전체 undo 했을 때, 그리기가 사라지는게 아니라 그리기가 적용된 필터가 사라짐. 그리기만 사라지고 싶음
