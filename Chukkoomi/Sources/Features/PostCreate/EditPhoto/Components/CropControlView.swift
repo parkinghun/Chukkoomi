@@ -17,7 +17,6 @@ struct CropControlView: View {
 
     var body: some View {
         VStack(spacing: 12) {
-            // 비율 선택 버튼들
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 8) {
                     ForEach(EditPhotoFeature.CropAspectRatio.allCases) { ratio in
@@ -39,7 +38,6 @@ struct CropControlView: View {
                 .padding(.horizontal, 20)
             }
 
-            // 적용/리셋 버튼
             HStack(spacing: 12) {
                 Button {
                     onResetCrop()

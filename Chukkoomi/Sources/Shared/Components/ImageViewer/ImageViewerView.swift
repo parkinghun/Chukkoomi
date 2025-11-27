@@ -377,10 +377,6 @@ class ZoomableImageUIView: UIView {
         case .changed:
             let currentTranslation = gesture.translation(in: self)
 
-            // 이전 프레임 대비 델타만 계산
-            let deltaX = currentTranslation.x - lastPanTranslation.x
-            let deltaY = currentTranslation.y - lastPanTranslation.y
-
             // 델타를 전달
             coordinator?.panChanged(translation: CGSize(width: currentTranslation.x, height: currentTranslation.y))
 

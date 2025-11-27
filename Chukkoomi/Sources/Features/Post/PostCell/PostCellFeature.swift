@@ -20,7 +20,7 @@ struct PostCellFeature {
         var commentCount: Int
         var isBookmarked: Bool
         var isFollowing: Bool
-        var likedUsers: [User] = [] // 좋아요 누른 사용자들 (최대 3명)
+        var likedUsers: [User] = []
         var isLoadingLikedUsers: Bool = false
         var currentImage: UIImage? = nil // 로드된 이미지 저장
 
@@ -36,7 +36,6 @@ struct PostCellFeature {
             post.id
         }
 
-        // 본인이 작성한 게시글인지 확인
         var isMyPost: Bool {
             guard let myUserId = UserDefaultsHelper.userId,
                   let creatorId = post.creator?.userId else {
@@ -50,24 +49,20 @@ struct PostCellFeature {
             self.likeCount = post.likes?.count ?? 0
             self.commentCount = post.commentCount ?? 0
 
-            // 본인의 userId 가져오기
             let myUserId = UserDefaultsHelper.userId
 
-            // 좋아요 초기 상태 설정
             if let myUserId = myUserId, let likes = post.likes {
                 self.isLiked = likes.contains(myUserId)
             } else {
                 self.isLiked = false
             }
 
-            // 북마크 초기 상태 설정
             if let myUserId = myUserId, let bookmarks = post.bookmarks {
                 self.isBookmarked = bookmarks.contains(myUserId)
             } else {
                 self.isBookmarked = false
             }
 
-            // 팔로우 초기 상태 설정 (추후 Profile 정보로 확인 필요)
             self.isFollowing = false
         }
     }
@@ -81,7 +76,6 @@ struct PostCellFeature {
 
     // MARK: - Action
     enum Action: Equatable {
-        // User Actions
         case postTapped
         case profileTapped
         case likeTapped
@@ -96,22 +90,12 @@ struct PostCellFeature {
 
         // Comment Count Update
         case updateCommentCount(Int) // delta: +1 or -1
-
-        // Follow Status Update
         case updateFollowStatus(Bool) // 팔로우 상태 업데이트
-
-        // Liked Users Loading
         case loadLikedUsers
         case likedUsersResponse(Result<[User], Error>)
-
-        // Menu Actions
         case menu(PresentationAction<Menu>)
-
-        // Delete Alert Actions
         case deleteAlert(PresentationAction<DeleteAlert>)
         case deleteResponse(Result<Void, Error>)
-
-        // Debounced Network Actions
         case debouncedToggleRequest(ToggleType)
         case toggleResponse(ToggleType, Result<PostLikeResponseDTO, Error>)
 
@@ -208,19 +192,15 @@ struct PostCellFeature {
                 }
 
             case .likeTapped:
-                // 낙관적 UI 업데이트 (즉시 상태 변경)
                 state.isLiked.toggle()
                 state.likeCount += state.isLiked ? 1 : -1
 
-                // 디바운스를 통해 마지막 상태만 네트워크 전송
                 return .send(.debouncedToggleRequest(.like))
                     .debounce(id: ToggleType.like, for: .milliseconds(300), scheduler: DispatchQueue.main)
 
             case .bookmarkTapped:
-                // 낙관적 UI 업데이트 (즉시 상태 변경)
                 state.isBookmarked.toggle()
 
-                // 디바운스를 통해 마지막 상태만 네트워크 전송
                 return .send(.debouncedToggleRequest(.bookmark))
                     .debounce(id: ToggleType.bookmark, for: .milliseconds(300), scheduler: DispatchQueue.main)
 
@@ -265,23 +245,19 @@ struct PostCellFeature {
                 return .none
 
             case .loadLikedUsers:
-                // 이미 로딩 중이거나 이미 로드했으면 스킵
                 guard !state.isLoadingLikedUsers && state.likedUsers.isEmpty else {
                     return .none
                 }
 
-                // likes가 없거나 비어있으면 스킵
                 guard let likes = state.post.likes, !likes.isEmpty else {
                     return .none
                 }
 
-                // 처음 3명만 가져오기
                 let userIdsToFetch = Array(likes.prefix(3))
                 state.isLoadingLikedUsers = true
 
                 return .run { send in
                     do {
-                        // 병렬로 프로필 조회
                         let users = try await withThrowingTaskGroup(of: User?.self) { group in
                             for userId in userIdsToFetch {
                                 group.addTask {
@@ -327,16 +303,13 @@ struct PostCellFeature {
                 return .send(.delegate(.sharePost(postId)))
 
             case .followTapped:
-                // 낙관적 UI 업데이트 (즉시 상태 변경)
                 state.isFollowing.toggle()
 
-                // 디바운스를 통해 마지막 상태만 네트워크 전송
                 return .send(.debouncedToggleRequest(.follow))
                     .debounce(id: ToggleType.follow, for: .milliseconds(300), scheduler: DispatchQueue.main)
 
             case .menuTapped:
                 if state.isMyPost {
-                    // 내 게시물: 수정하기/삭제하기
                     state.menu = ConfirmationDialogState {
                         TextState("게시글 관리")
                     } actions: {
@@ -351,7 +324,6 @@ struct PostCellFeature {
                         }
                     }
                 } else {
-                    // 다른 사람 게시물: 팔로우/팔로잉
                     state.menu = ConfirmationDialogState {
                         TextState("사용자 관리")
                     } actions: {
@@ -370,7 +342,6 @@ struct PostCellFeature {
                 return .send(.delegate(.editPost(postId)))
 
             case .menu(.presented(.deletePost)):
-                // 삭제 확인 Alert 띄우기
                 state.deleteAlert = AlertState {
                     TextState("게시글을 삭제하시겠어요?")
                 } actions: {
@@ -386,14 +357,12 @@ struct PostCellFeature {
                 return .none
 
             case .menu(.presented(.toggleFollow)):
-                // 팔로우 토글
                 return .send(.followTapped)
 
             case .menu:
                 return .none
 
             case .deleteAlert(.presented(.confirmDelete)):
-                // 삭제 확인 -> API 호출
                 guard let postId = state.postId else { return .none }
                 return .run { send in
                     do {
@@ -408,15 +377,10 @@ struct PostCellFeature {
                 return .none
 
             case .deleteResponse(.success):
-                // 삭제 성공 -> 부모에게 알림
-                print("✅ 게시글 삭제 성공")
                 guard let postId = state.postId else { return .none }
                 return .send(.delegate(.postDeleted(postId)))
 
-            case let .deleteResponse(.failure(error)):
-                // 삭제 실패
-                print("❌ 게시글 삭제 실패: \(error)")
-                // TODO: 에러 토스트 표시
+            case .deleteResponse(.failure(_)):
                 return .none
 
             case .delegate:
@@ -475,7 +439,6 @@ struct PostCellFeature {
                         as: FollowResponseDTO.self
                     )
                     let followResponse = response.toDomain
-                    // FollowResponse를 PostLikeResponseDTO와 호환되도록 변환
                     let adaptedResponse = PostLikeResponseDTO(likeStatus: followResponse.status)
                     await send(.toggleResponse(.follow, .success(adaptedResponse)))
                 } catch {
@@ -494,7 +457,6 @@ struct PostCellFeature {
         switch toggleType {
         case .like:
             print("좋아요 성공: \(response.likeStatus)")
-            // 서버 응답과 현재 상태가 일치하는지 확인
             if state.isLiked != response.likeStatus {
                 state.isLiked = response.likeStatus
                 state.likeCount += response.likeStatus ? 1 : -1
@@ -502,18 +464,15 @@ struct PostCellFeature {
 
         case .bookmark:
             print("북마크 성공: \(response.likeStatus)")
-            // 서버 응답과 현재 상태가 일치하는지 확인
             if state.isBookmarked != response.likeStatus {
                 state.isBookmarked = response.likeStatus
             }
 
         case .follow:
             print("팔로우 성공: \(response.likeStatus)")
-            // 서버 응답과 현재 상태가 일치하는지 확인
             if state.isFollowing != response.likeStatus {
                 state.isFollowing = response.likeStatus
             }
-            // 팔로우 상태 변경을 부모에게 알림
             if let userId = state.post.creator?.userId {
                 return .send(.delegate(.followStatusChanged(userId: userId, isFollowing: response.likeStatus)))
             }
@@ -530,18 +489,15 @@ struct PostCellFeature {
         switch toggleType {
         case .like:
             print("좋아요 실패: \(error)")
-            // 실패 시 상태 롤백
             state.isLiked.toggle()
             state.likeCount += state.isLiked ? 1 : -1
 
         case .bookmark:
             print("북마크 실패: \(error)")
-            // 실패 시 상태 롤백
             state.isBookmarked.toggle()
 
         case .follow:
             print("팔로우 실패: \(error)")
-            // 실패 시 상태 롤백
             state.isFollowing.toggle()
         }
         return .none

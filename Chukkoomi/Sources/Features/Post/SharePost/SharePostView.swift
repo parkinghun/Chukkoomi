@@ -14,7 +14,6 @@ struct SharePostView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            // 검색 바 (터치 시 UserSearchView로 이동)
             Button {
                 store.send(.searchBarTapped)
             } label: {

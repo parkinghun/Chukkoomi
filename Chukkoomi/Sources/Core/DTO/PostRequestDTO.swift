@@ -22,7 +22,6 @@ struct PostRequestDTO: Encodable {
     let value8: String
     let value9: String
     let value10: String
-    /// 이미 업로드가 완료된 파일들의 URL(서버 저장 경로)
     var files: [String]
     let longitude: Double
     let latitude: Double
