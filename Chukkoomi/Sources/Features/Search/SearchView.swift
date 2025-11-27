@@ -127,7 +127,6 @@ struct SearchView: View {
                         if blockPosts.count > 2 {
                             postItem(post: blockPosts[2], width: cellSize, height: cellSize, viewStore: viewStore)
                         }
-                        Spacer(minLength: 0)
                     }
                     Spacer(minLength: 0)
                 }
@@ -161,7 +160,6 @@ struct SearchView: View {
                         if blockPosts.count > 7 {
                             postItem(post: blockPosts[7], width: cellSize, height: cellSize, viewStore: viewStore)
                         }
-                        Spacer(minLength: 0)
                     }
 
                     if blockPosts.count > 8 {

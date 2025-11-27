@@ -299,8 +299,8 @@ struct PostCreateFeature {
                                     if let compressedThumbnail = await CompressHelper.compressImage(
                                         sourceData,
                                         maxSizeInBytes: 100_000,
-                                        maxWidth: 300,
-                                        maxHeight: 300
+                                        maxWidth: 600,
+                                        maxHeight: 600
                                     ) {
                                         imagesToUpload.append(compressedThumbnail)
                                     }
@@ -374,8 +374,8 @@ struct PostCreateFeature {
                                 compressedThumbnail = await CompressHelper.compressImage(
                                     sourceData,
                                     maxSizeInBytes: 100_000,
-                                    maxWidth: 300,
-                                    maxHeight: 300
+                                    maxWidth: 600,
+                                    maxHeight: 600
                                 )
                             } else {
                                 compressedThumbnail = nil

@@ -12,7 +12,7 @@ struct CustomNavigationTitle: ViewModifier {
     let title: String
 
     func body(content: Content) -> some View {
-        if #available(iOS 26, *) {
+        if #available(iOS 26.0, *) {
             content
                 .navigationBarBackButtonHidden(true)
                 .background(NavTitleViewSetter(title: title))
