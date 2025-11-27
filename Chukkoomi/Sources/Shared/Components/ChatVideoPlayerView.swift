@@ -18,6 +18,7 @@ struct ChatVideoPlayerView: View {
     @State private var hasFinishedPlaying = false
     @State private var videoDuration: Double = 0
     @State private var videoSize: CGSize = .zero
+    @State private var localFileURL: URL?
 
     var body: some View {
         ZStack {
@@ -33,6 +34,7 @@ struct ChatVideoPlayerView: View {
                     .onDisappear {
                         player.pause()
                         removePlayerObserver()
+                        cleanupLocalFile()
                     }
 
                 // 재생 완료 후 플레이 버튼 & 시간 표시
@@ -122,6 +124,11 @@ struct ChatVideoPlayerView: View {
             // AVPlayer 생성
             let playerItem = AVPlayerItem(url: tempURL)
             let avPlayer = AVPlayer(playerItem: playerItem)
+
+            // 임시 파일 URL 저장
+            await MainActor.run {
+                self.localFileURL = tempURL
+            }
 
             // 영상 정보 가져오기
             let asset = playerItem.asset
@@ -237,5 +244,10 @@ struct ChatVideoPlayerView: View {
         let minutes = Int(seconds) / 60
         let secs = Int(seconds) % 60
         return String(format: "%d:%02d", minutes, secs)
+    }
+
+    private func cleanupLocalFile() {
+        guard let fileURL = localFileURL else { return }
+        try? FileManager.default.removeItem(at: fileURL)
     }
 }

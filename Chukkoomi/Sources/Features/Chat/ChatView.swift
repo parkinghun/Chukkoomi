@@ -475,9 +475,9 @@ struct ChatView: View {
                         let data = try? Data(contentsOf: movie.url)
                         if let data = data {
                             videoData.append(data)
-                        } else {
                         }
-                    } else {
+                        // 임시 파일 삭제
+                        try? FileManager.default.removeItem(at: movie.url)
                     }
                 } else {
                     // 이미지는 Data로 직접 로드

@@ -370,14 +370,15 @@ struct EventRow: View {
 struct FullscreenVideoPlayerView: View {
     let videoURL: String
     let onDismiss: () -> Void
-    
+
     @State private var player: AVPlayer?
     @State private var isLoading = true
-    
+    @State private var localFileURL: URL?
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            
+
             if let player = player {
                 VideoPlayer(player: player)
                     .ignoresSafeArea()
@@ -386,6 +387,7 @@ struct FullscreenVideoPlayerView: View {
                     }
                     .onDisappear {
                         player.pause()
+                        cleanupLocalFile()
                     }
             } else if isLoading {
                 ProgressView()
@@ -401,7 +403,7 @@ struct FullscreenVideoPlayerView: View {
                         .foregroundColor(.white)
                 }
             }
-            
+
             VStack {
                 HStack {
                     Spacer()
@@ -427,10 +429,10 @@ struct FullscreenVideoPlayerView: View {
     
     private func loadVideo() async {
         isLoading = true
-        
+
         do {
             let videoData: Data
-            
+
             if videoURL.hasPrefix("http://") || videoURL.hasPrefix("https://") {
                 guard let url = URL(string: videoURL) else {
                     isLoading = false
@@ -443,17 +445,18 @@ struct FullscreenVideoPlayerView: View {
                     MediaRouter.getData(path: videoURL)
                 )
             }
-            
+
             let tempURL = FileManager.default.temporaryDirectory
                 .appendingPathComponent(UUID().uuidString)
                 .appendingPathExtension("mp4")
-            
+
             try videoData.write(to: tempURL)
-            
+
             let playerItem = AVPlayerItem(url: tempURL)
             let avPlayer = AVPlayer(playerItem: playerItem)
-            
+
             await MainActor.run {
+                self.localFileURL = tempURL
                 self.player = avPlayer
                 self.isLoading = false
             }
@@ -467,6 +470,11 @@ struct FullscreenVideoPlayerView: View {
                 self.isLoading = false
             }
         }
+    }
+
+    private func cleanupLocalFile() {
+        guard let fileURL = localFileURL else { return }
+        try? FileManager.default.removeItem(at: fileURL)
     }
 }
 
