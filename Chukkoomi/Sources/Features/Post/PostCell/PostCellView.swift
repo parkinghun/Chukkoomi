@@ -17,12 +17,12 @@ struct PostCellView: View {
             headerView
                 .padding(.bottom,AppPadding.medium)
 
-            HStack(alignment: .center, spacing: 0) {
+            HStack(alignment: .center, spacing: 8) {
                 mediaContentView
                     .frame(maxWidth: .infinity)
 
                 actionBarView
-                    .padding(.leading, 6)
+                .padding(.leading, 4)
             }
             .padding(.bottom,AppPadding.medium)
 
