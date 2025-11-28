@@ -347,6 +347,7 @@ struct URLMediaPlayerView: View {
     let mediaPath: String
     @State private var player: AVPlayer?
     @State private var isLoading = true
+    @State private var localFileURL: URL?
 
     var body: some View {
         ZStack {
@@ -359,6 +360,7 @@ struct URLMediaPlayerView: View {
                     }
                     .onDisappear {
                         player.pause()
+                        cleanupLocalFile()
                     }
             } else if isLoading {
                 ProgressView()
@@ -409,6 +411,7 @@ struct URLMediaPlayerView: View {
             let avPlayer = AVPlayer(playerItem: playerItem)
 
             await MainActor.run {
+                self.localFileURL = tempURL
                 self.player = avPlayer
                 self.isLoading = false
             }
@@ -422,6 +425,11 @@ struct URLMediaPlayerView: View {
                 self.isLoading = false
             }
         }
+    }
+
+    private func cleanupLocalFile() {
+        guard let fileURL = localFileURL else { return }
+        try? FileManager.default.removeItem(at: fileURL)
     }
 }
 
