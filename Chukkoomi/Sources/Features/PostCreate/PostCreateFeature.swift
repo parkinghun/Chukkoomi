@@ -1,0 +1,530 @@
+//
+//  PostCreateFeature.swift
+//  Chukkoomi
+//
+//  Created by 박성훈 on 11/16/25.
+//
+
+import ComposableArchitecture
+import SwiftUI
+
+@Reducer
+struct PostCreateFeature {
+
+    // MARK: - State
+    @ObservableState
+    struct State: Equatable {
+        var selectedCategory: FootballTeams = .all
+        var content: String = ""
+        var selectedImageData: Data?
+        var selectedVideoURL: URL? // 편집된 영상 URL
+        var videoThumbnailData: Data? // 영상 썸네일 (UI 표시용)
+        var isUploading: Bool = false
+        var errorMessage: String?
+        var showSuccessAlert: Bool = false
+
+        // 수정 모드
+        var isEditMode: Bool = false
+        var editingPostId: String?
+
+        // 원본 데이터 (변경 감지용)
+        var originalCategory: FootballTeams?
+        var originalContent: String?
+        var originalImageUrl: String?
+
+        // 이미지 뷰어
+        var currentImage: UIImage? = nil
+
+        // 갤러리 피커
+        @Presents var galleryPicker: GalleryPickerFeature.State?
+        @Presents var imageViewer: ImageViewerFeature.State?
+
+        // 네비게이션 타이틀
+        var navigationTitle: String {
+            isEditMode ? "게시글 수정" : "게시글 작성"
+        }
+
+        // 데이터 변경 여부 확인
+        var hasChanges: Bool {
+            guard isEditMode else { return true }
+
+            // 카테고리 변경 체크
+            if selectedCategory != originalCategory {
+                return true
+            }
+
+            // 컨텐츠 변경 체크
+            if content != originalContent {
+                return true
+            }
+
+            // 이미지 변경 체크 (새 이미지를 선택했거나, 원본 이미지를 제거한 경우)
+            if selectedImageData != nil || originalImageUrl == nil {
+                return true
+            }
+
+            return false
+        }
+
+        // 업로드 가능 여부
+        var canUpload: Bool {
+            // 수정 모드일 때는 변경사항이 있어야 함
+            if isEditMode {
+                return hasChanges &&
+                       (selectedImageData != nil || selectedVideoURL != nil || originalImageUrl != nil) &&
+                       !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+
+            // 작성 모드일 때는 이미지 또는 비디오와 본문이 있어야 함
+            return (selectedImageData != nil || selectedVideoURL != nil) &&
+                   !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+
+        // 수정 모드 생성자
+        init(post: Post) {
+            self.isEditMode = true
+            self.editingPostId = post.id
+            self.selectedCategory = post.teams
+            self.originalCategory = post.teams
+
+            // content를 그대로 사용 (해시태그 포함)
+            self.content = post.content
+            self.originalContent = post.content
+
+            // 원본 이미지 URL 저장
+            self.originalImageUrl = post.files.first
+
+            // 나머지는 기본값
+            self.selectedImageData = nil
+            self.isUploading = false
+            self.errorMessage = nil
+            self.showSuccessAlert = false
+            self.galleryPicker = nil
+        }
+
+        // 기본 생성자 (작성 모드)
+        init() {
+            self.selectedCategory = .ulsan  // 기본값: 울산 (전체는 선택 불가)
+            self.content = ""
+            self.selectedImageData = nil
+            self.isUploading = false
+            self.errorMessage = nil
+            self.showSuccessAlert = false
+            self.isEditMode = false
+            self.editingPostId = nil
+            self.originalCategory = nil
+            self.originalContent = nil
+            self.originalImageUrl = nil
+            self.galleryPicker = nil
+        }
+    }
+
+    // MARK: - Action
+    enum Action: Equatable {
+        case categorySelected(FootballTeams)
+        case contentChanged(String)
+        case selectImageTapped
+        case removeImage
+        case uploadButtonTapped
+        case uploadResponse(Result<PostResponseDTO, Error>)
+        case dismissSuccessAlert
+        case videoThumbnailGenerated(Data)
+        case imageLoaded(UIImage)
+        case imageTapped
+
+        // 갤러리 피커
+        case galleryPicker(PresentationAction<GalleryPickerFeature.Action>)
+
+        // 이미지 뷰어
+        case imageViewer(PresentationAction<ImageViewerFeature.Action>)
+
+        // Delegate
+        case delegate(Delegate)
+
+        enum Delegate: Equatable {
+            case postCreated
+            case postUpdated
+            case dismiss
+        }
+
+        static func == (lhs: Action, rhs: Action) -> Bool {
+            switch (lhs, rhs) {
+            case let (.categorySelected(lhsCategory), .categorySelected(rhsCategory)):
+                return lhsCategory == rhsCategory
+            case let (.contentChanged(lhsContent), .contentChanged(rhsContent)):
+                return lhsContent == rhsContent
+            case (.selectImageTapped, .selectImageTapped):
+                return true
+            case (.imageLoaded, .imageLoaded):
+                return true  // UIImage는 비교 불가
+            case (.imageTapped, .imageTapped):
+                return true
+            case (.removeImage, .removeImage):
+                return true
+            case (.uploadButtonTapped, .uploadButtonTapped):
+                return true
+            case (.uploadResponse, .uploadResponse):
+                return true
+            case (.dismissSuccessAlert, .dismissSuccessAlert):
+                return true
+            case (.videoThumbnailGenerated, .videoThumbnailGenerated):
+                return true
+            case (.galleryPicker, .galleryPicker):
+                return true
+            case let (.imageViewer(lhs), .imageViewer(rhs)):
+                return lhs == rhs
+            case let (.delegate(lhs), .delegate(rhs)):
+                return lhs == rhs
+            default:
+                return false
+            }
+        }
+    }
+
+    // MARK: - Reducer
+    var body: some ReducerOf<Self> {
+        Reduce { state, action in
+            switch action {
+            case let .categorySelected(category):
+                state.selectedCategory = category
+                return .none
+
+            case let .contentChanged(content):
+                state.content = content
+                return .none
+
+            case .selectImageTapped:
+                // 갤러리 피커 열기 (게시물 모드)
+                state.galleryPicker = GalleryPickerFeature.State(pickerMode: .post)
+                return .none
+
+            case .removeImage:
+                // 선택된 이미지/영상 제거
+                let videoURLToDelete = state.selectedVideoURL
+                state.selectedImageData = nil
+                state.selectedVideoURL = nil
+                state.videoThumbnailData = nil
+                state.currentImage = nil
+
+                // 영상 파일이 있으면 삭제
+                if let videoURL = videoURLToDelete {
+                    return .run { _ in
+                        try? FileManager.default.removeItem(at: videoURL)
+                    }
+                }
+                return .none
+
+            case let .imageLoaded(image):
+                state.currentImage = image
+                return .none
+
+            case .imageTapped:
+                guard let image = state.currentImage else { return .none }
+                state.imageViewer = ImageViewerFeature.State(image: image)
+                return .none
+
+            case .imageViewer(.presented(.delegate(.dismiss))):
+                state.imageViewer = nil
+                return .none
+
+            case .imageViewer:
+                return .none
+
+            case .uploadButtonTapped:
+                // 유효성 검증
+                if !state.isEditMode {
+                    guard state.selectedImageData != nil || state.selectedVideoURL != nil else {
+                        state.errorMessage = "사진 또는 영상을 선택해주세요"
+                        return .none
+                    }
+                } else {
+                    guard state.selectedImageData != nil || state.selectedVideoURL != nil || state.originalImageUrl != nil else {
+                        state.errorMessage = "사진 또는 영상을 선택해주세요"
+                        return .none
+                    }
+                }
+
+                guard !state.content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                    state.errorMessage = "내용을 입력해주세요"
+                    return .none
+                }
+
+                state.isUploading = true
+                state.errorMessage = nil
+
+                // 수정 모드인지 작성 모드인지에 따라 분기
+                if state.isEditMode {
+                    // 게시글 수정
+                    return .run { [
+                        postId = state.editingPostId!,
+                        imageData = state.selectedImageData,
+                        videoURL = state.selectedVideoURL,
+                        videoThumbnailData = state.videoThumbnailData,
+                        originalImageUrl = state.originalImageUrl,
+                        category = state.selectedCategory,
+                        content = state.content
+                    ] send in
+                        do {
+                            // 업로드할 미디어 데이터 준비
+                            var originalMediaData: Data? = nil
+                            var sourceThumbnailData: Data? = nil
+
+                            if let videoURL = videoURL {
+                                // 영상이 있으면 영상 데이터 읽기
+                                originalMediaData = try Data(contentsOf: videoURL)
+                                sourceThumbnailData = videoThumbnailData
+                            } else if let imageData = imageData {
+                                // 이미지가 있으면 이미지 데이터 사용
+                                originalMediaData = imageData
+                                sourceThumbnailData = imageData
+                            }
+
+                            // 기존 파일 URL 처리:
+                            // - 새 미디어를 선택하지 않았고, 기존 파일이 있으면 기존 URL 유지
+                            // - 새 미디어를 선택했으면 빈 배열 (새 파일이 업로드되어 추가됨)
+                            let files: [String]
+                            if originalMediaData == nil, let originalUrl = originalImageUrl {
+                                files = [originalUrl]
+                            } else {
+                                files = []
+                            }
+
+                            // images 배열 준비: 원본 + 썸네일
+                            var imagesToUpload: [Data] = []
+                            if let mediaData = originalMediaData {
+                                imagesToUpload.append(mediaData)
+
+                                // 썸네일 압축
+                                if let sourceData = sourceThumbnailData {
+                                    if let compressedThumbnail = await CompressHelper.compressImage(
+                                        sourceData,
+                                        maxSizeInBytes: 100_000,
+                                        maxWidth: 600,
+                                        maxHeight: 600
+                                    ) {
+                                        imagesToUpload.append(compressedThumbnail)
+                                    }
+                                }
+                            }
+
+                            // PostRequestDTO 생성
+                            let postRequest = PostRequestDTO(
+                                category: category.identifier,
+                                title: "게시글",
+                                price: 0,
+                                content: content,
+                                value1: "",
+                                value2: "",
+                                value3: "",
+                                value4: "",
+                                value5: "",
+                                value6: "",
+                                value7: "",
+                                value8: "",
+                                value9: "",
+                                value10: "",
+                                files: files,
+                                longitude: GeoLocation.defaultLocation.longitude,
+                                latitude: GeoLocation.defaultLocation.latitude
+                            )
+
+                            // PostService를 사용해서 게시글 수정
+                            let response = try await PostService.shared.updatePost(
+                                postId: postId,
+                                post: postRequest,
+                                images: imagesToUpload
+                            )
+
+                            print("게시글 수정 성공: \(response.postId)")
+                            await send(.uploadResponse(.success(response)))
+                        } catch {
+                            print("게시글 수정 실패: \(error)")
+                            await send(.uploadResponse(.failure(error)))
+                        }
+                    }
+                } else {
+                    // 게시글 작성
+                    return .run { [
+                        imageData = state.selectedImageData,
+                        videoURL = state.selectedVideoURL,
+                        videoThumbnailData = state.videoThumbnailData,
+                        category = state.selectedCategory,
+                        content = state.content
+                    ] send in
+                        do {
+                            // 업로드할 미디어 데이터 준비
+                            let originalMediaData: Data
+                            let sourceThumbnailData: Data?
+
+                            if let videoURL = videoURL {
+                                // 영상이 있으면 영상 데이터 읽기
+                                originalMediaData = try Data(contentsOf: videoURL)
+                                sourceThumbnailData = videoThumbnailData
+                            } else if let imageData = imageData {
+                                // 이미지가 있으면 이미지 데이터 사용
+                                originalMediaData = imageData
+                                sourceThumbnailData = imageData
+                            } else {
+                                throw NSError(domain: "PostCreate", code: -1, userInfo: [NSLocalizedDescriptionKey: "미디어가 없습니다"])
+                            }
+
+                            // 썸네일 압축
+                            let compressedThumbnail: Data?
+                            if let sourceData = sourceThumbnailData {
+                                compressedThumbnail = await CompressHelper.compressImage(
+                                    sourceData,
+                                    maxSizeInBytes: 100_000,
+                                    maxWidth: 600,
+                                    maxHeight: 600
+                                )
+                            } else {
+                                compressedThumbnail = nil
+                            }
+
+                            // images 배열: 0번 원본, 1번 썸네일
+                            var imagesToUpload = [originalMediaData]
+                            if let thumbnail = compressedThumbnail {
+                                imagesToUpload.append(thumbnail)
+                            }
+
+                            // PostRequestDTO 생성
+                            let postRequest = PostRequestDTO(
+                                category: category.identifier,
+                                title: "게시글",
+                                price: 0,
+                                content: content,
+                                value1: "",
+                                value2: "",
+                                value3: "",
+                                value4: "",
+                                value5: "",
+                                value6: "",
+                                value7: "",
+                                value8: "",
+                                value9: "",
+                                value10: "",
+                                files: [],
+                                longitude: GeoLocation.defaultLocation.longitude,
+                                latitude: GeoLocation.defaultLocation.latitude
+                            )
+
+                            // PostService를 사용해서 게시글 생성 (이미지/영상 업로드 포함)
+                            let response = try await PostService.shared.createPost(
+                                post: postRequest,
+                                images: imagesToUpload
+                            )
+
+                            print("게시글 업로드 성공: \(response.postId)")
+                            await send(.uploadResponse(.success(response)))
+                        } catch {
+                            print("게시글 업로드 실패: \(error)")
+                            await send(.uploadResponse(.failure(error)))
+                        }
+                    }
+                }
+
+            case let .uploadResponse(.success(response)):
+                state.isUploading = false
+                let logMessage = state.isEditMode ? "게시글 수정 성공: \(response.postId)" : "게시글 업로드 성공: \(response.postId)"
+                print(logMessage)
+
+                // 영상 파일 삭제
+                let videoURLToDelete = state.selectedVideoURL
+
+                // 작성 모드일 때만 상태 초기화
+                if !state.isEditMode {
+                    state.selectedImageData = nil
+                    state.selectedVideoURL = nil
+                    state.videoThumbnailData = nil
+                    state.selectedCategory = .all
+                    state.content = ""
+                } else {
+                    // 수정 모드에서도 영상은 삭제
+                    state.selectedVideoURL = nil
+                    state.videoThumbnailData = nil
+                }
+
+                // 성공 알림 표시
+                state.showSuccessAlert = true
+
+                // 영상 파일이 있으면 삭제
+                if let videoURL = videoURLToDelete {
+                    return .run { _ in
+                        try? FileManager.default.removeItem(at: videoURL)
+                    }
+                }
+                return .none
+
+            case .dismissSuccessAlert:
+                state.showSuccessAlert = false
+                let wasEditMode = state.isEditMode
+
+                // Delegate 액션 전송: 먼저 업데이트 알림(리스트 새로고침용), 그 다음 화면 닫기
+                if wasEditMode {
+                    return .run { send in
+                        await send(.delegate(.postUpdated))
+                        await send(.delegate(.dismiss))
+                    }
+                } else {
+                    return .run { send in
+                        await send(.delegate(.postCreated))
+                        await send(.delegate(.dismiss))
+                    }
+                }
+
+            case let .uploadResponse(.failure(error)):
+                state.isUploading = false
+                state.errorMessage = error.localizedDescription
+                let logMessage = state.isEditMode ? "게시글 수정 실패: \(error)" : "게시글 업로드 실패: \(error)"
+                print(logMessage)
+                return .none
+
+            case let .galleryPicker(.presented(.delegate(.didSelectImage(imageData)))):
+                // 갤러리에서 이미지 선택 완료
+                state.selectedImageData = imageData
+                print("이미지 선택 완료: \(imageData.count) bytes")
+                // 갤러리 피커 닫기
+                state.galleryPicker = nil
+                return .none
+
+            case .galleryPicker(.presented(.cancel)):
+                // 사용자가 취소 버튼을 눌렀을 때
+                state.galleryPicker = nil
+                return .none
+
+            case .galleryPicker(.dismiss):
+                // 갤러리 피커가 dismiss될 때
+                state.galleryPicker = nil
+                return .none
+
+            case let .galleryPicker(.presented(.delegate(.didExportVideo(url)))):
+                // 갤러리에서 영상 편집 완료
+                state.selectedVideoURL = url
+
+                // 영상 썸네일 생성
+                return .run { send in
+                    if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: url) {
+                        await send(.videoThumbnailGenerated(thumbnailData))
+                    }
+                }
+
+            case let .videoThumbnailGenerated(thumbnailData):
+                // 썸네일을 UI 표시용으로 저장 (업로드 시에는 실제 영상 사용)
+                state.videoThumbnailData = thumbnailData
+                return .none
+
+            case .galleryPicker:
+                return .none
+
+            case .delegate:
+                return .none
+            }
+        }
+        .ifLet(\.$galleryPicker, action: \.galleryPicker) {
+            GalleryPickerFeature()
+        }
+        .ifLet(\.$imageViewer, action: \.imageViewer) {
+            ImageViewerFeature()
+        }
+    }
+}
