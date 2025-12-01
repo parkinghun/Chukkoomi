@@ -7,6 +7,10 @@
 
 import SwiftUI
 
+/// 그리기 도구 툴바
+/// - 펜/연필/마커/지우개 선택
+/// - 색상 및 굵기 조정
+/// - Undo/Redo 버튼
 struct DrawingToolbar: View {
     let selectedTool: EditPhotoFeature.DrawingTool
     let currentColor: Color
@@ -17,6 +21,17 @@ struct DrawingToolbar: View {
     let onBrushTap: () -> Void
     let onUndo: () -> Void
     let onRedo: () -> Void
+
+    // MARK: - Constants
+
+    /// 툴바 모서리 반경
+    private static let cornerRadius: CGFloat = 12
+    /// 툴바 가로 패딩
+    private static let horizontalPadding: CGFloat = 12
+    /// 툴바 세로 패딩
+    private static let verticalPadding: CGFloat = 8
+    /// 색상 원 크기
+    private static let colorCircleSize: CGFloat = 28
 
     var body: some View {
         HStack(spacing: 8) {
@@ -39,7 +54,7 @@ struct DrawingToolbar: View {
             Button(action: onColorTap) {
                 Circle()
                     .fill(currentColor)
-                    .frame(width: 28, height: 28)
+                    .frame(width: Self.colorCircleSize, height: Self.colorCircleSize)
                     .overlay(
                         Circle()
                             .stroke(Color.white, lineWidth: 2)
@@ -74,10 +89,10 @@ struct DrawingToolbar: View {
                 action: onRedo
             )
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
+        .padding(.horizontal, Self.horizontalPadding)
+        .padding(.vertical, Self.verticalPadding)
         .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
+        .clipShape(RoundedRectangle(cornerRadius: Self.cornerRadius))
         .shadow(color: Color.black.opacity(0.1), radius: 6, x: 0, y: 2)
     }
 }
