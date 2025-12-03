@@ -7,6 +7,7 @@
 
 import UIKit
 import CoreImage
+import CoreImage.CIFilterBuiltins
 import CoreML
 import Metal
 
@@ -146,47 +147,53 @@ enum ImageFilter: String, CaseIterable, Identifiable, Codable {
         }
 
         // 필터 생성
-        let filter: CIFilter?
+        let filter: CIFilter!
 
         switch self {
         case .noir:
-            filter = CIFilter(name: "CIPhotoEffectNoir")
-            filter?.setValue(ciImage, forKey: kCIInputImageKey)
+            filter = CIFilter.photoEffectNoir()
+//            filter = CIFilter(name: "CIPhotoEffectNoir")
+            filter.setValue(ciImage, forKey: kCIInputImageKey)
 
         case .chrome:
-            filter = CIFilter(name: "CIPhotoEffectChrome")
-            filter?.setValue(ciImage, forKey: kCIInputImageKey)
+            filter = CIFilter.photoEffectChrome()
+//            filter = CIFilter(name: "CIPhotoEffectChrome")
+            filter.setValue(ciImage, forKey: kCIInputImageKey)
 
         case .sepia:
-            filter = CIFilter(name: "CISepiaTone")
-            filter?.setValue(ciImage, forKey: kCIInputImageKey)
-            filter?.setValue(0.8, forKey: kCIInputIntensityKey)
+            filter = CIFilter.sepiaTone()
+//            filter = CIFilter(name: "CISepiaTone")
+            filter.setValue(ciImage, forKey: kCIInputImageKey)
+            filter.setValue(0.8, forKey: kCIInputIntensityKey)
 
         case .vivid:
-            filter = CIFilter(name: "CIColorControls")
-            filter?.setValue(ciImage, forKey: kCIInputImageKey)
-            filter?.setValue(1.2, forKey: kCIInputSaturationKey)   // 채도 +20%
-            filter?.setValue(0.15, forKey: kCIInputBrightnessKey)  // 밝기 +15%
-            filter?.setValue(1.0, forKey: kCIInputContrastKey)     // 대비 유지
+            filter = CIFilter.colorControls()
+//            filter = CIFilter(name: "CIColorControls")
+            filter.setValue(ciImage, forKey: kCIInputImageKey)
+            filter.setValue(1.2, forKey: kCIInputSaturationKey)   // 채도 +20%
+            filter.setValue(0.15, forKey: kCIInputBrightnessKey)  // 밝기 +15%
+            filter.setValue(1.0, forKey: kCIInputContrastKey)     // 대비 유지
 
         case .warm:
-            filter = CIFilter(name: "CITemperatureAndTint")
-            filter?.setValue(ciImage, forKey: kCIInputImageKey)
-            filter?.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-            filter?.setValue(CIVector(x: 7000, y: 100), forKey: "inputTargetNeutral")
+            filter = CIFilter.temperatureAndTint()
+//            filter = CIFilter(name: "CITemperatureAndTint")
+            filter.setValue(ciImage, forKey: kCIInputImageKey)
+            filter.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
+            filter.setValue(CIVector(x: 7000, y: 100), forKey: "inputTargetNeutral")
 
         case .cool:
-            filter = CIFilter(name: "CITemperatureAndTint")
-            filter?.setValue(ciImage, forKey: kCIInputImageKey)
-            filter?.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
-            filter?.setValue(CIVector(x: 5500, y: -100), forKey: "inputTargetNeutral")
+            filter = CIFilter.temperatureAndTint()
+//            filter = CIFilter(name: "CITemperatureAndTint")
+            filter.setValue(ciImage, forKey: kCIInputImageKey)
+            filter.setValue(CIVector(x: 6500, y: 0), forKey: "inputNeutral")
+            filter.setValue(CIVector(x: 5500, y: -100), forKey: "inputTargetNeutral")
 
         default:
             return nil
         }
 
-        guard let filter = filter,
-              let outputImage = filter.outputImage else {
+//        guard let filter = filter,
+              guard let outputImage = filter.outputImage else {
             print("[ImageFilter] ❌ Filter creation failed: \(self.rawValue)")
             return nil
         }
@@ -336,8 +343,9 @@ enum ImageFilter: String, CaseIterable, Identifiable, Codable {
 
 // MARK: - FilterCacheManager
 
-/// 필터 적용 결과를 캐싱하는 Actor (Thread-safe)
-actor FilterCacheManager {
+/// 필터 적용 결과를 캐싱하는 Manager
+/// - Thread-safe 보장 (DispatchQueue 사용)
+final class FilterCacheManager: @unchecked Sendable {
 
     // MARK: - Properties
 
@@ -351,50 +359,69 @@ actor FilterCacheManager {
     private let maxThumbnailCacheSize = 50  // 최대 50개
     private let maxFullImageCacheSize = 10  // 최대 10개
 
+    /// Thread-safety를 위한 Queue
+    private let queue = DispatchQueue(label: "com.chukkoomi.filterCache", attributes: .concurrent)
+
     // MARK: - Thumbnail Cache
 
     func getThumbnail(for key: String) -> UIImage? {
-        thumbnailCache[key]
+        queue.sync {
+            thumbnailCache[key]
+        }
     }
 
     func setThumbnail(_ image: UIImage, for key: String) {
-        // LRU 캐시: 크기 초과 시 가장 오래된 항목 제거
-        if thumbnailCache.count >= maxThumbnailCacheSize {
-            thumbnailCache.removeValue(forKey: thumbnailCache.keys.first!)
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            // LRU 캐시: 크기 초과 시 가장 오래된 항목 제거
+            if self.thumbnailCache.count >= self.maxThumbnailCacheSize {
+                self.thumbnailCache.removeValue(forKey: self.thumbnailCache.keys.first!)
+            }
+            self.thumbnailCache[key] = image
         }
-        thumbnailCache[key] = image
     }
 
     // MARK: - Full Image Cache
 
     func getFullImage(for key: String) -> UIImage? {
-        fullImageCache[key]
+        queue.sync {
+            fullImageCache[key]
+        }
     }
 
     func setFullImage(_ image: UIImage, for key: String) {
-        // LRU 캐시: 크기 초과 시 가장 오래된 항목 제거
-        if fullImageCache.count >= maxFullImageCacheSize {
-            fullImageCache.removeValue(forKey: fullImageCache.keys.first!)
+        queue.async(flags: .barrier) { [weak self] in
+            guard let self = self else { return }
+            // LRU 캐시: 크기 초과 시 가장 오래된 항목 제거
+            if self.fullImageCache.count >= self.maxFullImageCacheSize {
+                self.fullImageCache.removeValue(forKey: self.fullImageCache.keys.first!)
+            }
+            self.fullImageCache[key] = image
         }
-        fullImageCache[key] = image
     }
 
     // MARK: - Cache Management
 
     func clearAll() {
-        thumbnailCache.removeAll()
-        fullImageCache.removeAll()
-        print("[FilterCacheManager] 🗑️ All cache cleared")
+        queue.async(flags: .barrier) { [weak self] in
+            self?.thumbnailCache.removeAll()
+            self?.fullImageCache.removeAll()
+            print("[FilterCacheManager] 🗑️ All cache cleared")
+        }
     }
 
     func clearThumbnailCache() {
-        thumbnailCache.removeAll()
-        print("[FilterCacheManager] 🗑️ Thumbnail cache cleared")
+        queue.async(flags: .barrier) { [weak self] in
+            self?.thumbnailCache.removeAll()
+            print("[FilterCacheManager] 🗑️ Thumbnail cache cleared")
+        }
     }
 
     func clearFullImageCache() {
-        fullImageCache.removeAll()
-        print("[FilterCacheManager] 🗑️ Full image cache cleared")
+        queue.async(flags: .barrier) { [weak self] in
+            self?.fullImageCache.removeAll()
+            print("[FilterCacheManager] 🗑️ Full image cache cleared")
+        }
     }
 
     /// 메모리 경고 시 호출

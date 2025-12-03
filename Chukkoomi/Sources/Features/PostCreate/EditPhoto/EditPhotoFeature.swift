@@ -133,8 +133,10 @@ struct EditPhotoFeature {
     }
 
     // MARK: - EditSnapshot (Undo/Redo용)
+    /// 메타데이터만 저장하는 경량 스냅샷
+    /// - displayImage는 저장하지 않고, 필요 시 캐시에서 재생성
     struct EditSnapshot: Equatable {
-        let displayImage: UIImage
+        // ❌ displayImage 제거 (메모리 절약)
         let selectedFilter: ImageFilter
         let textOverlays: [TextOverlay]
         let stickers: [StickerOverlay]
@@ -143,14 +145,27 @@ struct EditPhotoFeature {
         let pkDrawing: PKDrawing
 
         static func == (lhs: EditSnapshot, rhs: EditSnapshot) -> Bool {
-            // UIImage 비교는 pngData로 변환하여 비교 (간단하게 참조만 비교)
-            return lhs.displayImage === rhs.displayImage &&
-                   lhs.selectedFilter == rhs.selectedFilter &&
+            return lhs.selectedFilter == rhs.selectedFilter &&
                    lhs.textOverlays == rhs.textOverlays &&
                    lhs.stickers == rhs.stickers &&
                    lhs.cropRect == rhs.cropRect &&
                    lhs.selectedAspectRatio == rhs.selectedAspectRatio &&
                    lhs.pkDrawing.dataRepresentation() == rhs.pkDrawing.dataRepresentation()
+        }
+    }
+
+    // MARK: - CropSnapshot
+    /// Crop 작업은 파괴적이므로 원본 이미지를 별도 저장
+    struct CropSnapshot: Equatable {
+        let beforeCropImage: UIImage  // Crop 전 이미지
+        let originalImage: UIImage    // 최초 원본 이미지
+        let timestamp: Date
+
+        static func == (lhs: CropSnapshot, rhs: CropSnapshot) -> Bool {
+            // UIImage는 참조 비교
+            return lhs.beforeCropImage === rhs.beforeCropImage &&
+                   lhs.originalImage === rhs.originalImage &&
+                   lhs.timestamp == rhs.timestamp
         }
     }
 
@@ -198,7 +213,11 @@ struct EditPhotoFeature {
         // Undo/Redo
         var historyStack: [EditSnapshot] = []
         var redoStack: [EditSnapshot] = []
-        var maxHistorySize: Int = 20  // 최대 히스토리 개수
+        var maxHistorySize: Int = 10  // 메모리 최적화: 20 → 10으로 축소
+
+        // Crop History (파괴적 작업이므로 별도 관리)
+        var cropHistory: [CropSnapshot] = []
+        var maxCropHistorySize: Int = 3  // Crop은 이미지 저장이 필요하므로 최소화
 
         // Common
         var isProcessing: Bool = false
@@ -235,10 +254,9 @@ struct EditPhotoFeature {
             !redoStack.isEmpty
         }
 
-        // 현재 상태의 스냅샷 생성
+        // 현재 상태의 스냅샷 생성 (메타데이터만)
         func createSnapshot() -> EditSnapshot {
             EditSnapshot(
-                displayImage: displayImage,
                 selectedFilter: selectedFilter,
                 textOverlays: textOverlays,
                 stickers: stickers,
@@ -248,9 +266,9 @@ struct EditPhotoFeature {
             )
         }
 
-        // 스냅샷으로부터 상태 복원
-        mutating func restoreFromSnapshot(_ snapshot: EditSnapshot) {
-            displayImage = snapshot.displayImage
+        // 스냅샷으로부터 메타데이터 복원 (displayImage는 별도 재생성)
+        mutating func restoreMetadataFromSnapshot(_ snapshot: EditSnapshot) {
+            // displayImage는 복원하지 않음 (캐시에서 재생성 필요)
             selectedFilter = snapshot.selectedFilter
             textOverlays = snapshot.textOverlays
             stickers = snapshot.stickers
@@ -320,9 +338,12 @@ struct EditPhotoFeature {
         case saveSnapshot
         case undo
         case redo
+        case regenerateImageFromSnapshot(EditSnapshot)  // 스냅샷으로부터 이미지 재생성
+        case imageRegenerated(UIImage)  // 재생성된 이미지 적용
 
         // Common
         case completeButtonTapped
+        case memoryWarning  // 메모리 경고 처리
         case delegate(Delegate)
 
         // Payment Actions
@@ -453,12 +474,23 @@ struct EditPhotoFeature {
 
                 return .merge(
                     .send(.saveSnapshot),
-                    .run { [originalImage = state.originalImage] send in
-                        // 전체 해상도 이미지에 필터 적용
-                        if let filtered = filter.apply(to: originalImage) {
-                            await send(.filterApplied(filtered))
+                    .run { [originalImage = state.originalImage, filterCache] send in
+                        let filterKey = filter.rawValue
+
+                        // 캐시 확인
+                        if let cachedImage = filterCache.getFullImage(for: filterKey) {
+                            print("✅ [Cache HIT] Filter '\(filterKey)' from cache")
+                            await send(.filterApplied(cachedImage))
                         } else {
-                            await send(.filterApplied(originalImage))
+                            print("⚠️ [Cache MISS] Applying filter '\(filterKey)'")
+                            // 전체 해상도 이미지에 필터 적용
+                            if let filtered = filter.apply(to: originalImage) {
+                                // 캐시에 저장
+                                filterCache.setFullImage(filtered, for: filterKey)
+                                await send(.filterApplied(filtered))
+                            } else {
+                                await send(.filterApplied(originalImage))
+                            }
                         }
                     }
                 )
@@ -488,15 +520,25 @@ struct EditPhotoFeature {
                 guard let cropRect = state.cropRect else { return .none }
                 state.isProcessing = true
 
-                return .merge(
-                    .send(.saveSnapshot),
-                    .run { [displayImage = state.displayImage] send in
-                        // Crop 적용
-                        if let croppedImage = await ImageEditHelper.cropImage(displayImage, to: cropRect) {
-                            await send(.cropApplied(croppedImage))
-                        }
-                    }
+                // Crop은 파괴적 작업이므로 CropSnapshot 저장
+                let cropSnapshot = CropSnapshot(
+                    beforeCropImage: state.displayImage,
+                    originalImage: state.originalImage,
+                    timestamp: Date()
                 )
+                state.cropHistory.append(cropSnapshot)
+
+                // 최대 Crop 히스토리 크기 제한
+                if state.cropHistory.count > state.maxCropHistorySize {
+                    state.cropHistory.removeFirst()
+                }
+
+                return .run { [displayImage = state.displayImage] send in
+                    // Crop 적용
+                    if let croppedImage = await ImageEditHelper.cropImage(displayImage, to: cropRect) {
+                        await send(.cropApplied(croppedImage))
+                    }
+                }
 
             case let .cropApplied(image):
                 state.displayImage = image
@@ -504,6 +546,10 @@ struct EditPhotoFeature {
                 state.cropRect = nil
                 state.isCropping = false
                 state.isProcessing = false
+
+                // Crop 후에는 필터 캐시 클리어 (원본이 바뀌었으므로)
+                filterCache.clearFullImageCache()
+                print("[Crop] ✂️ Filter cache cleared (original image changed)")
                 return .none
 
             case .resetCrop:
@@ -766,13 +812,14 @@ struct EditPhotoFeature {
 
                 // 히스토리에서 이전 상태 복원
                 let previousSnapshot = state.historyStack.removeLast()
-                state.restoreFromSnapshot(previousSnapshot)
+                state.restoreMetadataFromSnapshot(previousSnapshot)
 
                 // 텍스트 편집 모드 종료
                 state.editingTextId = nil
                 state.isTextEditMode = false
 
-                return .none
+                // 이미지 재생성 트리거
+                return .send(.regenerateImageFromSnapshot(previousSnapshot))
 
             case .redo:
                 guard !state.redoStack.isEmpty else { return .none }
@@ -783,13 +830,14 @@ struct EditPhotoFeature {
 
                 // Redo 스택에서 다음 상태 복원
                 let nextSnapshot = state.redoStack.removeLast()
-                state.restoreFromSnapshot(nextSnapshot)
+                state.restoreMetadataFromSnapshot(nextSnapshot)
 
                 // 텍스트 편집 모드 종료
                 state.editingTextId = nil
                 state.isTextEditMode = false
 
-                return .none
+                // 이미지 재생성 트리거
+                return .send(.regenerateImageFromSnapshot(nextSnapshot))
 
             case .completeButtonTapped:
                 // 텍스트 편집 모드면 먼저 종료
@@ -969,6 +1017,89 @@ struct EditPhotoFeature {
                     await send(.delegate(.didCompleteEditing(imageData)))
                 }
 
+            // MARK: - Image Regeneration (Undo/Redo용)
+            case let .regenerateImageFromSnapshot(snapshot):
+                // 스냅샷으로부터 이미지 재생성 (캐시 활용)
+                state.isProcessing = true
+
+                return .run { [originalImage = state.originalImage, filterCache] send in
+                    // 1. 필터 적용 (캐시 우선 확인)
+                    var baseImage = originalImage
+                    let filterKey = snapshot.selectedFilter.rawValue
+
+                    // FilterCache에서 확인
+                    if let cachedImage = filterCache.getFullImage(for: filterKey) {
+                        print("✅ [Cache HIT] Filter '\(filterKey)' from cache")
+                        baseImage = cachedImage
+                    } else {
+                        print("⚠️ [Cache MISS] Applying filter '\(filterKey)'")
+                        if let filteredImage = snapshot.selectedFilter.apply(to: originalImage) {
+                            baseImage = filteredImage
+                            // 캐시에 저장
+                            filterCache.setFullImage(filteredImage, for: filterKey)
+                        }
+                    }
+
+                    // 2. 오버레이 합성 (텍스트, 스티커, 그림)
+                    // 오버레이가 있으면 합성, 없으면 베이스 이미지 그대로
+                    let hasOverlays = !snapshot.textOverlays.isEmpty ||
+                                      !snapshot.stickers.isEmpty ||
+                                      !snapshot.pkDrawing.strokes.isEmpty
+
+                    let finalImage: UIImage
+                    if hasOverlays {
+                        // 임시 canvasSize (실제 canvasSize는 State에서 가져와야 하지만 스냅샷에 없음)
+                        // Drawing이 있으면 이미지 크기로 가정
+                        let canvasSize = baseImage.size
+                        finalImage = await ImageEditHelper.compositeImageWithOverlays(
+                            baseImage: baseImage,
+                            textOverlays: snapshot.textOverlays,
+                            stickers: snapshot.stickers,
+                            drawing: snapshot.pkDrawing,
+                            canvasSize: canvasSize
+                        )
+                    } else {
+                        finalImage = baseImage
+                    }
+
+                    await send(.imageRegenerated(finalImage))
+                }
+
+            case let .imageRegenerated(image):
+                state.displayImage = image
+                state.isProcessing = false
+                return .none
+
+            // MARK: - Memory Management
+            case .memoryWarning:
+                print("⚠️ [Memory Warning] Clearing caches and limiting history")
+
+                // 2. 히스토리 크기 축소 (10 → 5)
+                if state.historyStack.count > 5 {
+                    let removeCount = state.historyStack.count - 5
+                    state.historyStack.removeFirst(removeCount)
+                    print("   - History stack reduced: \(state.historyStack.count + removeCount) → \(state.historyStack.count)")
+                }
+
+                // 3. Redo 스택 클리어
+                if !state.redoStack.isEmpty {
+                    let redoCount = state.redoStack.count
+                    state.redoStack.removeAll()
+                    print("   - Redo stack cleared: \(redoCount) items")
+                }
+
+                // 4. Crop 히스토리 축소 (3 → 1)
+                if state.cropHistory.count > 1 {
+                    let cropRemoveCount = state.cropHistory.count - 1
+                    state.cropHistory.removeFirst(cropRemoveCount)
+                    print("   - Crop history reduced: \(state.cropHistory.count + cropRemoveCount) → \(state.cropHistory.count)")
+                }
+
+                // 1. FilterCache 정리 (전체 이미지만, 썸네일은 유지)
+                filterCache.handleMemoryWarning()
+
+                return .none
+
             case .delegate:
                 return .none
             }
@@ -998,6 +1129,7 @@ extension EditPhotoFeature.Action: Equatable {
              (.undo, .undo),
              (.redo, .redo),
              (.completeButtonTapped, .completeButtonTapped),
+             (.memoryWarning, .memoryWarning),
              (.loadPurchaseHistory, .loadPurchaseHistory),
              (.checkPaidFilterPurchase, .checkPaidFilterPurchase),
              (.dismissPurchaseModal, .dismissPurchaseModal),
@@ -1013,8 +1145,11 @@ extension EditPhotoFeature.Action: Equatable {
             return l == r
         case let (.filterThumbnailGenerated(lf, _), .filterThumbnailGenerated(rf, _)):
             return lf == rf  // UIImage는 무시
-        case (.filterApplied(_), .filterApplied(_)):
+        case (.filterApplied(_), .filterApplied(_)),
+             (.imageRegenerated(_), .imageRegenerated(_)):
             return true  // UIImage는 무시
+        case (.regenerateImageFromSnapshot(_), .regenerateImageFromSnapshot(_)):
+            return true  // EditSnapshot 비교는 복잡하므로 무시
         case let (.cropRectChanged(l), .cropRectChanged(r)):
             return l == r
         case let (.aspectRatioChanged(l), .aspectRatioChanged(r)):
