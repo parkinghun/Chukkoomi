@@ -132,6 +132,7 @@ Packages
 xcuserdata
 # *.xcodeproj
 
+.claude/
 
 ### Xcode ###
 
