@@ -10,7 +10,6 @@
 		1509EB382EC5721200E86228 /* RealmSwift in Embed Frameworks */ = {isa = PBXBuildFile; productRef = 15163D132EC49DB400843A8A /* RealmSwift */; settings = {ATTRIBUTES = (CodeSignOnCopy, ); }; };
 		15163D142EC49DB400843A8A /* RealmSwift in Frameworks */ = {isa = PBXBuildFile; productRef = 15163D132EC49DB400843A8A /* RealmSwift */; };
 		154F15B02EBDE1A20079B157 /* ComposableArchitecture in Frameworks */ = {isa = PBXBuildFile; productRef = 154F15AF2EBDE1A20079B157 /* ComposableArchitecture */; };
-		15890C4C2ED349A800238746 /* Secrets.xcconfig in Resources */ = {isa = PBXBuildFile; fileRef = 15890C4B2ED349A800238746 /* Secrets.xcconfig */; };
 		B521765F2ED5BCD100CD0BFA /* SocketIO in Frameworks */ = {isa = PBXBuildFile; productRef = B521765E2ED5BCD100CD0BFA /* SocketIO */; };
 		B5511E102ED6111A00DBEA27 /* iamport-ios in Frameworks */ = {isa = PBXBuildFile; productRef = B5511E0F2ED6111A00DBEA27 /* iamport-ios */; };
 		B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = B5CC0CDD2EBA3E81003B6A27 /* .gitignore */; };
@@ -176,7 +175,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				B5CC0CDE2EBA3E81003B6A27 /* .gitignore in Resources */,
-				15890C4C2ED349A800238746 /* Secrets.xcconfig in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

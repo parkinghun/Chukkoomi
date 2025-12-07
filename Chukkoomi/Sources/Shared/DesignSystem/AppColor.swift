@@ -25,6 +25,12 @@ enum AppColor {
     
     /// 구분 선
     static let divider = Color(hex: "#D8DADC")
+
+    /// 이미지 편집용 색상 팔레트 (텍스트, 그리기 등)
+    static let editingPalette: [Color] = [
+        .white, .black, .red, .orange,
+        .yellow, .green, .blue, .purple
+    ]
 }
 
 

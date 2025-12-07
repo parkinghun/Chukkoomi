@@ -8,6 +8,10 @@
 import SwiftUI
 import PencilKit
 
+/// PencilKit 캔버스 뷰 래퍼
+/// - PKCanvasView를 SwiftUI에서 사용
+/// - Undo/Redo 지원
+/// - 손가락 + Apple Pencil 입력 모두 지원
 struct DrawingCanvasView: UIViewRepresentable {
     @Binding var drawing: PKDrawing
     let tool: PKTool
@@ -15,6 +19,11 @@ struct DrawingCanvasView: UIViewRepresentable {
     let redoTrigger: UUID?
     let onDrawingChanged: (PKDrawing) -> Void
     let onUndoStatusChanged: (Bool, Bool) -> Void  // (canUndo, canRedo)
+
+    // MARK: - Constants
+
+    /// Undo 스택 최대 크기
+    private static let maxUndoLevels = 20
 
     func makeUIView(context: Context) -> PKCanvasView {
         let canvasView = PKCanvasView()
@@ -26,7 +35,7 @@ struct DrawingCanvasView: UIViewRepresentable {
         canvasView.drawingPolicy = .anyInput  // 손가락 + Apple Pencil 모두 지원
 
         // UndoManager 설정
-        canvasView.undoManager?.levelsOfUndo = 20
+        canvasView.undoManager?.levelsOfUndo = Self.maxUndoLevels
 
         // Coordinator에 canvasView 참조 저장
         context.coordinator.canvasView = canvasView
@@ -57,27 +66,44 @@ struct DrawingCanvasView: UIViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(self)
+        Coordinator(
+            drawingBinding: $drawing,
+            onDrawingChanged: onDrawingChanged,
+            onUndoStatusChanged: onUndoStatusChanged
+        )
     }
 
+    // MARK: - Coordinator
+
+    /// PKCanvasViewDelegate를 처리하는 Coordinator
+    /// - 순환 참조 방지를 위해 클로저 캡처 사용
     class Coordinator: NSObject, PKCanvasViewDelegate {
-        var parent: DrawingCanvasView
+        @Binding var drawing: PKDrawing
+        let onDrawingChanged: (PKDrawing) -> Void
+        let onUndoStatusChanged: (Bool, Bool) -> Void
+
         weak var canvasView: PKCanvasView?
         var lastUndoTrigger: UUID?
         var lastRedoTrigger: UUID?
 
-        init(_ parent: DrawingCanvasView) {
-            self.parent = parent
+        init(
+            drawingBinding: Binding<PKDrawing>,
+            onDrawingChanged: @escaping (PKDrawing) -> Void,
+            onUndoStatusChanged: @escaping (Bool, Bool) -> Void
+        ) {
+            self._drawing = drawingBinding
+            self.onDrawingChanged = onDrawingChanged
+            self.onUndoStatusChanged = onUndoStatusChanged
         }
 
         func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-            parent.drawing = canvasView.drawing
-            parent.onDrawingChanged(canvasView.drawing)
+            drawing = canvasView.drawing
+            onDrawingChanged(canvasView.drawing)
 
             // Undo/Redo 상태 업데이트
             let canUndo = canvasView.undoManager?.canUndo ?? false
             let canRedo = canvasView.undoManager?.canRedo ?? false
-            parent.onUndoStatusChanged(canUndo, canRedo)
+            onUndoStatusChanged(canUndo, canRedo)
         }
 
         func performUndo() {

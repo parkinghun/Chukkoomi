@@ -8,15 +8,13 @@
 import SwiftUI
 import ComposableArchitecture
 
+/// 텍스트 색상 선택 컨트롤 뷰
+/// - 텍스트 편집 모드일 때 색상 팔레트 표시
+/// - 선택된 색상 하이라이트
 struct TextControlView: View {
     let isTextEditMode: Bool
     let currentTextColor: Color
     let onColorChanged: (Color) -> Void
-
-    private let colors: [Color] = [
-        .white, .black, .red, .orange,
-        .yellow, .green, .blue, .purple
-    ]
 
     var body: some View {
         VStack(spacing: 0) {
@@ -24,7 +22,7 @@ struct TextControlView: View {
                 // 색상 선택 버튼들 (편집 모드일 때만)
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 10) {
-                        ForEach(colors, id: \.self) { color in
+                        ForEach(AppColor.editingPalette, id: \.self) { color in
                             Circle()
                                 .fill(color)
                                 .frame(width: 30, height: 30)
