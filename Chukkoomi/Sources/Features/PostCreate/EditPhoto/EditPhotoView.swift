@@ -181,12 +181,12 @@ struct EditPhotoView: View {
                         .frame(width: width, height: height)
                 }
 
-                if store.selectedEditMode == .crop, let cropRect = store.cropRect {
+                if store.selectedEditMode == .crop, let cropRect = store.crop.cropRect {
                     CropOverlayView(
                         cropRect: cropRect,
                         imageSize: CGSize(width: width, height: height),
                         onCropRectChanged: { newRect in
-                            store.send(.cropRectChanged(newRect))
+                            store.send(.crop(.cropRectChanged(newRect)))
                         }
                     )
                     .frame(width: width, height: height)
@@ -385,17 +385,7 @@ struct EditPhotoView: View {
     // MARK: - Crop Control View
     private var cropControlView: some View {
         CropControlView(
-            selectedAspectRatio: store.selectedAspectRatio,
-            cropRect: store.cropRect,
-            onAspectRatioChanged: { ratio in
-                store.send(.aspectRatioChanged(ratio))
-            },
-            onResetCrop: {
-                store.send(.resetCrop)
-            },
-            onApplyCrop: {
-                store.send(.applyCrop)
-            }
+            store: store.scope(state: \.crop, action: \.crop)
         )
     }
 

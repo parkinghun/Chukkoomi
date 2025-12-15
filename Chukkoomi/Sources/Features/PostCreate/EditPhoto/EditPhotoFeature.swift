@@ -63,28 +63,8 @@ struct EditPhotoFeature {
         }
     }
 
-    // MARK: - CropAspectRatio
-    enum CropAspectRatio: String, CaseIterable, Identifiable {
-        case free = "자유"
-        case square = "1:1"
-        case ratio3_4 = "3:4"
-        case ratio4_3 = "4:3"
-        case ratio9_16 = "9:16"
-        case ratio16_9 = "16:9"
-
-        var id: String { rawValue }
-
-        var ratio: CGFloat? {
-            switch self {
-            case .free: return nil
-            case .square: return 1.0
-            case .ratio3_4: return 3.0 / 4.0
-            case .ratio4_3: return 4.0 / 3.0
-            case .ratio9_16: return 9.0 / 16.0
-            case .ratio16_9: return 16.0 / 9.0
-            }
-        }
-    }
+    // CropAspectRatio는 CropFeature.AspectRatio로 대체됨 (타입 별칭 유지)
+    typealias CropAspectRatio = CropFeature.AspectRatio
 
     // MARK: - TextOverlay
     struct TextOverlay: Equatable, Identifiable {
@@ -179,10 +159,8 @@ struct EditPhotoFeature {
         // Filter (Child Feature)
         var filter: FilterFeature.State
 
-        // Crop
-        var cropRect: CGRect?  // 자를 영역 (normalized 0.0~1.0)
-        var selectedAspectRatio: CropAspectRatio = .free
-        var isCropping: Bool = false
+        // Crop (Child Feature)
+        var crop: CropFeature.State
 
         // Text
         var textOverlays: [TextOverlay] = []
@@ -238,6 +216,7 @@ struct EditPhotoFeature {
             self.originalImage = originalImage
             self.displayImage = originalImage
             self.filter = FilterFeature.State(originalImage: originalImage)
+            self.crop = CropFeature.State()
         }
 
         // Undo/Redo 가능 여부 계산
@@ -255,8 +234,8 @@ struct EditPhotoFeature {
                 selectedFilter: filter.selectedFilter,
                 textOverlays: textOverlays,
                 stickers: stickers,
-                cropRect: cropRect,
-                selectedAspectRatio: selectedAspectRatio,
+                cropRect: crop.cropRect,
+                selectedAspectRatio: crop.selectedAspectRatio,
                 pkDrawing: pkDrawing
             )
         }
@@ -267,8 +246,8 @@ struct EditPhotoFeature {
             filter.selectedFilter = snapshot.selectedFilter
             textOverlays = snapshot.textOverlays
             stickers = snapshot.stickers
-            cropRect = snapshot.cropRect
-            selectedAspectRatio = snapshot.selectedAspectRatio
+            crop.cropRect = snapshot.cropRect
+            crop.selectedAspectRatio = snapshot.selectedAspectRatio
             pkDrawing = snapshot.pkDrawing
         }
     }
@@ -283,12 +262,9 @@ struct EditPhotoFeature {
         case applyFilter(ImageFilter)  // FilterFeature delegate로부터 호출
         case filterApplied(UIImage)
 
-        // Crop Actions
-        case cropRectChanged(CGRect)
-        case aspectRatioChanged(CropAspectRatio)
-        case applyCrop
+        // Crop Actions (Child Feature)
+        case crop(CropFeature.Action)
         case cropApplied(UIImage)
-        case resetCrop
 
         // Text Actions
         case enterTextEditMode(CGPoint)  // 텍스트 편집 모드 진입 (새 텍스트, 터치 위치)
@@ -383,9 +359,9 @@ struct EditPhotoFeature {
 
                 state.selectedEditMode = mode
 
-                // Crop 모드로 전환 시 초기 cropRect 설정 (전체 이미지)
-                if mode == .crop && state.cropRect == nil {
-                    state.cropRect = CGRect(x: 0, y: 0, width: 1.0, height: 1.0)
+                // Crop 모드로 전환 시
+                if mode == .crop {
+                    return .send(.crop(.enterCropMode))
                 }
 
                 // 그리기 모드를 벗어날 때 drawing 적용
@@ -444,24 +420,13 @@ struct EditPhotoFeature {
                 state.isProcessing = false
                 return .none
 
-            // MARK: - Crop Actions
-            case let .cropRectChanged(rect):
-                state.cropRect = rect
+            // MARK: - Crop Actions (Delegate Handling)
+            case .crop(.delegate(.cropRectUpdated)):
+                // cropRect 변경은 CropFeature 내부에서 처리됨
                 return .none
 
-            case let .aspectRatioChanged(ratio):
-                state.selectedAspectRatio = ratio
-                // 전체 이미지 크기에서 선택한 비율로 cropRect 계산
-                if let aspectRatio = ratio.ratio {
-                    state.cropRect = ImageEditHelper.calculateCropRectForAspectRatio(aspectRatio)
-                } else {
-                    // free 비율인 경우 전체 이미지로
-                    state.cropRect = CGRect(x: 0, y: 0, width: 1.0, height: 1.0)
-                }
-                return .none
-
-            case .applyCrop:
-                guard let cropRect = state.cropRect else { return .none }
+            case .crop(.delegate(.applyCropRequested(let cropRect))):
+                // Crop 적용 요청 받음
                 state.isProcessing = true
 
                 // Crop은 파괴적 작업이므로 CropSnapshot 저장
@@ -484,22 +449,20 @@ struct EditPhotoFeature {
                     }
                 }
 
+            case .crop:
+                // 다른 crop 액션은 자동 처리
+                return .none
+
             case let .cropApplied(image):
                 state.displayImage = image
                 state.originalImage = image  // 자른 이미지를 새로운 원본으로
-                state.cropRect = nil
-                state.isCropping = false
+                state.crop.cropRect = nil
+                state.crop.isCropping = false
                 state.isProcessing = false
 
                 // Crop 후에는 필터 캐시 클리어 (원본이 바뀌었으므로)
                 filterCache.clearFullImageCache()
                 print("[Crop] ✂️ Filter cache cleared (original image changed)")
-                return .none
-
-            case .resetCrop:
-                // 전체 이미지로 리셋
-                state.cropRect = CGRect(x: 0, y: 0, width: 1.0, height: 1.0)
-                state.selectedAspectRatio = .free
                 return .none
 
             // MARK: - Text Actions
@@ -875,7 +838,7 @@ struct EditPhotoFeature {
 
                 return .run { [
                     displayImage = state.displayImage,
-                    cropRect = state.cropRect,
+                    cropRect = state.crop.cropRect,
                     textOverlays = state.textOverlays,
                     stickers = state.stickers,
                     drawing = state.pkDrawing,
@@ -998,6 +961,10 @@ struct EditPhotoFeature {
             FilterFeature()
         }
 
+        Scope(state: \.crop, action: \.crop) {
+            CropFeature()
+        }
+
         .ifLet(\.$paidFilterPurchase, action: \.paidFilterPurchase) {
             PaidFilterPurchaseFeature()
         }
@@ -1010,8 +977,6 @@ extension EditPhotoFeature.Action: Equatable {
     static func == (lhs: EditPhotoFeature.Action, rhs: EditPhotoFeature.Action) -> Bool {
         switch (lhs, rhs) {
         case (.onAppear, .onAppear),
-             (.applyCrop, .applyCrop),
-             (.resetCrop, .resetCrop),
              (.exitTextEditMode, .exitTextEditMode),
              (.deleteSelectedText, .deleteSelectedText),
              (.toggleDrawingToolCustomization, .toggleDrawingToolCustomization),
@@ -1039,9 +1004,7 @@ extension EditPhotoFeature.Action: Equatable {
             return true  // UIImage는 무시
         case (.regenerateImageFromSnapshot(_), .regenerateImageFromSnapshot(_)):
             return true  // EditSnapshot 비교는 복잡하므로 무시
-        case let (.cropRectChanged(l), .cropRectChanged(r)):
-            return l == r
-        case let (.aspectRatioChanged(l), .aspectRatioChanged(r)):
+        case let (.crop(l), .crop(r)):
             return l == r
         case (.cropApplied(_), .cropApplied(_)):
             return true  // UIImage는 무시

@@ -12,11 +12,7 @@ import ComposableArchitecture
 /// - 비율 선택 (자유/1:1/3:4 등)
 /// - 리셋/적용 버튼
 struct CropControlView: View {
-    let selectedAspectRatio: EditPhotoFeature.CropAspectRatio
-    let cropRect: CGRect?
-    let onAspectRatioChanged: (EditPhotoFeature.CropAspectRatio) -> Void
-    let onResetCrop: () -> Void
-    let onApplyCrop: () -> Void
+    let store: StoreOf<CropFeature>
 
     // MARK: - Constants
 
@@ -38,7 +34,7 @@ struct CropControlView: View {
             // 비율 선택 스크롤
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: ratioButtonSpacing) {
-                    ForEach(EditPhotoFeature.CropAspectRatio.allCases) { ratio in
+                    ForEach(CropFeature.AspectRatio.allCases) { ratio in
                         ratioButton(for: ratio)
                     }
                 }
@@ -50,15 +46,19 @@ struct CropControlView: View {
                 actionButton(
                     title: "리셋",
                     isActive: true,
-                    action: onResetCrop
+                    action: {
+                        store.send(.reset)
+                    }
                 )
 
                 actionButton(
                     title: "적용",
-                    isActive: cropRect != nil,
-                    action: onApplyCrop
+                    isActive: store.cropRect != nil,
+                    action: {
+                        store.send(.applyCrop)
+                    }
                 )
-                .disabled(cropRect == nil)
+                .disabled(store.cropRect == nil)
             }
             .padding(.horizontal, 20)
         }
@@ -68,9 +68,9 @@ struct CropControlView: View {
     // MARK: - View Components
 
     /// 비율 선택 버튼
-    private func ratioButton(for ratio: EditPhotoFeature.CropAspectRatio) -> some View {
+    private func ratioButton(for ratio: CropFeature.AspectRatio) -> some View {
         Button {
-            onAspectRatioChanged(ratio)
+            store.send(.aspectRatioChanged(ratio))
         } label: {
             Text(ratio.rawValue)
                 .font(.caption)
@@ -78,9 +78,9 @@ struct CropControlView: View {
                 .padding(.vertical, buttonVerticalPadding)
                 .background(
                     Capsule()
-                        .fill(selectedAspectRatio == ratio ? Color.blue : Color.gray.opacity(0.2))
+                        .fill(store.selectedAspectRatio == ratio ? Color.blue : Color.gray.opacity(0.2))
                 )
-                .foregroundColor(selectedAspectRatio == ratio ? Color.white : Color.primary)
+                .foregroundColor(store.selectedAspectRatio == ratio ? Color.white : Color.primary)
         }
     }
 
