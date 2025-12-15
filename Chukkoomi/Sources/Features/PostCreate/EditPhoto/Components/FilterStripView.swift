@@ -10,26 +10,23 @@ import ComposableArchitecture
 
 // MARK: - Filter Strip View
 struct FilterStripView: View {
-    let filterThumbnails: [ImageFilter: UIImage]
-    let selectedFilter: ImageFilter
+    let store: StoreOf<FilterFeature>
     let purchasedFilterTypes: Set<ImageFilter>
-    let onFilterTap: (ImageFilter) -> Void
-    let onFilterDragStart: (ImageFilter) -> Void
-    
+
     var body: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(ImageFilter.allCases) { filter in
                     FilterThumbnailView(
                         filter: filter,
-                        thumbnail: filterThumbnails[filter],
-                        isSelected: selectedFilter == filter,
+                        thumbnail: store.filterThumbnails[filter],
+                        isSelected: store.selectedFilter == filter,
                         isPurchased: isPurchased(filter),
                         onTap: {
-                            onFilterTap(filter)
+                            store.send(.selectFilter(filter))
                         },
                         onDragStart: {
-                            onFilterDragStart(filter)
+                            store.send(.dragStarted(filter))
                         }
                     )
                 }
@@ -37,11 +34,14 @@ struct FilterStripView: View {
             .padding(.horizontal, 20)
         }
         .frame(height: 120)
+        .onAppear {
+            store.send(.onAppear)
+        }
     }
-    
+
     private func isPurchased(_ filter: ImageFilter) -> Bool {
         guard filter.isPaid else { return true }
-        
+
         // 캐시된 purchasedFilterTypes에서 확인 (동기적으로)
         return purchasedFilterTypes.contains(filter)
     }

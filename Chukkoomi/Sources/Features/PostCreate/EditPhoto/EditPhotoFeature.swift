@@ -176,10 +176,8 @@ struct EditPhotoFeature {
         var displayImage: UIImage  // 현재 화면에 표시되는 이미지
         var selectedEditMode: EditMode = .filter  // 기본값: 필터
 
-        // Filter
-        var selectedFilter: ImageFilter = .original
-        var previewFilter: ImageFilter?  // 드래그 중인 필터 (라이브 프리뷰)
-        var filterThumbnails: [ImageFilter: UIImage] = [:]
+        // Filter (Child Feature)
+        var filter: FilterFeature.State
 
         // Crop
         var cropRect: CGRect?  // 자를 영역 (normalized 0.0~1.0)
@@ -239,6 +237,7 @@ struct EditPhotoFeature {
         init(originalImage: UIImage) {
             self.originalImage = originalImage
             self.displayImage = originalImage
+            self.filter = FilterFeature.State(originalImage: originalImage)
         }
 
         // Undo/Redo 가능 여부 계산
@@ -253,7 +252,7 @@ struct EditPhotoFeature {
         // 현재 상태의 스냅샷 생성 (메타데이터만)
         func createSnapshot() -> EditSnapshot {
             EditSnapshot(
-                selectedFilter: selectedFilter,
+                selectedFilter: filter.selectedFilter,
                 textOverlays: textOverlays,
                 stickers: stickers,
                 cropRect: cropRect,
@@ -265,7 +264,7 @@ struct EditPhotoFeature {
         // 스냅샷으로부터 메타데이터 복원 (displayImage는 별도 재생성)
         mutating func restoreMetadataFromSnapshot(_ snapshot: EditSnapshot) {
             // displayImage는 복원하지 않음 (캐시에서 재생성 필요)
-            selectedFilter = snapshot.selectedFilter
+            filter.selectedFilter = snapshot.selectedFilter
             textOverlays = snapshot.textOverlays
             stickers = snapshot.stickers
             cropRect = snapshot.cropRect
@@ -279,15 +278,9 @@ struct EditPhotoFeature {
         case onAppear
         case editModeChanged(EditMode)
 
-        // Filter Actions
-        case generateFilterThumbnails
-        case filterThumbnailGenerated(ImageFilter, UIImage)
-        case filterDragStarted(ImageFilter)
-        case filterDragEntered  // Preview Canvas 위로 드래그
-        case filterDragExited   // Preview Canvas에서 벗어남
-        case filterDropped(ImageFilter)
-        case filterDragCancelled
-        case applyFilter(ImageFilter)
+        // Filter Actions (Child Feature)
+        case filter(FilterFeature.Action)
+        case applyFilter(ImageFilter)  // FilterFeature delegate로부터 호출
         case filterApplied(UIImage)
 
         // Crop Actions
@@ -366,7 +359,7 @@ struct EditPhotoFeature {
             switch action {
             case .onAppear:
                 return .merge(
-                    .send(.generateFilterThumbnails),
+                    .send(.filter(.onAppear)),
                     .send(.loadPurchaseHistory)
                 )
 
@@ -390,11 +383,6 @@ struct EditPhotoFeature {
 
                 state.selectedEditMode = mode
 
-                // 필터 모드로 전환할 때 썸네일이 없으면 생성
-                if mode == .filter && state.filterThumbnails.isEmpty {
-                    return .send(.generateFilterThumbnails)
-                }
-
                 // Crop 모드로 전환 시 초기 cropRect 설정 (전체 이미지)
                 if mode == .crop && state.cropRect == nil {
                     state.cropRect = CGRect(x: 0, y: 0, width: 1.0, height: 1.0)
@@ -407,64 +395,26 @@ struct EditPhotoFeature {
 
                 return .none
 
-            case .generateFilterThumbnails:
-                state.isProcessing = true
-
-                return .run { [originalImage = state.originalImage] send in
-                    // 썸네일용 작은 이미지 생성 (성능 최적화)
-                    let thumbnailSize = CGSize(width: 100, height: 100)
-                    let thumbnailImage = await ImageEditHelper.resizeImage(originalImage, to: thumbnailSize)
-
-                    // 각 필터별 썸네일 생성
-                    for filter in ImageFilter.allCases {
-                        if let filtered = filter.apply(to: thumbnailImage) {
-                            await send(.filterThumbnailGenerated(filter, filtered))
-                        }
-                    }
-                }
-
-            case let .filterThumbnailGenerated(filter, thumbnail):
-                state.filterThumbnails[filter] = thumbnail
-                // 모든 썸네일이 생성되면 processing 완료
-                if state.filterThumbnails.count == ImageFilter.allCases.count {
-                    state.isProcessing = false
-                }
-                return .none
-
-            case let .filterDragStarted(filter):
-                state.isDragging = true
-                state.previewFilter = filter
-                return .none
-
-            case .filterDragEntered:
-                // 드래그가 Preview Canvas 위로 진입
-                // 현재 previewFilter로 이미지 즉시 업데이트
-                if let previewFilter = state.previewFilter {
-                    return .send(.applyFilter(previewFilter))
-                }
-                return .none
-
-            case .filterDragExited:
-                // Preview Canvas에서 벗어남 - 원래 선택된 필터로 복원
-                state.previewFilter = nil
-                return .send(.applyFilter(state.selectedFilter))
-
-            case let .filterDropped(filter):
-                state.isDragging = false
-                state.previewFilter = nil
-                state.selectedFilter = filter
-                // 드롭된 필터를 최종 적용
+            // MARK: - Filter Actions (Delegate Handling)
+            case .filter(.delegate(.filterChanged(let filter))):
+                // FilterFeature에서 필터가 변경됨 - 실제 필터 적용
                 return .send(.applyFilter(filter))
 
-            case .filterDragCancelled:
-                state.isDragging = false
-                state.previewFilter = nil
-                // 원래 필터로 복원
-                return .send(.applyFilter(state.selectedFilter))
+            case .filter(.delegate(.previewFilterChanged(let previewFilter))):
+                // 드래그 중 프리뷰 필터 변경
+                if let previewFilter = previewFilter {
+                    return .send(.applyFilter(previewFilter))
+                } else {
+                    // 프리뷰 취소 - 원래 선택된 필터로 복원
+                    return .send(.applyFilter(state.filter.selectedFilter))
+                }
+
+            case .filter:
+                // 다른 filter 액션은 자동 처리
+                return .none
 
             case let .applyFilter(filter):
                 state.isProcessing = true
-                state.selectedFilter = filter  // 선택한 필터 상태 업데이트
 
                 return .merge(
                     .send(.saveSnapshot),
@@ -875,7 +825,7 @@ struct EditPhotoFeature {
 
             case .checkPaidFilterPurchase:
                 // 적용된 필터가 유료 필터인지 확인
-                let appliedFilter = state.selectedFilter
+                let appliedFilter = state.filter.selectedFilter
 
                 // 유료 필터가 아니면 바로 완료
                 guard appliedFilter.isPaid else {
@@ -1043,6 +993,11 @@ struct EditPhotoFeature {
                 return .none
             }
         }
+
+        Scope(state: \.filter, action: \.filter) {
+            FilterFeature()
+        }
+
         .ifLet(\.$paidFilterPurchase, action: \.paidFilterPurchase) {
             PaidFilterPurchaseFeature()
         }
@@ -1055,10 +1010,6 @@ extension EditPhotoFeature.Action: Equatable {
     static func == (lhs: EditPhotoFeature.Action, rhs: EditPhotoFeature.Action) -> Bool {
         switch (lhs, rhs) {
         case (.onAppear, .onAppear),
-             (.generateFilterThumbnails, .generateFilterThumbnails),
-             (.filterDragEntered, .filterDragEntered),
-             (.filterDragExited, .filterDragExited),
-             (.filterDragCancelled, .filterDragCancelled),
              (.applyCrop, .applyCrop),
              (.resetCrop, .resetCrop),
              (.exitTextEditMode, .exitTextEditMode),
@@ -1079,12 +1030,10 @@ extension EditPhotoFeature.Action: Equatable {
 
         case let (.editModeChanged(l), .editModeChanged(r)):
             return l == r
-        case let (.filterDragStarted(l), .filterDragStarted(r)),
-             let (.filterDropped(l), .filterDropped(r)),
-             let (.applyFilter(l), .applyFilter(r)):
+        case let (.filter(l), .filter(r)):
             return l == r
-        case let (.filterThumbnailGenerated(lf, _), .filterThumbnailGenerated(rf, _)):
-            return lf == rf  // UIImage는 무시
+        case let (.applyFilter(l), .applyFilter(r)):
+            return l == r
         case (.filterApplied(_), .filterApplied(_)),
              (.imageRegenerated(_), .imageRegenerated(_)):
             return true  // UIImage는 무시

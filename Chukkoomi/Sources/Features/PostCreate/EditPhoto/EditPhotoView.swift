@@ -175,7 +175,7 @@ struct EditPhotoView: View {
                 }
 
                 // 드롭 타겟, crop overlay 등 기존 요소 그대로
-                if store.isDragging {
+                if store.filter.isDragging {
                     Rectangle()
                         .stroke(Color.blue, lineWidth: 3)
                         .frame(width: width, height: height)
@@ -303,6 +303,20 @@ struct EditPhotoView: View {
                         .tint(.white)
                 }
             }
+            .dropDestination(for: ImageFilter.self) { items, location in
+                // 드롭 시
+                if let filter = items.first {
+                    store.send(.filter(.dropped(filter)))
+                }
+                return true
+            } isTargeted: { isTargeted in
+                // 드래그가 들어오거나 나갈 때
+                if isTargeted {
+                    store.send(.filter(.dragEntered))
+                } else {
+                    store.send(.filter(.dragExited))
+                }
+            }
             .task(id: geometry.size) {
                 // 캔버스 크기 설정 (DrawingCanvas와 동일한 크기)
                 // geometry.size가 변경될 때마다 업데이트
@@ -363,15 +377,8 @@ struct EditPhotoView: View {
     // MARK: - Filter Strip
     private var filterStrip: some View {
         FilterStripView(
-            filterThumbnails: store.filterThumbnails,
-            selectedFilter: store.selectedFilter,
-            purchasedFilterTypes: store.purchasedFilterTypes,
-            onFilterTap: { filter in
-                store.send(.applyFilter(filter))
-            },
-            onFilterDragStart: { filter in
-                store.send(.filterDragStarted(filter))
-            }
+            store: store.scope(state: \.filter, action: \.filter),
+            purchasedFilterTypes: store.purchasedFilterTypes
         )
     }
 
