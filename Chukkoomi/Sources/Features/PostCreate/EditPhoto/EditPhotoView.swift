@@ -26,7 +26,7 @@ struct EditPhotoView: View {
                 previewCanvas
 
                 // 폰트 크기 슬라이더 (텍스트 편집 모드일 때만, 우측에 표시)
-                if store.isTextEditMode {
+                if store.text.isTextEditMode {
                     HStack {
                         Spacer()
                         fontSizeSlider()
@@ -40,7 +40,7 @@ struct EditPhotoView: View {
                 .padding(.bottom, 8)
 
             // 하단 탭 바 (텍스트 편집 모드가 아닐 때만 표시)
-            if !store.isTextEditMode {
+            if !store.text.isTextEditMode {
                 editModeTabBar
                     .background(Color.white)
                     .zIndex(99)  // 높은 zIndex로 터치 보장
@@ -117,9 +117,9 @@ struct EditPhotoView: View {
             Spacer()
 
             // 완료 버튼
-            if store.isTextEditMode {
+            if store.text.isTextEditMode {
                 Button {
-                    store.send(.exitTextEditMode)
+                    store.send(.text(.exitTextEditMode))
                 } label: {
                     Text("완료")
                         .foregroundStyle(.black)
@@ -153,13 +153,13 @@ struct EditPhotoView: View {
                     .clipped()
 
                 // 텍스트 편집 모드일 때 검정 반투명 오버레이
-                if store.isTextEditMode {
+                if store.text.isTextEditMode {
                     Color.black.opacity(0.5)
                         .frame(width: width, height: height)
                 }
 
                 // 텍스트 모드 또는 스티커 모드일 때 탭 감지용 투명 레이어
-                if (store.selectedEditMode == .text && !store.isTextEditMode) || store.selectedEditMode == .sticker {
+                if (store.selectedEditMode == .text && !store.text.isTextEditMode) || store.selectedEditMode == .sticker {
                     Color.clear
                         .frame(width: width, height: height)
                         .contentShape(Rectangle())
@@ -193,8 +193,8 @@ struct EditPhotoView: View {
                 }
 
                 // Text Overlays (편집 모드가 아닐 때만 완료된 텍스트 표시)
-                if !store.isTextEditMode {
-                    ForEach(store.textOverlays.filter { !$0.text.isEmpty }) { textOverlay in
+                if !store.text.isTextEditMode {
+                    ForEach(store.text.textOverlays.filter { !$0.text.isEmpty }) { textOverlay in
                         Text(textOverlay.text)
                             .font(.system(size: textOverlay.fontSize, weight: .bold))
                             .foregroundColor(textOverlay.color)
@@ -215,7 +215,7 @@ struct EditPhotoView: View {
                                         let clampedY = min(max(normalizedY, 0.0), 1.0)
 
                                         let newPosition = CGPoint(x: clampedX, y: clampedY)
-                                        store.send(.textOverlayPositionChanged(textOverlay.id, newPosition))
+                                        store.send(.text(.textOverlayPositionChanged(textOverlay.id, newPosition)))
                                     }
                                     .onEnded { value in
                                         // 드래그 거리가 짧으면 탭으로 인식 (편집)
@@ -226,7 +226,7 @@ struct EditPhotoView: View {
 
                                         if dragDistance < 10 {
                                             // 탭으로 인식 - 편집 모드 진입
-                                            store.send(.editExistingText(textOverlay.id))
+                                            store.send(.text(.editExistingText(textOverlay.id)))
                                         }
                                     }
                             )
@@ -234,17 +234,17 @@ struct EditPhotoView: View {
                 }
 
                 // 편집 중인 텍스트 (편집 모드일 때만)
-                if store.isTextEditMode, let editingId = store.editingTextId,
-                   let textOverlay = store.textOverlays.first(where: { $0.id == editingId }) {
+                if store.text.isTextEditMode, let editingId = store.text.editingTextId,
+                   let textOverlay = store.text.textOverlays.first(where: { $0.id == editingId }) {
                     EditableTextOverlayView(
                         text: textOverlay.text,
                         color: textOverlay.color,
                         fontSize: textOverlay.fontSize,
                         onTextChanged: { newText in
-                            store.send(.updateEditingText(textOverlay.id, newText))
+                            store.send(.text(.updateEditingText(textOverlay.id, newText)))
                         },
                         onFinishEditing: {
-                            store.send(.exitTextEditMode)
+                            store.send(.text(.exitTextEditMode))
                         }
                     )
                     .frame(width: width * 0.8, height: 100)
@@ -396,8 +396,8 @@ struct EditPhotoView: View {
 
         return Slider(
             value: Binding(
-                get: { store.currentTextFontSize },
-                set: { store.send(.textFontSizeChanged($0)) }
+                get: { store.text.currentTextFontSize },
+                set: { store.send(.text(.textFontSizeChanged($0))) }
             ),
             in: 16...72,
             step: 1
@@ -418,10 +418,10 @@ struct EditPhotoView: View {
     // MARK: - Text Control View
     private var textControlView: some View {
         TextControlView(
-            isTextEditMode: store.isTextEditMode,
-            currentTextColor: store.currentTextColor,
+            isTextEditMode: store.text.isTextEditMode,
+            currentTextColor: store.text.currentTextColor,
             onColorChanged: { color in
-                store.send(.textColorChanged(color))
+                store.send(.text(.textColorChanged(color)))
             }
         )
     }

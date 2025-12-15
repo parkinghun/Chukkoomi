@@ -66,28 +66,8 @@ struct EditPhotoFeature {
     // CropAspectRatio는 CropFeature.AspectRatio로 대체됨 (타입 별칭 유지)
     typealias CropAspectRatio = CropFeature.AspectRatio
 
-    // MARK: - TextOverlay
-    struct TextOverlay: Equatable, Identifiable {
-        let id: UUID
-        var text: String
-        var position: CGPoint  // Normalized (0.0~1.0)
-        var color: Color
-        var fontSize: CGFloat
-
-        init(
-            id: UUID = UUID(),
-            text: String = "",
-            position: CGPoint = CGPoint(x: 0.5, y: 0.5),  // 중앙
-            color: Color = .white,
-            fontSize: CGFloat = 32
-        ) {
-            self.id = id
-            self.text = text
-            self.position = position
-            self.color = color
-            self.fontSize = fontSize
-        }
-    }
+    // TextOverlay는 TextEditFeature.TextOverlay로 대체됨 (타입 별칭 유지)
+    typealias TextOverlay = TextEditFeature.TextOverlay
 
     // MARK: - StickerOverlay
     struct StickerOverlay: Equatable, Identifiable {
@@ -162,12 +142,8 @@ struct EditPhotoFeature {
         // Crop (Child Feature)
         var crop: CropFeature.State
 
-        // Text
-        var textOverlays: [TextOverlay] = []
-        var editingTextId: UUID?  // 현재 편집 중인 텍스트 ID
-        var isTextEditMode: Bool = false  // 텍스트 편집 모드 활성화 여부
-        var currentTextColor: Color = .white
-        var currentTextFontSize: CGFloat = 32
+        // Text (Child Feature)
+        var text: TextEditFeature.State
 
         // Drawing
         var pkDrawing: PKDrawing = PKDrawing()  // PencilKit drawing
@@ -217,6 +193,7 @@ struct EditPhotoFeature {
             self.displayImage = originalImage
             self.filter = FilterFeature.State(originalImage: originalImage)
             self.crop = CropFeature.State()
+            self.text = TextEditFeature.State()
         }
 
         // Undo/Redo 가능 여부 계산
@@ -232,7 +209,7 @@ struct EditPhotoFeature {
         func createSnapshot() -> EditSnapshot {
             EditSnapshot(
                 selectedFilter: filter.selectedFilter,
-                textOverlays: textOverlays,
+                textOverlays: text.textOverlays,
                 stickers: stickers,
                 cropRect: crop.cropRect,
                 selectedAspectRatio: crop.selectedAspectRatio,
@@ -244,7 +221,7 @@ struct EditPhotoFeature {
         mutating func restoreMetadataFromSnapshot(_ snapshot: EditSnapshot) {
             // displayImage는 복원하지 않음 (캐시에서 재생성 필요)
             filter.selectedFilter = snapshot.selectedFilter
-            textOverlays = snapshot.textOverlays
+            text.textOverlays = snapshot.textOverlays
             stickers = snapshot.stickers
             crop.cropRect = snapshot.cropRect
             crop.selectedAspectRatio = snapshot.selectedAspectRatio
@@ -266,16 +243,9 @@ struct EditPhotoFeature {
         case crop(CropFeature.Action)
         case cropApplied(UIImage)
 
-        // Text Actions
-        case enterTextEditMode(CGPoint)  // 텍스트 편집 모드 진입 (새 텍스트, 터치 위치)
-        case editExistingText(UUID)  // 기존 텍스트 편집 (수정)
-        case exitTextEditMode  // 텍스트 편집 모드 종료
-        case updateEditingText(UUID, String)  // 편집 중 텍스트 업데이트
-        case textColorChanged(Color)
-        case textFontSizeChanged(CGFloat)
-        case textOverlayPositionChanged(UUID, CGPoint)
-        case deleteSelectedText
-        case tapImageEmptySpace(CGPoint)  // 이미지 빈 공간 탭 (터치 위치)
+        // Text Actions (Child Feature)
+        case text(TextEditFeature.Action)
+        case tapImageEmptySpace(CGPoint)  // 이미지 빈 공간 탭 (터치 위치) - 텍스트/스티커 모드 공통
 
         // Drawing Actions
         case setCanvasSize(CGSize)
@@ -346,15 +316,13 @@ struct EditPhotoFeature {
                 let hasDrawing = !state.pkDrawing.strokes.isEmpty
 
                 // 다른 모드로 전환 시 텍스트 편집 모드 종료
-                if mode != .text && state.isTextEditMode {
-                    // 빈 텍스트면 삭제
-                    if let editingId = state.editingTextId,
-                       let overlay = state.textOverlays.first(where: { $0.id == editingId }),
-                       overlay.text.isEmpty {
-                        state.textOverlays.removeAll(where: { $0.id == editingId })
-                    }
-                    state.editingTextId = nil
-                    state.isTextEditMode = false
+                if mode != .text && state.text.isTextEditMode {
+                    return .merge(
+                        .send(.text(.exitTextEditMode)),
+                        .run { send in
+                            await send(.editModeChanged(mode))
+                        }
+                    )
                 }
 
                 state.selectedEditMode = mode
@@ -465,7 +433,23 @@ struct EditPhotoFeature {
                 print("[Crop] ✂️ Filter cache cleared (original image changed)")
                 return .none
 
-            // MARK: - Text Actions
+            // MARK: - Text Actions (Delegate Handling)
+            case .text(.delegate(.overlaysChanged)):
+                // textOverlays가 변경됨 - 이미 TextEditFeature 내부에서 처리됨
+                return .none
+
+            case .text(.delegate(.editModeChanged)):
+                // 편집 모드 상태가 변경됨 - 이미 TextEditFeature 내부에서 처리됨
+                return .none
+
+            case .text(.delegate(.settingsChanged)):
+                // 현재 설정이 변경됨 - 이미 TextEditFeature 내부에서 처리됨
+                return .none
+
+            case .text:
+                // 다른 text 액션은 자동 처리
+                return .none
+
             case let .tapImageEmptySpace(position):
                 // 스티커 모드일 때는 스티커 선택 해제
                 if state.selectedEditMode == .sticker {
@@ -476,38 +460,7 @@ struct EditPhotoFeature {
                 // 텍스트 모드가 아니면 무시
                 guard state.selectedEditMode == .text else { return .none }
                 // 이미 편집 모드면 무시
-                guard !state.isTextEditMode else { return .none }
-
-                return .send(.enterTextEditMode(position))
-
-            case let .enterTextEditMode(position):
-                // 히스토리에 저장
-                let snapshot = state.createSnapshot()
-                state.historyStack.append(snapshot)
-                if state.historyStack.count > state.maxHistorySize {
-                    state.historyStack.removeFirst()
-                }
-                state.redoStack.removeAll()
-
-                // 텍스트 편집 모드 활성화
-                state.isTextEditMode = true
-
-                // 터치한 위치에 새 텍스트 생성
-                let newOverlay = TextOverlay(
-                    text: "",
-                    position: position,  // 터치한 위치 사용
-                    color: state.currentTextColor,
-                    fontSize: state.currentTextFontSize
-                )
-                state.textOverlays.append(newOverlay)
-                state.editingTextId = newOverlay.id
-                return .none
-
-            case let .editExistingText(id):
-                // 텍스트 모드가 아니면 무시
-                guard state.selectedEditMode == .text else { return .none }
-                // 이미 편집 모드면 무시
-                guard !state.isTextEditMode else { return .none }
+                guard !state.text.isTextEditMode else { return .none }
 
                 // 히스토리에 저장
                 let snapshot = state.createSnapshot()
@@ -517,74 +470,7 @@ struct EditPhotoFeature {
                 }
                 state.redoStack.removeAll()
 
-                // 텍스트 편집 모드 활성화
-                state.isTextEditMode = true
-                state.editingTextId = id
-
-                if let overlay = state.textOverlays.first(where: { $0.id == id }) {
-                    state.currentTextColor = overlay.color
-                    state.currentTextFontSize = overlay.fontSize
-                }
-                return .none
-
-            case let .updateEditingText(id, text):
-                // 편집 중 텍스트 업데이트
-                if let index = state.textOverlays.firstIndex(where: { $0.id == id }) {
-                    state.textOverlays[index].text = text
-                }
-                return .none
-
-            case .exitTextEditMode:
-                // 편집 완료
-                // 빈 텍스트면 삭제
-                if let editingId = state.editingTextId,
-                   let overlay = state.textOverlays.first(where: { $0.id == editingId }),
-                   overlay.text.isEmpty {
-                    state.textOverlays.removeAll(where: { $0.id == editingId })
-                }
-                state.editingTextId = nil
-                state.isTextEditMode = false
-                return .none
-
-            case let .textColorChanged(color):
-                state.currentTextColor = color
-                // 편집 중인 텍스트가 있으면 색상 업데이트
-                if let editingId = state.editingTextId,
-                   let index = state.textOverlays.firstIndex(where: { $0.id == editingId }) {
-                    state.textOverlays[index].color = color
-                }
-                return .none
-
-            case let .textFontSizeChanged(size):
-                state.currentTextFontSize = size
-                // 편집 중인 텍스트가 있으면 크기 업데이트
-                if let editingId = state.editingTextId,
-                   let index = state.textOverlays.firstIndex(where: { $0.id == editingId }) {
-                    state.textOverlays[index].fontSize = size
-                }
-                return .none
-
-            case let .textOverlayPositionChanged(id, position):
-                if let index = state.textOverlays.firstIndex(where: { $0.id == id }) {
-                    state.textOverlays[index].position = position
-                }
-                return .none
-
-            case .deleteSelectedText:
-                guard let editingId = state.editingTextId else { return .none }
-
-                // 변경 전 현재 상태를 히스토리에 저장
-                let snapshot = state.createSnapshot()
-                state.historyStack.append(snapshot)
-                if state.historyStack.count > state.maxHistorySize {
-                    state.historyStack.removeFirst()
-                }
-                state.redoStack.removeAll()
-
-                // 텍스트 삭제
-                state.textOverlays.removeAll(where: { $0.id == editingId })
-                state.editingTextId = nil
-                return .none
+                return .send(.text(.enterTextEditMode(position)))
 
             // MARK: - Drawing Actions
             case let .setCanvasSize(size):
@@ -721,9 +607,13 @@ struct EditPhotoFeature {
                 let previousSnapshot = state.historyStack.removeLast()
                 state.restoreMetadataFromSnapshot(previousSnapshot)
 
-                // 텍스트 편집 모드 종료
-                state.editingTextId = nil
-                state.isTextEditMode = false
+                // 텍스트 편집 모드 종료 (TextEditFeature에게 알림)
+                if state.text.isTextEditMode {
+                    return .merge(
+                        .send(.text(.exitTextEditMode)),
+                        .send(.regenerateImageFromSnapshot(previousSnapshot))
+                    )
+                }
 
                 // 이미지 재생성 트리거
                 return .send(.regenerateImageFromSnapshot(previousSnapshot))
@@ -739,24 +629,26 @@ struct EditPhotoFeature {
                 let nextSnapshot = state.redoStack.removeLast()
                 state.restoreMetadataFromSnapshot(nextSnapshot)
 
-                // 텍스트 편집 모드 종료
-                state.editingTextId = nil
-                state.isTextEditMode = false
+                // 텍스트 편집 모드 종료 (TextEditFeature에게 알림)
+                if state.text.isTextEditMode {
+                    return .merge(
+                        .send(.text(.exitTextEditMode)),
+                        .send(.regenerateImageFromSnapshot(nextSnapshot))
+                    )
+                }
 
                 // 이미지 재생성 트리거
                 return .send(.regenerateImageFromSnapshot(nextSnapshot))
 
             case .completeButtonTapped:
                 // 텍스트 편집 모드면 먼저 종료
-                if state.isTextEditMode {
-                    // 빈 텍스트면 삭제
-                    if let editingId = state.editingTextId,
-                       let overlay = state.textOverlays.first(where: { $0.id == editingId }),
-                       overlay.text.isEmpty {
-                        state.textOverlays.removeAll(where: { $0.id == editingId })
-                    }
-                    state.editingTextId = nil
-                    state.isTextEditMode = false
+                if state.text.isTextEditMode {
+                    return .merge(
+                        .send(.text(.exitTextEditMode)),
+                        .run { send in
+                            await send(.checkPaidFilterPurchase)
+                        }
+                    )
                 }
 
                 // 유료 필터 체크
@@ -839,7 +731,7 @@ struct EditPhotoFeature {
                 return .run { [
                     displayImage = state.displayImage,
                     cropRect = state.crop.cropRect,
-                    textOverlays = state.textOverlays,
+                    textOverlays = state.text.textOverlays,
                     stickers = state.stickers,
                     drawing = state.pkDrawing,
                     canvasSize = state.canvasSize
@@ -965,6 +857,10 @@ struct EditPhotoFeature {
             CropFeature()
         }
 
+        Scope(state: \.text, action: \.text) {
+            TextEditFeature()
+        }
+
         .ifLet(\.$paidFilterPurchase, action: \.paidFilterPurchase) {
             PaidFilterPurchaseFeature()
         }
@@ -977,8 +873,6 @@ extension EditPhotoFeature.Action: Equatable {
     static func == (lhs: EditPhotoFeature.Action, rhs: EditPhotoFeature.Action) -> Bool {
         switch (lhs, rhs) {
         case (.onAppear, .onAppear),
-             (.exitTextEditMode, .exitTextEditMode),
-             (.deleteSelectedText, .deleteSelectedText),
              (.toggleDrawingToolCustomization, .toggleDrawingToolCustomization),
              (.drawingUndo, .drawingUndo),
              (.drawingRedo, .drawingRedo),
@@ -1008,20 +902,12 @@ extension EditPhotoFeature.Action: Equatable {
             return l == r
         case (.cropApplied(_), .cropApplied(_)):
             return true  // UIImage는 무시
-        case let (.tapImageEmptySpace(l), .tapImageEmptySpace(r)),
-             let (.enterTextEditMode(l), .enterTextEditMode(r)):
+        case let (.text(l), .text(r)):
             return l == r
-        case let (.editExistingText(l), .editExistingText(r)),
-             let (.deleteSticker(l), .deleteSticker(r)):
+        case let (.tapImageEmptySpace(l), .tapImageEmptySpace(r)):
             return l == r
-        case let (.updateEditingText(lid, lt), .updateEditingText(rid, rt)):
-            return lid == rid && lt == rt
-        case let (.textColorChanged(l), .textColorChanged(r)):
+        case let (.deleteSticker(l), .deleteSticker(r)):
             return l == r
-        case let (.textFontSizeChanged(l), .textFontSizeChanged(r)):
-            return l == r
-        case let (.textOverlayPositionChanged(lid, lp), .textOverlayPositionChanged(rid, rp)):
-            return lid == rid && lp == rp
         case let (.setCanvasSize(l), .setCanvasSize(r)):
             return l == r
         case let (.drawingToolSelected(l), .drawingToolSelected(r)):
