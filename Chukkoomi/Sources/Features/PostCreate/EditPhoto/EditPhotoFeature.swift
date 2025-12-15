@@ -223,12 +223,8 @@ struct EditPhotoFeature {
         var isProcessing: Bool = false
         var isDragging: Bool = false
 
-        // Payment (결제 관련)
-        var webView: WKWebView?
-        var isPurchaseModalPresented: Bool = false
-        var pendingPurchaseFilter: PaidFilter?
-        var isProcessingPayment: Bool = false
-        var paymentError: String?
+        // Payment (결제 관련) - Child Feature로 분리
+        @Presents var paidFilterPurchase: PaidFilterPurchaseFeature.State?
         var availableFilters: [PaidFilter] = []  // 사용 가능한 유료 필터 목록
         var purchasedFilterPostIds: Set<String> = []  // 구매한 필터의 postId
 
@@ -349,12 +345,8 @@ struct EditPhotoFeature {
         // Payment Actions
         case loadPurchaseHistory
         case purchaseHistoryLoaded([PaidFilter], Set<String>)  // availableFilters, purchasedPostIds
-        case webViewCreated(WKWebView)
         case checkPaidFilterPurchase  // 유료 필터 구매 확인
-        case showPurchaseModal(PaidFilter)
-        case dismissPurchaseModal
-        case purchaseButtonTapped
-        case paymentCompleted(Result<PaymentResponseDTO, PaymentError>)
+        case paidFilterPurchase(PresentationAction<PaidFilterPurchaseFeature.Action>)
         case proceedToComplete  // 실제 완료 동작
 
         enum Delegate: Equatable {
@@ -881,40 +873,6 @@ struct EditPhotoFeature {
                 state.purchasedFilterPostIds = purchasedPostIds
                 return .none
 
-            case let .webViewCreated(webView):
-                state.webView = webView
-
-                // 결제 대기 중이면 실제 결제 시작
-                if state.isProcessingPayment, let paidFilter = state.pendingPurchaseFilter {
-
-                    // 결제 데이터 생성
-                    let paymentData = payment.createPayment(
-                        "\(paidFilter.price)",
-                        paidFilter.title,
-                        "박성훈",
-                        paidFilter.id
-                    )
-
-                    return .run { [payment] send in
-                        do {
-                            // 결제 요청 + 서버 검증
-                            let validated = try await payment.requestPayment(
-                                webView,
-                                paymentData,
-                                paidFilter.id
-                            )
-
-                            await send(.paymentCompleted(.success(validated)))
-                        } catch let error as PaymentError {
-                            await send(.paymentCompleted(.failure(error)))
-                        } catch {
-                            await send(.paymentCompleted(.failure(.validationFailed)))
-                        }
-                    }
-                }
-
-                return .none
-
             case .checkPaidFilterPurchase:
                 // 적용된 필터가 유료 필터인지 확인
                 let appliedFilter = state.selectedFilter
@@ -925,61 +883,40 @@ struct EditPhotoFeature {
                 }
 
                 // 이미 구매한 필터면 바로 완료
-                return .run { [purchasedFilterTypes = state.purchasedFilterTypes, availableFilters = state.availableFilters] send in
-                    if purchasedFilterTypes.contains(appliedFilter) {
-                        await send(.proceedToComplete)
-                    } else {
-                        if let paidFilter = availableFilters.first(where: { $0.imageFilter == appliedFilter }) {
-                            await send(.showPurchaseModal(paidFilter))
-                        } else {
-                            await send(.proceedToComplete)  // 일단 진행
-                        }
-                    }
+                if state.purchasedFilterTypes.contains(appliedFilter) {
+                    return .send(.proceedToComplete)
                 }
 
-            case let .showPurchaseModal(paidFilter):
-                state.pendingPurchaseFilter = paidFilter
-                state.isPurchaseModalPresented = true
-                state.paymentError = nil
-                return .none
-
-            case .dismissPurchaseModal:
-                state.isPurchaseModalPresented = false
-                state.pendingPurchaseFilter = nil
-                state.paymentError = nil
-                return .none
-
-            case .purchaseButtonTapped:
-
-                guard state.pendingPurchaseFilter != nil else {
+                // 구매하지 않은 유료 필터 - PaidFilterPurchaseFeature 표시
+                if let paidFilter = state.availableFilters.first(where: { $0.imageFilter == appliedFilter }) {
+                    state.paidFilterPurchase = PaidFilterPurchaseFeature.State(
+                        pendingFilter: paidFilter,
+                        availableFilters: state.availableFilters,
+                        purchasedFilterPostIds: state.purchasedFilterPostIds
+                    )
                     return .none
                 }
 
-                // Purchase modal 닫고 결제 모드 진입
-                // WebView가 생성되면 webViewCreated에서 실제 결제 시작
-                state.isPurchaseModalPresented = false
-                state.isProcessingPayment = true
-                state.paymentError = nil
+                // 필터를 찾지 못하면 일단 진행
+                return .send(.proceedToComplete)
 
-                return .none
-
-            case let .paymentCompleted(.success(paymentDTO)):
-                state.isProcessingPayment = false
-
-                // 로컬 캐시에 구매 기록 저장
+            case .paidFilterPurchase(.presented(.delegate(.purchaseCompleted(let paymentDTO)))):
+                // 결제 성공 - 구매 기록 업데이트
                 state.purchasedFilterPostIds.insert(paymentDTO.postId)
 
-                return .run { [purchase] send in
-                    await purchase.markAsPurchased(paymentDTO.postId)
+                // Feature 닫기
+                state.paidFilterPurchase = nil
 
-                    // 모달 닫고 완료 진행
-                    await send(.dismissPurchaseModal)
-                    await send(.proceedToComplete)
-                }
+                // 완료 진행
+                return .send(.proceedToComplete)
 
-            case let .paymentCompleted(.failure(error)):
-                state.isProcessingPayment = false
-                state.paymentError = error.localizedDescription
+            case .paidFilterPurchase(.presented(.delegate(.purchaseCancelled))):
+                // 결제 취소 - Feature 닫기
+                state.paidFilterPurchase = nil
+                return .none
+
+            case .paidFilterPurchase:
+                // 다른 paidFilterPurchase 액션은 자동 처리
                 return .none
 
             case .proceedToComplete:
@@ -1106,6 +1043,9 @@ struct EditPhotoFeature {
                 return .none
             }
         }
+        .ifLet(\.$paidFilterPurchase, action: \.paidFilterPurchase) {
+            PaidFilterPurchaseFeature()
+        }
     }
 
 }
@@ -1134,8 +1074,6 @@ extension EditPhotoFeature.Action: Equatable {
              (.memoryWarning, .memoryWarning),
              (.loadPurchaseHistory, .loadPurchaseHistory),
              (.checkPaidFilterPurchase, .checkPaidFilterPurchase),
-             (.dismissPurchaseModal, .dismissPurchaseModal),
-             (.purchaseButtonTapped, .purchaseButtonTapped),
              (.proceedToComplete, .proceedToComplete):
             return true
 
@@ -1202,19 +1140,8 @@ extension EditPhotoFeature.Action: Equatable {
             return l == r
         case let (.purchaseHistoryLoaded(lf, lp), .purchaseHistoryLoaded(rf, rp)):
             return lf == rf && lp == rp
-        case (.webViewCreated(_), .webViewCreated(_)):
-            return true  // WKWebView는 비교 불가, 항상 true
-        case let (.showPurchaseModal(l), .showPurchaseModal(r)):
+        case let (.paidFilterPurchase(l), .paidFilterPurchase(r)):
             return l == r
-        case let (.paymentCompleted(l), .paymentCompleted(r)):
-            switch (l, r) {
-            case let (.success(ls), .success(rs)):
-                return ls == rs
-            case let (.failure(lf), .failure(rf)):
-                return lf.localizedDescription == rf.localizedDescription
-            default:
-                return false
-            }
         default:
             return false
         }

@@ -70,28 +70,15 @@ struct EditPhotoView: View {
             )
         }
         .overlay {
-            if store.isPurchaseModalPresented {
-                purchaseModalView
-            }
-        }
-        .overlay {
-            // 구매하기 버튼 누르면 그때만 WebView 표시
-            if store.isProcessingPayment {
-                ZStack {
-                    Color.black.opacity(0.9)
-                        .ignoresSafeArea()
-
-                    IamportWebView(webView: Binding(
-                        get: { store.webView },
-                        set: { webView in
-                            if let webView = webView {
-                                print("🌐 [EditPhotoView] WebView 생성됨")
-                                store.send(.webViewCreated(webView))
-                            }
-                        }
-                    ))
-                    .background(Color.white)
-                }
+            // PaidFilterPurchaseFeature Presentation
+            if let paidFilterPurchaseStore = store.scope(
+                state: \.paidFilterPurchase,
+                action: \.paidFilterPurchase.presented
+            ) {
+                PaidFilterPurchaseView(
+                    store: paidFilterPurchaseStore,
+                    displayImage: store.displayImage
+                )
             }
         }
     }
@@ -490,96 +477,6 @@ struct EditPhotoView: View {
         }
         .frame(height: 120)
         .frame(maxWidth: .infinity)
-    }
-
-    // MARK: - Purchase Modal View
-    @ViewBuilder
-    private var purchaseModalView: some View {
-        if let paidFilter = store.pendingPurchaseFilter {
-            // 반투명 배경
-            Color.black.opacity(0.5)
-                .ignoresSafeArea()
-                .onTapGesture {
-                    store.send(.dismissPurchaseModal)
-                }
-
-            // 중앙 모달 카드
-            VStack(spacing: 20) {
-                // X 버튼
-                HStack {
-                    Spacer()
-                    
-                    Text(paidFilter.title)
-                        .font(.title2)
-                        .fontWeight(.bold)
-                    
-                    Spacer()
-
-                    Button {
-                        store.send(.dismissPurchaseModal)
-                    } label: {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 28))
-                            .foregroundColor(.gray)
-                    }
-                }
-
-
-                // 필터 설명
-                Text(paidFilter.content)
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-                    .multilineTextAlignment(.center)
-
-                // 필터 미리보기 이미지 (적용된 이미지)
-                Image(uiImage: store.displayImage)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(height: 200)
-                    .cornerRadius(12)
-
-                // 가격
-                Text("₩\(paidFilter.price)")
-                    .font(.title)
-                    .fontWeight(.bold)
-
-                // 에러 메시지
-                if let errorMessage = store.paymentError {
-                    Text(errorMessage)
-                        .font(.caption)
-                        .foregroundColor(.red)
-                        .padding()
-                        .background(Color.red.opacity(0.1))
-                        .cornerRadius(8)
-                }
-
-                // 구매 버튼
-                Button {
-                    store.send(.purchaseButtonTapped)
-                } label: {
-                    if store.isProcessingPayment {
-                        ProgressView()
-                            .tint(.white)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                    } else {
-                        Text("구매하기")
-                            .fontWeight(.semibold)
-                            .frame(maxWidth: .infinity)
-                            .frame(height: 50)
-                    }
-                }
-                .background(store.isProcessingPayment ? Color.gray : Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(12)
-                .disabled(store.isProcessingPayment)
-            }
-            .padding(24)
-            .background(Color.white)
-            .cornerRadius(20)
-            .shadow(radius: 20)
-            .frame(maxWidth: 350)
-        }
     }
 
     // MARK: - Helper: Create PencilKit Tool
