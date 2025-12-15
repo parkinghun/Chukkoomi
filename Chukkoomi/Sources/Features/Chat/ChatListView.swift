@@ -137,7 +137,7 @@ struct ChatRoomRow: View {
                     }
                 } else if let lastChat = chatRoom.lastChat, !lastChat.files.isEmpty {
                     // 파일이 있는 경우 영상/사진 구분
-                    let hasVideo = lastChat.files.contains { MediaTypeHelper.isVideoPath($0) }
+                    let hasVideo = lastChat.files.contains { MediaTypeDetector.isVideoPath($0) }
                     Text(hasVideo ? "동영상을 보냈습니다" : "사진을 보냈습니다")
                         .font(.system(size: 14))
                         .foregroundColor(.gray)

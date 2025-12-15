@@ -133,7 +133,7 @@ struct PostCellView: View {
     @ViewBuilder
     private var mediaContentView: some View {
         if let firstFile = store.post.files.first {
-            let isVideo = MediaTypeHelper.isVideoPath(firstFile)
+            let isVideo = MediaTypeDetector.isVideoPath(firstFile)
 
             GeometryReader { geometry in
                 let availableWidth = geometry.size.width

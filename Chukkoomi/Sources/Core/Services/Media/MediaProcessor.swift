@@ -1,5 +1,5 @@
 //
-//  CompressHelper.swift
+//  MediaProcessor.swift
 //  Chukkoomi
 //
 //  Created by 김영훈 on 11/11/25.
@@ -9,7 +9,7 @@ import UIKit
 import CoreGraphics
 import AVFoundation
 
-enum CompressHelper {
+enum MediaProcessor {
     
     static func compressImage(_ imageData: Data, maxSizeInBytes: Int, maxWidth: CGFloat, maxHeight: CGFloat) async -> Data? {
         // 이미지 리사이징

@@ -1,5 +1,5 @@
 //
-//  MediaTypeHelper.swift
+//  MediaTypeDetector.swift
 //  Chukkoomi
 //
 //  Created by 김영훈 on 11/12/25.
@@ -14,7 +14,7 @@ enum MediaType {
     case unknown
 }
 
-enum MediaTypeHelper {
+enum MediaTypeDetector {
 
     /// 파일 경로에서 확장자를 확인하여 동영상 여부를 판단합니다
     static func isVideoPath(_ path: String) -> Bool {

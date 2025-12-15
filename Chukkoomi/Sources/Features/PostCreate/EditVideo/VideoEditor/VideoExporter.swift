@@ -187,7 +187,7 @@ struct VideoExporter {
         let videoSize = sizeAfterApplyingTransform(naturalSize: naturalSize, transform: preferredTransform)
 
         // 목표 크기 계산 (videoSize 기준)
-        let targetSize = CompressHelper.resizedSizeForiPhoneMax(
+        let targetSize = MediaProcessor.resizedSizeForiPhoneMax(
             originalWidth: videoSize.width,
             originalHeight: videoSize.height
         )
@@ -239,7 +239,7 @@ struct VideoExporter {
         let videoSize = sizeAfterApplyingTransform(naturalSize: naturalSize, transform: preferredTransform)
 
         // 목표 크기 계산
-        let targetSize = CompressHelper.resizedSizeForiPhoneMax(
+        let targetSize = MediaProcessor.resizedSizeForiPhoneMax(
             originalWidth: videoSize.width,
             originalHeight: videoSize.height
         )
@@ -269,7 +269,7 @@ struct VideoExporter {
         let videoSize = sizeAfterApplyingTransform(naturalSize: naturalSize, transform: preferredTransform)
 
         // 목표 크기 계산
-        let targetSize = CompressHelper.resizedSizeForiPhoneMax(
+        let targetSize = MediaProcessor.resizedSizeForiPhoneMax(
             originalWidth: videoSize.width,
             originalHeight: videoSize.height
         )
@@ -279,8 +279,8 @@ struct VideoExporter {
             return nil
         }
 
-        // CompressHelper로 리사이즈만 수행
-        return await CompressHelper.createResizeVideoComposition(
+        // MediaProcessor로 리사이즈만 수행
+        return await MediaProcessor.createResizeVideoComposition(
             for: asset,
             targetSize: targetSize
         )

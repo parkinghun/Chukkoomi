@@ -682,7 +682,7 @@ struct MessageRow: View {
     // 미디어 뷰 헬퍼 (이미지 or 영상)
     @ViewBuilder
     private func mediaView(filePath: String, width: CGFloat, height: CGFloat) -> some View {
-        if MediaTypeHelper.isVideoPath(filePath) {
+        if MediaTypeDetector.isVideoPath(filePath) {
             ChatVideoPlayerView(
                 mediaPath: filePath,
                 maxWidth: width
@@ -705,7 +705,7 @@ struct MessageRow: View {
             switch count {
             case 1:
                 // 1개: 단일 이미지/영상
-                if MediaTypeHelper.isVideoPath(files[0]) {
+                if MediaTypeDetector.isVideoPath(files[0]) {
                     ChatVideoPlayerView(
                         mediaPath: files[0],
                         maxWidth: 200
@@ -781,7 +781,7 @@ struct MessageRow: View {
             default:
                 // 그 외: 기본 처리 (1개씩 표시)
                 ForEach(files, id: \.self) { filePath in
-                    if MediaTypeHelper.isVideoPath(filePath) {
+                    if MediaTypeDetector.isVideoPath(filePath) {
                         ChatVideoPlayerView(
                             mediaPath: filePath,
                             maxWidth: 200
@@ -1020,7 +1020,7 @@ struct LocalMediaGridView: View {
                 results.append(image)
             } else {
                 // 이미지 변환 실패 시 영상 썸네일 추출
-                if let thumbnail = await VideoThumbnailHelper.generateThumbnail(from: data),
+                if let thumbnail = await VideoThumbnailService.generateThumbnail(from: data),
                    let thumbnailImage = UIImage(data: thumbnail) {
                     results.append(thumbnailImage)
                 } else {
@@ -1083,7 +1083,7 @@ struct SharedPostCardView: View {
                         .frame(width: 200, height: 150)
 
                     // 미디어 콘텐츠
-                    if MediaTypeHelper.isVideoPath(firstFile) {
+                    if MediaTypeDetector.isVideoPath(firstFile) {
                         ChatVideoPlayerView(
                             mediaPath: firstFile,
                             maxWidth: 200

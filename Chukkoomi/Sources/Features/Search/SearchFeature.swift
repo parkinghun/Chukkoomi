@@ -74,7 +74,7 @@ struct SearchFeature {
                             guard post.files.count >= 2 else { return nil }
                             let thumbnailPath = post.files[1] // 썸네일
                             let originalPath = post.files[0] // 원본
-                            let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                            let isVideo = MediaTypeDetector.isVideoPath(originalPath)
                             return PostItem(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                         }
 
@@ -240,7 +240,7 @@ struct SearchFeature {
                             guard post.files.count >= 2 else { return nil }
                             let thumbnailPath = post.files[1] // 썸네일
                             let originalPath = post.files[0] // 원본
-                            let isVideo = MediaTypeHelper.isVideoPath(originalPath)
+                            let isVideo = MediaTypeDetector.isVideoPath(originalPath)
                             return PostItem(id: post.id, imagePath: thumbnailPath, isVideo: isVideo)
                         }
 

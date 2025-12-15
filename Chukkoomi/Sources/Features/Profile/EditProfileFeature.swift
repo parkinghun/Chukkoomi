@@ -159,7 +159,7 @@ struct EditProfileFeature {
         case .galleryPicker(.presented(.delegate(.didSelectImage(let imageData)))):
             // 프로필 사진을 100KB 이하로 압축 (UI 크기 100x100에 맞춰 300x300으로 압축)
             return .run { send in
-                if let compressedData = await CompressHelper.compressImage(imageData, maxSizeInBytes: 100_000, maxWidth: 300, maxHeight: 300) {
+                if let compressedData = await MediaProcessor.compressImage(imageData, maxSizeInBytes: 100_000, maxWidth: 300, maxHeight: 300) {
                     await send(.profileImageCompressed(compressedData))
                 }
             }

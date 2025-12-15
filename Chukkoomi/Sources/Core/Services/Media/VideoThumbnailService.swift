@@ -1,5 +1,5 @@
 //
-//  VideoThumbnailHelper.swift
+//  VideoThumbnailService.swift
 //  Chukkoomi
 //
 //  Created by 김영훈 on 11/12/25.
@@ -59,7 +59,7 @@ actor VideoThumbnailExtractor {
     }
 }
 
-enum VideoThumbnailHelper {
+enum VideoThumbnailService {
     /// 동영상 데이터에서 썸네일 이미지를 추출
     static func generateThumbnail(from videoData: Data) async -> Data? {
         await VideoThumbnailExtractor.shared.generateThumbnail(from: videoData)

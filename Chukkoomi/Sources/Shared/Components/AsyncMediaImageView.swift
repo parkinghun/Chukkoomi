@@ -46,7 +46,7 @@ struct AsyncMediaImageView: View {
         self.imagePath = imagePath
         self.width = width
         self.height = height
-        self.isVideoContent = isVideo ?? MediaTypeHelper.isVideoPath(imagePath)
+        self.isVideoContent = isVideo ?? MediaTypeDetector.isVideoPath(imagePath)
         self.onImageLoaded = onImageLoaded
     }
 
@@ -106,9 +106,9 @@ struct AsyncMediaImageView: View {
             )
 
             // imagePath가 실제 비디오 파일이면 썸네일 생성, 아니면 그대로 사용
-            if MediaTypeHelper.isVideoPath(imagePath) {
+            if MediaTypeDetector.isVideoPath(imagePath) {
                 // 비디오 파일 → 썸네일 생성
-                if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: mediaData) {
+                if let thumbnailData = await VideoThumbnailService.generateThumbnail(from: mediaData) {
                     imageData = thumbnailData
                     onImageLoaded?(thumbnailData)
                     await ImageCache.shared.set(imagePath, data: thumbnailData)

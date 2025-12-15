@@ -296,7 +296,7 @@ struct PostCreateFeature {
 
                                 // 썸네일 압축
                                 if let sourceData = sourceThumbnailData {
-                                    if let compressedThumbnail = await CompressHelper.compressImage(
+                                    if let compressedThumbnail = await MediaProcessor.compressImage(
                                         sourceData,
                                         maxSizeInBytes: 100_000,
                                         maxWidth: 600,
@@ -371,7 +371,7 @@ struct PostCreateFeature {
                             // 썸네일 압축
                             let compressedThumbnail: Data?
                             if let sourceData = sourceThumbnailData {
-                                compressedThumbnail = await CompressHelper.compressImage(
+                                compressedThumbnail = await MediaProcessor.compressImage(
                                     sourceData,
                                     maxSizeInBytes: 100_000,
                                     maxWidth: 600,
@@ -503,7 +503,7 @@ struct PostCreateFeature {
 
                 // 영상 썸네일 생성
                 return .run { send in
-                    if let thumbnailData = await VideoThumbnailHelper.generateThumbnail(from: url) {
+                    if let thumbnailData = await VideoThumbnailService.generateThumbnail(from: url) {
                         await send(.videoThumbnailGenerated(thumbnailData))
                     }
                 }
