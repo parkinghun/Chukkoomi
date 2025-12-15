@@ -35,37 +35,10 @@ struct EditPhotoFeature {
         }
     }
 
-    // DrawingTool는 DrawingFeature.DrawingTool로 대체됨 (타입 별칭 유지)
     typealias DrawingTool = DrawingFeature.DrawingTool
-
-    // CropAspectRatio는 CropFeature.AspectRatio로 대체됨 (타입 별칭 유지)
     typealias CropAspectRatio = CropFeature.AspectRatio
-
-    // TextOverlay는 TextEditFeature.TextOverlay로 대체됨 (타입 별칭 유지)
     typealias TextOverlay = TextEditFeature.TextOverlay
-
-    // MARK: - StickerOverlay
-    struct StickerOverlay: Equatable, Identifiable {
-        let id: UUID
-        var imageName: String
-        var position: CGPoint  // Normalized (0.0~1.0)
-        var scale: CGFloat
-        var rotation: Angle
-
-        init(
-            id: UUID = UUID(),
-            imageName: String,
-            position: CGPoint = CGPoint(x: 0.5, y: 0.5),  // 중앙
-            scale: CGFloat = 1.0,
-            rotation: Angle = .zero
-        ) {
-            self.id = id
-            self.imageName = imageName
-            self.position = position
-            self.scale = scale
-            self.rotation = rotation
-        }
-    }
+    typealias StickerOverlay = StickerFeature.StickerOverlay
 
     // MARK: - EditSnapshot (Undo/Redo용)
     /// 메타데이터만 저장하는 경량 스냅샷
@@ -111,22 +84,11 @@ struct EditPhotoFeature {
         var displayImage: UIImage  // 현재 화면에 표시되는 이미지
         var selectedEditMode: EditMode = .filter  // 기본값: 필터
 
-        // Filter (Child Feature)
         var filter: FilterFeature.State
-
-        // Crop (Child Feature)
         var crop: CropFeature.State
-
-        // Text (Child Feature)
         var text: TextEditFeature.State
-
-        // Drawing (Child Feature)
         var drawing: DrawingFeature.State
-
-        // Sticker
-        var stickers: [StickerOverlay] = []
-        var selectedStickerId: UUID?
-        var availableStickers: [String] = (1...13).map { "sticker_\($0)" }
+        var sticker: StickerFeature.State
 
         // Undo/Redo
         var historyStack: [EditSnapshot] = []
@@ -161,6 +123,7 @@ struct EditPhotoFeature {
             self.crop = CropFeature.State()
             self.text = TextEditFeature.State()
             self.drawing = DrawingFeature.State()
+            self.sticker = StickerFeature.State()
         }
 
         // Undo/Redo 가능 여부 계산
@@ -177,7 +140,7 @@ struct EditPhotoFeature {
             EditSnapshot(
                 selectedFilter: filter.selectedFilter,
                 textOverlays: text.textOverlays,
-                stickers: stickers,
+                stickers: sticker.stickers,
                 cropRect: crop.cropRect,
                 selectedAspectRatio: crop.selectedAspectRatio,
                 pkDrawing: drawing.pkDrawing
@@ -189,7 +152,7 @@ struct EditPhotoFeature {
             // displayImage는 복원하지 않음 (캐시에서 재생성 필요)
             filter.selectedFilter = snapshot.selectedFilter
             text.textOverlays = snapshot.textOverlays
-            stickers = snapshot.stickers
+            sticker.stickers = snapshot.stickers
             crop.cropRect = snapshot.cropRect
             crop.selectedAspectRatio = snapshot.selectedAspectRatio
             drawing.pkDrawing = snapshot.pkDrawing
@@ -201,31 +164,20 @@ struct EditPhotoFeature {
         case onAppear
         case editModeChanged(EditMode)
 
-        // Filter Actions (Child Feature)
         case filter(FilterFeature.Action)
         case applyFilter(ImageFilter)  // FilterFeature delegate로부터 호출
         case filterApplied(UIImage)
 
-        // Crop Actions (Child Feature)
         case crop(CropFeature.Action)
         case cropApplied(UIImage)
 
-        // Text Actions (Child Feature)
         case text(TextEditFeature.Action)
         case tapImageEmptySpace(CGPoint)  // 이미지 빈 공간 탭 (터치 위치) - 텍스트/스티커 모드 공통
 
-        // Drawing Actions (Child Feature)
         case drawing(DrawingFeature.Action)
         case drawingApplied(UIImage)
 
-        // Sticker Actions
-        case addSticker(String)  // 스티커 추가 (imageName)
-        case selectSticker(UUID?)  // 스티커 선택/해제
-        case updateStickerPosition(UUID, CGPoint)  // 위치 업데이트
-        case updateStickerScale(UUID, CGFloat)  // 크기 업데이트
-        case updateStickerRotation(UUID, Angle)  // 회전 업데이트
-        case updateStickerTransform(UUID, CGPoint, CGFloat, Angle)  // 위치+크기+회전 동시 업데이트
-        case deleteSticker(UUID)  // 스티커 삭제
+        case sticker(StickerFeature.Action)
 
         // Undo/Redo Actions
         case saveSnapshot
@@ -400,7 +352,7 @@ struct EditPhotoFeature {
 
                 // Crop 후에는 필터 캐시 클리어 (원본이 바뀌었으므로)
                 filterCache.clearFullImageCache()
-                print("[Crop] ✂️ Filter cache cleared (original image changed)")
+                print("[Crop] Filter cache cleared (original image changed)")
                 return .none
 
             // MARK: - Text Actions (Delegate Handling)
@@ -423,8 +375,7 @@ struct EditPhotoFeature {
             case let .tapImageEmptySpace(position):
                 // 스티커 모드일 때는 스티커 선택 해제
                 if state.selectedEditMode == .sticker {
-                    state.selectedStickerId = nil
-                    return .none
+                    return .send(.sticker(.deselectSticker))
                 }
 
                 // 텍스트 모드가 아니면 무시
@@ -457,50 +408,13 @@ struct EditPhotoFeature {
                 state.isProcessing = false
                 return .none
 
-            // MARK: - Sticker Actions
-            case let .addSticker(imageName):
-                // 새 스티커 추가 (중앙에 배치)
-                let newSticker = StickerOverlay(imageName: imageName)
-                state.stickers.append(newSticker)
-                // 자동 선택하지 않음 - 사용자가 직접 탭해야 선택됨
-                // state.selectedStickerId = newSticker.id
+            // MARK: - Sticker Actions (Delegate Handling)
+            case .sticker(.delegate):
+                // Sticker delegate 액션 처리
                 return .none
 
-            case let .selectSticker(stickerId):
-                state.selectedStickerId = stickerId
-                return .none
-
-            case let .updateStickerPosition(id, position):
-                if let index = state.stickers.firstIndex(where: { $0.id == id }) {
-                    state.stickers[index].position = position
-                }
-                return .none
-
-            case let .updateStickerScale(id, scale):
-                if let index = state.stickers.firstIndex(where: { $0.id == id }) {
-                    state.stickers[index].scale = scale
-                }
-                return .none
-
-            case let .updateStickerRotation(id, rotation):
-                if let index = state.stickers.firstIndex(where: { $0.id == id }) {
-                    state.stickers[index].rotation = rotation
-                }
-                return .none
-
-            case let .updateStickerTransform(id, position, scale, rotation):
-                if let index = state.stickers.firstIndex(where: { $0.id == id }) {
-                    state.stickers[index].position = position
-                    state.stickers[index].scale = scale
-                    state.stickers[index].rotation = rotation
-                }
-                return .none
-
-            case let .deleteSticker(id):
-                state.stickers.removeAll(where: { $0.id == id })
-                if state.selectedStickerId == id {
-                    state.selectedStickerId = nil
-                }
+            case .sticker:
+                // 다른 sticker 액션은 자동 처리
                 return .none
 
             // MARK: - Undo/Redo Actions
@@ -654,7 +568,7 @@ struct EditPhotoFeature {
                     displayImage = state.displayImage,
                     cropRect = state.crop.cropRect,
                     textOverlays = state.text.textOverlays,
-                    stickers = state.stickers,
+                    stickers = state.sticker.stickers,
                     drawing = state.drawing.pkDrawing,
                     canvasSize = state.drawing.canvasSize
                 ] send in
@@ -787,6 +701,10 @@ struct EditPhotoFeature {
             DrawingFeature()
         }
 
+        Scope(state: \.sticker, action: \.sticker) {
+            StickerFeature()
+        }
+
         .ifLet(\.$paidFilterPurchase, action: \.paidFilterPurchase) {
             PaidFilterPurchaseFeature()
         }
@@ -832,20 +750,8 @@ extension EditPhotoFeature.Action: Equatable {
             return l == r
         case (.drawingApplied(_), .drawingApplied(_)):
             return true  // UIImage는 무시
-        case let (.deleteSticker(l), .deleteSticker(r)):
+        case let (.sticker(l), .sticker(r)):
             return l == r
-        case let (.addSticker(l), .addSticker(r)):
-            return l == r
-        case let (.selectSticker(l), .selectSticker(r)):
-            return l == r
-        case let (.updateStickerPosition(lid, lp), .updateStickerPosition(rid, rp)):
-            return lid == rid && lp == rp
-        case let (.updateStickerScale(lid, ls), .updateStickerScale(rid, rs)):
-            return lid == rid && ls == rs
-        case let (.updateStickerRotation(lid, la), .updateStickerRotation(rid, ra)):
-            return lid == rid && la == ra
-        case let (.updateStickerTransform(lid, lp, ls, la), .updateStickerTransform(rid, rp, rs, ra)):
-            return lid == rid && lp == rp && ls == rs && la == ra
         case let (.delegate(l), .delegate(r)):
             return l == r
         case let (.purchaseHistoryLoaded(lf, lp), .purchaseHistoryLoaded(rf, rp)):

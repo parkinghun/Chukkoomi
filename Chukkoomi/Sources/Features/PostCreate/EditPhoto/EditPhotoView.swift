@@ -255,19 +255,19 @@ struct EditPhotoView: View {
                 }
 
                 // Sticker Overlays
-                ForEach(store.stickers) { sticker in
+                ForEach(store.sticker.stickers) { sticker in
                     StickerOverlayView(
                         sticker: sticker,
-                        isSelected: store.selectedStickerId == sticker.id,
+                        isSelected: store.sticker.selectedStickerId == sticker.id,
                         imageSize: CGSize(width: width, height: height),
                         onTransformChanged: { position, scale, rotation in
-                            store.send(.updateStickerTransform(sticker.id, position, scale, rotation))
+                            store.send(.sticker(.updateStickerTransform(sticker.id, position, scale, rotation)))
                         },
                         onTap: {
-                            store.send(.selectSticker(sticker.id))
+                            store.send(.sticker(.selectSticker(sticker.id)))
                         },
                         onDelete: {
-                            store.send(.deleteSticker(sticker.id))
+                            store.send(.sticker(.deleteSticker(sticker.id)))
                         }
                     )
                 }
@@ -455,9 +455,9 @@ struct EditPhotoView: View {
     // MARK: - Sticker Strip
     private var stickerStrip: some View {
         StickerStripView(
-            availableStickers: store.availableStickers,
+            availableStickers: store.sticker.availableStickers,
             onStickerTap: { stickerName in
-                store.send(.addSticker(stickerName))
+                store.send(.sticker(.addSticker(stickerName)))
             }
         )
     }
