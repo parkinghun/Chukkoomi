@@ -51,21 +51,21 @@ struct EditPhotoView: View {
             store.send(.onAppear)
         }
         .sheet(isPresented: Binding(
-            get: { store.isDrawingToolCustomizationPresented },
-            set: { _ in store.send(.toggleDrawingToolCustomization) }
+            get: { store.drawing.isDrawingToolCustomizationPresented },
+            set: { _ in store.send(.drawing(.toggleDrawingToolCustomization)) }
         )) {
             PenCustomizationSheet(
-                selectedTool: store.selectedDrawingTool,
-                currentColor: store.drawingColor,
-                currentWidth: store.drawingWidth,
+                selectedTool: store.drawing.selectedDrawingTool,
+                currentColor: store.drawing.drawingColor,
+                currentWidth: store.drawing.drawingWidth,
                 onToolSelected: { tool in
-                    store.send(.drawingToolSelected(tool))
+                    store.send(.drawing(.drawingToolSelected(tool)))
                 },
                 onColorChanged: { color in
-                    store.send(.drawingColorChanged(color))
+                    store.send(.drawing(.drawingColorChanged(color)))
                 },
                 onWidthChanged: { width in
-                    store.send(.drawingWidthChanged(width))
+                    store.send(.drawing(.drawingWidthChanged(width)))
                 }
             )
         }
@@ -276,21 +276,21 @@ struct EditPhotoView: View {
                 if store.selectedEditMode == .draw {
                     DrawingCanvasView(
                         drawing: Binding(
-                            get: { store.pkDrawing },
+                            get: { store.drawing.pkDrawing },
                             set: { _ in }
                         ),
                         tool: createPKTool(
-                            tool: store.selectedDrawingTool,
-                            color: store.drawingColor,
-                            width: store.drawingWidth
+                            tool: store.drawing.selectedDrawingTool,
+                            color: store.drawing.drawingColor,
+                            width: store.drawing.drawingWidth
                         ),
-                        undoTrigger: store.undoDrawingTrigger,
-                        redoTrigger: store.redoDrawingTrigger,
+                        undoTrigger: store.drawing.undoDrawingTrigger,
+                        redoTrigger: store.drawing.redoDrawingTrigger,
                         onDrawingChanged: { drawing in
-                            store.send(.drawingChanged(drawing))
+                            store.send(.drawing(.drawingChanged(drawing)))
                         },
                         onUndoStatusChanged: { canUndo, canRedo in
-                            store.send(.drawingUndoStatusChanged(canUndo: canUndo, canRedo: canRedo))
+                            store.send(.drawing(.drawingUndoStatusChanged(canUndo: canUndo, canRedo: canRedo)))
                         }
                     )
                     .frame(width: width, height: height)
@@ -320,7 +320,7 @@ struct EditPhotoView: View {
             .task(id: geometry.size) {
                 // 캔버스 크기 설정 (DrawingCanvas와 동일한 크기)
                 // geometry.size가 변경될 때마다 업데이트
-                store.send(.setCanvasSize(CGSize(width: width, height: height)))
+                store.send(.drawing(.setCanvasSize(CGSize(width: width, height: height))))
             }
         }
     }
@@ -429,24 +429,24 @@ struct EditPhotoView: View {
     // MARK: - Drawing Toolbar
     private var drawingToolbar: some View {
         DrawingToolbar(
-            selectedTool: store.selectedDrawingTool,
-            currentColor: store.drawingColor,
-            canUndo: store.canUndoDrawing,
-            canRedo: store.canRedoDrawing,
+            selectedTool: store.drawing.selectedDrawingTool,
+            currentColor: store.drawing.drawingColor,
+            canUndo: store.drawing.canUndoDrawing,
+            canRedo: store.drawing.canRedoDrawing,
             onToolSelected: { tool in
-                store.send(.drawingToolSelected(tool))
+                store.send(.drawing(.drawingToolSelected(tool)))
             },
             onColorTap: {
-                store.send(.toggleDrawingToolCustomization)
+                store.send(.drawing(.toggleDrawingToolCustomization))
             },
             onBrushTap: {
-                store.send(.toggleDrawingToolCustomization)
+                store.send(.drawing(.toggleDrawingToolCustomization))
             },
             onUndo: {
-                store.send(.drawingUndo)
+                store.send(.drawing(.drawingUndo))
             },
             onRedo: {
-                store.send(.drawingRedo)
+                store.send(.drawing(.drawingRedo))
             }
         )
         .frame(height: 60)

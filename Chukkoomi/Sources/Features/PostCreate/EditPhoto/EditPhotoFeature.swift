@@ -35,33 +35,8 @@ struct EditPhotoFeature {
         }
     }
 
-    // MARK: - DrawingTool
-    enum DrawingTool: String, CaseIterable, Identifiable {
-        case pen = "펜"
-        case pencil = "연필"
-        case marker = "마커"
-        case eraser = "지우개"
-
-        var id: String { rawValue }
-
-        var pkTool: PKInkingTool.InkType {
-            switch self {
-            case .pen: return .pen
-            case .pencil: return .pencil
-            case .marker: return .marker
-            case .eraser: return .pen // eraser는 별도 처리
-            }
-        }
-
-        var icon: String {
-            switch self {
-            case .pen: return "pencil.tip"
-            case .pencil: return "pencil"
-            case .marker: return "highlighter"
-            case .eraser: return "eraser.fill"
-            }
-        }
-    }
+    // DrawingTool는 DrawingFeature.DrawingTool로 대체됨 (타입 별칭 유지)
+    typealias DrawingTool = DrawingFeature.DrawingTool
 
     // CropAspectRatio는 CropFeature.AspectRatio로 대체됨 (타입 별칭 유지)
     typealias CropAspectRatio = CropFeature.AspectRatio
@@ -145,17 +120,8 @@ struct EditPhotoFeature {
         // Text (Child Feature)
         var text: TextEditFeature.State
 
-        // Drawing
-        var pkDrawing: PKDrawing = PKDrawing()  // PencilKit drawing
-        var canvasSize: CGSize = .zero  // DrawingCanvas의 실제 크기 (포인트)
-        var selectedDrawingTool: DrawingTool = .pen
-        var drawingColor: Color = .black
-        var drawingWidth: CGFloat = 5.0
-        var isDrawingToolCustomizationPresented: Bool = false
-        var canUndoDrawing: Bool = false
-        var canRedoDrawing: Bool = false
-        var undoDrawingTrigger: UUID?
-        var redoDrawingTrigger: UUID?
+        // Drawing (Child Feature)
+        var drawing: DrawingFeature.State
 
         // Sticker
         var stickers: [StickerOverlay] = []
@@ -194,6 +160,7 @@ struct EditPhotoFeature {
             self.filter = FilterFeature.State(originalImage: originalImage)
             self.crop = CropFeature.State()
             self.text = TextEditFeature.State()
+            self.drawing = DrawingFeature.State()
         }
 
         // Undo/Redo 가능 여부 계산
@@ -213,7 +180,7 @@ struct EditPhotoFeature {
                 stickers: stickers,
                 cropRect: crop.cropRect,
                 selectedAspectRatio: crop.selectedAspectRatio,
-                pkDrawing: pkDrawing
+                pkDrawing: drawing.pkDrawing
             )
         }
 
@@ -225,7 +192,7 @@ struct EditPhotoFeature {
             stickers = snapshot.stickers
             crop.cropRect = snapshot.cropRect
             crop.selectedAspectRatio = snapshot.selectedAspectRatio
-            pkDrawing = snapshot.pkDrawing
+            drawing.pkDrawing = snapshot.pkDrawing
         }
     }
 
@@ -247,17 +214,8 @@ struct EditPhotoFeature {
         case text(TextEditFeature.Action)
         case tapImageEmptySpace(CGPoint)  // 이미지 빈 공간 탭 (터치 위치) - 텍스트/스티커 모드 공통
 
-        // Drawing Actions
-        case setCanvasSize(CGSize)
-        case drawingToolSelected(DrawingTool)
-        case drawingColorChanged(Color)
-        case drawingWidthChanged(CGFloat)
-        case toggleDrawingToolCustomization
-        case drawingChanged(PKDrawing)
-        case drawingUndoStatusChanged(canUndo: Bool, canRedo: Bool)
-        case drawingUndo
-        case drawingRedo
-        case applyDrawingToImage
+        // Drawing Actions (Child Feature)
+        case drawing(DrawingFeature.Action)
         case drawingApplied(UIImage)
 
         // Sticker Actions
@@ -313,7 +271,7 @@ struct EditPhotoFeature {
                 // 그리기 모드를 벗어날 때 drawing을 displayImage에 적용
                 let wasDrawingMode = state.selectedEditMode == .draw
                 let isLeavingDrawingMode = wasDrawingMode && mode != .draw
-                let hasDrawing = !state.pkDrawing.strokes.isEmpty
+                let hasDrawing = !state.drawing.pkDrawing.strokes.isEmpty
 
                 // 다른 모드로 전환 시 텍스트 편집 모드 종료
                 if mode != .text && state.text.isTextEditMode {
@@ -334,7 +292,19 @@ struct EditPhotoFeature {
 
                 // 그리기 모드를 벗어날 때 drawing 적용
                 if isLeavingDrawingMode && hasDrawing {
-                    return .send(.applyDrawingToImage)
+                    return .run { [
+                        displayImage = state.displayImage,
+                        drawing = state.drawing.pkDrawing,
+                        canvasSize = state.drawing.canvasSize
+                    ] send in
+                        // Drawing을 이미지에 합성
+                        let composited = await ImageEditHelper.compositeImageWithDrawing(
+                            baseImage: displayImage,
+                            drawing: drawing,
+                            canvasSize: canvasSize
+                        )
+                        await send(.drawingApplied(composited))
+                    }
                 }
 
                 return .none
@@ -472,66 +442,18 @@ struct EditPhotoFeature {
 
                 return .send(.text(.enterTextEditMode(position)))
 
-            // MARK: - Drawing Actions
-            case let .setCanvasSize(size):
-                state.canvasSize = size
+            // MARK: - Drawing Actions (Delegate Handling)
+            case .drawing(.delegate):
+                // Drawing delegate 액션 처리
                 return .none
 
-            case let .drawingToolSelected(tool):
-                state.selectedDrawingTool = tool
+            case .drawing:
+                // 다른 drawing 액션은 자동 처리
                 return .none
-
-            case let .drawingColorChanged(color):
-                state.drawingColor = color
-                return .none
-
-            case let .drawingWidthChanged(width):
-                state.drawingWidth = width
-                return .none
-
-            case .toggleDrawingToolCustomization:
-                state.isDrawingToolCustomizationPresented.toggle()
-                return .none
-
-            case let .drawingChanged(drawing):
-                state.pkDrawing = drawing
-                return .none
-
-            case let .drawingUndoStatusChanged(canUndo, canRedo):
-                state.canUndoDrawing = canUndo
-                state.canRedoDrawing = canRedo
-                return .none
-
-            case .drawingUndo:
-                // Trigger를 변경하여 DrawingCanvasView에서 undo 수행
-                state.undoDrawingTrigger = UUID()
-                return .none
-
-            case .drawingRedo:
-                // Trigger를 변경하여 DrawingCanvasView에서 redo 수행
-                state.redoDrawingTrigger = UUID()
-                return .none
-
-            case .applyDrawingToImage:
-                state.isProcessing = true
-
-                return .run { [
-                    displayImage = state.displayImage,
-                    drawing = state.pkDrawing,
-                    canvasSize = state.canvasSize
-                ] send in
-                    // Drawing을 이미지에 합성
-                    let composited = await ImageEditHelper.compositeImageWithDrawing(
-                        baseImage: displayImage,
-                        drawing: drawing,
-                        canvasSize: canvasSize
-                    )
-                    await send(.drawingApplied(composited))
-                }
 
             case let .drawingApplied(image):
                 state.displayImage = image
-                state.pkDrawing = PKDrawing()  // Drawing 초기화
+                state.drawing.pkDrawing = PKDrawing()  // Drawing 초기화
                 state.isProcessing = false
                 return .none
 
@@ -733,8 +655,8 @@ struct EditPhotoFeature {
                     cropRect = state.crop.cropRect,
                     textOverlays = state.text.textOverlays,
                     stickers = state.stickers,
-                    drawing = state.pkDrawing,
-                    canvasSize = state.canvasSize
+                    drawing = state.drawing.pkDrawing,
+                    canvasSize = state.drawing.canvasSize
                 ] send in
                     // 1. 자르기가 설정되어 있으면 먼저 적용
                     var baseImage = displayImage
@@ -861,6 +783,10 @@ struct EditPhotoFeature {
             TextEditFeature()
         }
 
+        Scope(state: \.drawing, action: \.drawing) {
+            DrawingFeature()
+        }
+
         .ifLet(\.$paidFilterPurchase, action: \.paidFilterPurchase) {
             PaidFilterPurchaseFeature()
         }
@@ -873,10 +799,6 @@ extension EditPhotoFeature.Action: Equatable {
     static func == (lhs: EditPhotoFeature.Action, rhs: EditPhotoFeature.Action) -> Bool {
         switch (lhs, rhs) {
         case (.onAppear, .onAppear),
-             (.toggleDrawingToolCustomization, .toggleDrawingToolCustomization),
-             (.drawingUndo, .drawingUndo),
-             (.drawingRedo, .drawingRedo),
-             (.applyDrawingToImage, .applyDrawingToImage),
              (.saveSnapshot, .saveSnapshot),
              (.undo, .undo),
              (.redo, .redo),
@@ -906,22 +828,12 @@ extension EditPhotoFeature.Action: Equatable {
             return l == r
         case let (.tapImageEmptySpace(l), .tapImageEmptySpace(r)):
             return l == r
-        case let (.deleteSticker(l), .deleteSticker(r)):
+        case let (.drawing(l), .drawing(r)):
             return l == r
-        case let (.setCanvasSize(l), .setCanvasSize(r)):
-            return l == r
-        case let (.drawingToolSelected(l), .drawingToolSelected(r)):
-            return l == r
-        case let (.drawingColorChanged(l), .drawingColorChanged(r)):
-            return l == r
-        case let (.drawingWidthChanged(l), .drawingWidthChanged(r)):
-            return l == r
-        case (.drawingChanged(_), .drawingChanged(_)):
-            return true  // PKDrawing 비교는 복잡하므로 무시
-        case let (.drawingUndoStatusChanged(lc, lr), .drawingUndoStatusChanged(rc, rr)):
-            return lc == rc && lr == rr
         case (.drawingApplied(_), .drawingApplied(_)):
             return true  // UIImage는 무시
+        case let (.deleteSticker(l), .deleteSticker(r)):
+            return l == r
         case let (.addSticker(l), .addSticker(r)):
             return l == r
         case let (.selectSticker(l), .selectSticker(r)):
