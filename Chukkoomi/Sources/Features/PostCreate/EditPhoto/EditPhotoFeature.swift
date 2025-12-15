@@ -136,7 +136,7 @@ struct EditPhotoFeature {
     /// 메타데이터만 저장하는 경량 스냅샷
     /// - displayImage는 저장하지 않고, 필요 시 캐시에서 재생성
     struct EditSnapshot: Equatable {
-        // ❌ displayImage 제거 (메모리 절약)
+        // displayImage 제거 (메모리 절약)
         let selectedFilter: ImageFilter
         let textOverlays: [TextOverlay]
         let stickers: [StickerOverlay]
@@ -364,7 +364,9 @@ struct EditPhotoFeature {
 
     // MARK: - Dependencies
     @Dependency(\.dismiss) var dismiss
-    private let filterCache = FilterCacheManager()
+    @Dependency(\.filterCache) var filterCache
+    @Dependency(\.payment) var payment
+    @Dependency(\.purchase) var purchase
 
     // MARK: - Body
     var body: some ReducerOf<Self> {
@@ -478,15 +480,15 @@ struct EditPhotoFeature {
                         let filterKey = filter.rawValue
 
                         // 캐시 확인
-                        if let cachedImage = filterCache.getFullImage(for: filterKey) {
-                            print("✅ [Cache HIT] Filter '\(filterKey)' from cache")
+                        if let cachedImage = filterCache.getFullImage(filterKey) {
+                            print("[Cache HIT] Filter '\(filterKey)' from cache")
                             await send(.filterApplied(cachedImage))
                         } else {
-                            print("⚠️ [Cache MISS] Applying filter '\(filterKey)'")
+                            print("[Cache MISS] Applying filter '\(filterKey)'")
                             // 전체 해상도 이미지에 필터 적용
                             if let filtered = filter.apply(to: originalImage) {
                                 // 캐시에 저장
-                                filterCache.setFullImage(filtered, for: filterKey)
+                                filterCache.setFullImage(filtered, filterKey)
                                 await send(.filterApplied(filtered))
                             } else {
                                 await send(.filterApplied(originalImage))
@@ -858,15 +860,15 @@ struct EditPhotoFeature {
             // MARK: - Payment Actions
 
             case .loadPurchaseHistory:
-                return .run { send in
+                return .run { [purchase] send in
                     // 사용 가능한 유료 필터 목록 가져오기
-                    let availableFilters = await PurchaseManager.shared.getAvailableFilters()
+                    let availableFilters = await purchase.getAvailableFilters()
                     availableFilters.forEach { print("   - \($0.title) (postId: \($0.id))") }
 
                     // 구매한 필터의 postId 추출 (각각 isPurchased 호출)
                     var purchasedPostIds: Set<String> = []
                     for filter in availableFilters {
-                        if await PurchaseManager.shared.isPurchased(filter.imageFilter) {
+                        if await purchase.isPurchased(filter.imageFilter) {
                             purchasedPostIds.insert(filter.id)
                         }
                     }
@@ -886,20 +888,20 @@ struct EditPhotoFeature {
                 if state.isProcessingPayment, let paidFilter = state.pendingPurchaseFilter {
 
                     // 결제 데이터 생성
-                    let payment = PaymentService.shared.createPayment(
-                        amount: "\(paidFilter.price)",
-                        productName: paidFilter.title,
-                        buyerName: "박성훈",
-                        postId: paidFilter.id
+                    let paymentData = payment.createPayment(
+                        "\(paidFilter.price)",
+                        paidFilter.title,
+                        "박성훈",
+                        paidFilter.id
                     )
 
-                    return .run { send in
+                    return .run { [payment] send in
                         do {
                             // 결제 요청 + 서버 검증
-                            let validated = try await PaymentService.shared.requestPayment(
-                                webView: webView,
-                                payment: payment,
-                                postId: paidFilter.id
+                            let validated = try await payment.requestPayment(
+                                webView,
+                                paymentData,
+                                paidFilter.id
                             )
 
                             await send(.paymentCompleted(.success(validated)))
@@ -967,8 +969,8 @@ struct EditPhotoFeature {
                 // 로컬 캐시에 구매 기록 저장
                 state.purchasedFilterPostIds.insert(paymentDTO.postId)
 
-                return .run { send in
-                    await PurchaseManager.shared.markAsPurchased(postId: paymentDTO.postId)
+                return .run { [purchase] send in
+                    await purchase.markAsPurchased(paymentDTO.postId)
 
                     // 모달 닫고 완료 진행
                     await send(.dismissPurchaseModal)
@@ -1028,15 +1030,15 @@ struct EditPhotoFeature {
                     let filterKey = snapshot.selectedFilter.rawValue
 
                     // FilterCache에서 확인
-                    if let cachedImage = filterCache.getFullImage(for: filterKey) {
-                        print("✅ [Cache HIT] Filter '\(filterKey)' from cache")
+                    if let cachedImage = filterCache.getFullImage(filterKey) {
+                        print("[Cache HIT] Filter '\(filterKey)' from cache")
                         baseImage = cachedImage
                     } else {
-                        print("⚠️ [Cache MISS] Applying filter '\(filterKey)'")
+                        print("[Cache MISS] Applying filter '\(filterKey)'")
                         if let filteredImage = snapshot.selectedFilter.apply(to: originalImage) {
                             baseImage = filteredImage
                             // 캐시에 저장
-                            filterCache.setFullImage(filteredImage, for: filterKey)
+                            filterCache.setFullImage(filteredImage, filterKey)
                         }
                     }
 
@@ -1072,7 +1074,7 @@ struct EditPhotoFeature {
 
             // MARK: - Memory Management
             case .memoryWarning:
-                print("⚠️ [Memory Warning] Clearing caches and limiting history")
+                print("[Memory Warning] Clearing caches and limiting history")
 
                 // 2. 히스토리 크기 축소 (10 → 5)
                 if state.historyStack.count > 5 {
