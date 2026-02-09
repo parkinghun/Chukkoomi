@@ -24,19 +24,21 @@ struct EditPhotoView: View {
             ZStack(alignment: .bottom) {
                 previewCanvas
 
-                // 폰트 크기 슬라이더 (텍스트 편집 모드일 때만, 우측에 표시)
-                if store.text.isTextEditMode {
-                    HStack {
-                        Spacer()
-                        fontSizeSlider()
-                            .padding(.trailing, 10)
-                    }
-                }
-
                 // 선택된 편집 모드에 따른 UI 표시 (이미지 위 오버레이)
                 editModeContentView
                     .padding(.bottom, 8)
                     .background(Color.white)
+                    .zIndex(1)  // 컨트롤 뷰는 중간 레이어
+
+                // 폰트 크기 슬라이더 (텍스트 편집 모드일 때만, 최상단 레이어에 표시)
+                if store.text.isTextEditMode {
+                    GeometryReader { geometry in
+                        let containerSize = CGSize(width: geometry.size.width, height: geometry.size.height)
+                        fontSizeSlider(containerSize: containerSize)
+                    }
+                    .zIndex(200)  // 최상단 레이어
+                    .allowsHitTesting(true)
+                }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -406,9 +408,17 @@ struct EditPhotoView: View {
     }
 
     // MARK: - Font Size Slider
-    private func fontSizeSlider() -> some View {
-        let sliderHeight: CGFloat = 220  // 적당한 고정 크기
-        let sliderWidth: CGFloat = 30   // 슬라이더 두께
+    /// 텍스트 폰트 크기 슬라이더 (화면 우상단에 배치)
+    /// - Parameter containerSize: 화면 컨테이너 크기
+    private func fontSizeSlider(containerSize: CGSize) -> some View {
+        let sliderHeight: CGFloat = 220  // 슬라이더 길이
+        let sliderWidth: CGFloat = 30    // 슬라이더 두께
+        let padding: CGFloat = 20        // 화면 가장자리로부터의 여백
+        let topPadding: CGFloat = 80     // 상단 여백
+
+        // 화면(containerSize) 기준으로 위치 계산
+        let xPosition = containerSize.width - sliderWidth / 2 - padding
+        let yPosition = sliderHeight / 2 + topPadding
 
         return Slider(
             value: Binding(
@@ -429,6 +439,7 @@ struct EditPhotoView: View {
         )
         .rotationEffect(.degrees(-90))
         .frame(width: sliderWidth, height: sliderHeight)  // 회전 후 최종 크기 고정
+        .position(x: xPosition, y: yPosition)  // visibleFrame 기준 위치 설정
     }
 
     // MARK: - Text Control View
