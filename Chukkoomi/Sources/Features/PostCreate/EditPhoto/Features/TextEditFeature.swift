@@ -98,6 +98,14 @@ struct TextEditFeature {
         }
     }
 
+    // MARK: - Dependencies
+    @Dependency(\.mainQueue) var mainQueue
+
+    // MARK: - Cancellation IDs
+    private enum CancelID {
+        case textUpdate
+    }
+
     // MARK: - Body
     var body: some ReducerOf<Self> {
         Reduce { state, action in
@@ -140,7 +148,9 @@ struct TextEditFeature {
                 // 편집 중 텍스트 업데이트
                 if let index = state.textOverlays.firstIndex(where: { $0.id == id }) {
                     state.textOverlays[index].text = text
+                    // 로컬 상태는 즉시 업데이트하고, 부모 알림은 디바운스
                     return .send(.delegate(.overlaysChanged(state.textOverlays)))
+                        .debounce(id: CancelID.textUpdate, for: 0.3, scheduler: mainQueue)
                 }
                 return .none
 

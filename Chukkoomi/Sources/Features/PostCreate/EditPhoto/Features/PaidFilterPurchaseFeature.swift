@@ -84,6 +84,11 @@ struct PaidFilterPurchaseFeature {
     @Dependency(\.payment) var payment
     @Dependency(\.purchase) var purchase
 
+    // MARK: - Cancellation IDs
+    private enum CancelID {
+        case payment
+    }
+
     // MARK: - Body
     var body: some ReducerOf<Self> {
         Reduce { state, action in
@@ -121,6 +126,7 @@ struct PaidFilterPurchaseFeature {
                         await send(.paymentCompleted(.failure(.invalidResponse)))
                     }
                 }
+                .cancellable(id: CancelID.payment, cancelInFlight: true)
 
             case .purchaseButtonTapped:
                 // 현재는 webView 생성 시 자동으로 결제가 시작되므로
@@ -154,6 +160,7 @@ struct PaidFilterPurchaseFeature {
                         await send(.paymentCompleted(.failure(.invalidResponse)))
                     }
                 }
+                .cancellable(id: CancelID.payment, cancelInFlight: true)
 
             case let .paymentCompleted(.success(paymentDTO)):
                 state.isProcessingPayment = false
@@ -173,7 +180,10 @@ struct PaidFilterPurchaseFeature {
                 return .none
 
             case .cancelButtonTapped:
-                return .send(.delegate(.purchaseCancelled))
+                return .merge(
+                    .cancel(id: CancelID.payment),
+                    .send(.delegate(.purchaseCancelled))
+                )
 
             case .delegate:
                 return .none

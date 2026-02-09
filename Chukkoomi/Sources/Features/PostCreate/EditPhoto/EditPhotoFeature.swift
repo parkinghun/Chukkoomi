@@ -51,6 +51,7 @@ struct EditPhotoFeature {
         let cropRect: CGRect?
         let selectedAspectRatio: CropAspectRatio
         let pkDrawing: PKDrawing
+        let canvasSize: CGSize  // Drawing 좌표계를 올바르게 복원하기 위해 필요
 
         static func == (lhs: EditSnapshot, rhs: EditSnapshot) -> Bool {
             return lhs.selectedFilter == rhs.selectedFilter &&
@@ -58,7 +59,8 @@ struct EditPhotoFeature {
                    lhs.stickers == rhs.stickers &&
                    lhs.cropRect == rhs.cropRect &&
                    lhs.selectedAspectRatio == rhs.selectedAspectRatio &&
-                   lhs.pkDrawing.dataRepresentation() == rhs.pkDrawing.dataRepresentation()
+                   lhs.pkDrawing.dataRepresentation() == rhs.pkDrawing.dataRepresentation() &&
+                   lhs.canvasSize == rhs.canvasSize
         }
     }
 
@@ -102,6 +104,7 @@ struct EditPhotoFeature {
         // Common
         var isProcessing: Bool = false
         var isDragging: Bool = false
+        var containerSize: CGSize = .zero  // 화면 컨테이너 크기 (Drawing 좌표계 변환에 필요)
 
         // Payment (결제 관련) - Child Feature로 분리
         @Presents var paidFilterPurchase: PaidFilterPurchaseFeature.State?
@@ -143,7 +146,8 @@ struct EditPhotoFeature {
                 stickers: sticker.stickers,
                 cropRect: crop.cropRect,
                 selectedAspectRatio: crop.selectedAspectRatio,
-                pkDrawing: drawing.pkDrawing
+                pkDrawing: drawing.pkDrawing,
+                canvasSize: drawing.canvasSize
             )
         }
 
@@ -156,6 +160,7 @@ struct EditPhotoFeature {
             crop.cropRect = snapshot.cropRect
             crop.selectedAspectRatio = snapshot.selectedAspectRatio
             drawing.pkDrawing = snapshot.pkDrawing
+            drawing.canvasSize = snapshot.canvasSize
         }
     }
 
@@ -183,10 +188,11 @@ struct EditPhotoFeature {
         case saveSnapshot
         case undo
         case redo
-        case regenerateImageFromSnapshot(EditSnapshot)  // 스냅샷으로부터 이미지 재생성
+        case rebuildDisplayImage(includeDrawing: Bool)  // 현재 상태로 이미지 재생성
         case imageRegenerated(UIImage)  // 재생성된 이미지 적용
 
         // Common
+        case setContainerSize(CGSize)  // 화면 컨테이너 크기 설정
         case completeButtonTapped
         case memoryWarning  // 메모리 경고 처리
         case delegate(Delegate)
@@ -209,6 +215,14 @@ struct EditPhotoFeature {
     @Dependency(\.payment) var payment
     @Dependency(\.purchase) var purchase
 
+    // MARK: - Cancellation IDs
+    private enum CancelID {
+        case applyFilter
+        case regenerateImage
+        case applyDrawing
+        case completeImage
+    }
+
     // MARK: - Body
     var body: some ReducerOf<Self> {
         Reduce { state, action in
@@ -222,8 +236,6 @@ struct EditPhotoFeature {
             case let .editModeChanged(mode):
                 // 그리기 모드를 벗어날 때 drawing을 displayImage에 적용
                 let wasDrawingMode = state.selectedEditMode == .draw
-                let isLeavingDrawingMode = wasDrawingMode && mode != .draw
-                let hasDrawing = !state.drawing.pkDrawing.strokes.isEmpty
 
                 // 다른 모드로 전환 시 텍스트 편집 모드 종료
                 if mode != .text && state.text.isTextEditMode {
@@ -239,24 +251,21 @@ struct EditPhotoFeature {
 
                 // Crop 모드로 전환 시
                 if mode == .crop {
+                    if wasDrawingMode {
+                        return .merge(
+                            .send(.crop(.enterCropMode)),
+                            .send(.rebuildDisplayImage(includeDrawing: true))
+                        )
+                    }
                     return .send(.crop(.enterCropMode))
                 }
 
-                // 그리기 모드를 벗어날 때 drawing 적용
-                if isLeavingDrawingMode && hasDrawing {
-                    return .run { [
-                        displayImage = state.displayImage,
-                        drawing = state.drawing.pkDrawing,
-                        canvasSize = state.drawing.canvasSize
-                    ] send in
-                        // Drawing을 이미지에 합성
-                        let composited = await ImageEditHelper.compositeImageWithDrawing(
-                            baseImage: displayImage,
-                            drawing: drawing,
-                            canvasSize: canvasSize
-                        )
-                        await send(.drawingApplied(composited))
-                    }
+                // 그리기 모드 진입/이탈 시 displayImage 재생성
+                if mode == .draw {
+                    return .send(.rebuildDisplayImage(includeDrawing: false))
+                }
+                if wasDrawingMode && mode != .draw {
+                    return .send(.rebuildDisplayImage(includeDrawing: true))
                 }
 
                 return .none
@@ -284,30 +293,10 @@ struct EditPhotoFeature {
 
                 return .merge(
                     .send(.saveSnapshot),
-                    .run { [originalImage = state.originalImage, filterCache] send in
-                        let filterKey = filter.rawValue
-
-                        // 캐시 확인
-                        if let cachedImage = filterCache.getFullImage(filterKey) {
-                            print("[Cache HIT] Filter '\(filterKey)' from cache")
-                            await send(.filterApplied(cachedImage))
-                        } else {
-                            print("[Cache MISS] Applying filter '\(filterKey)'")
-                            // 전체 해상도 이미지에 필터 적용
-                            if let filtered = filter.apply(to: originalImage) {
-                                // 캐시에 저장
-                                filterCache.setFullImage(filtered, filterKey)
-                                await send(.filterApplied(filtered))
-                            } else {
-                                await send(.filterApplied(originalImage))
-                            }
-                        }
-                    }
+                    .send(.rebuildDisplayImage(includeDrawing: state.selectedEditMode != .draw))
                 )
 
-            case let .filterApplied(image):
-                state.displayImage = image
-                state.isProcessing = false
+            case .filterApplied:
                 return .none
 
             // MARK: - Crop Actions (Delegate Handling)
@@ -348,6 +337,8 @@ struct EditPhotoFeature {
                 state.originalImage = image  // 자른 이미지를 새로운 원본으로
                 state.crop.cropRect = nil
                 state.crop.isCropping = false
+                // Crop은 파괴적 작업이므로 기존 drawing은 초기화
+                state.drawing.pkDrawing = PKDrawing()
                 state.isProcessing = false
 
                 // Crop 후에는 필터 캐시 클리어 (원본이 바뀌었으므로)
@@ -404,7 +395,6 @@ struct EditPhotoFeature {
 
             case let .drawingApplied(image):
                 state.displayImage = image
-                state.drawing.pkDrawing = PKDrawing()  // Drawing 초기화
                 state.isProcessing = false
                 return .none
 
@@ -447,12 +437,12 @@ struct EditPhotoFeature {
                 if state.text.isTextEditMode {
                     return .merge(
                         .send(.text(.exitTextEditMode)),
-                        .send(.regenerateImageFromSnapshot(previousSnapshot))
+                        .send(.rebuildDisplayImage(includeDrawing: state.selectedEditMode != .draw))
                     )
                 }
 
                 // 이미지 재생성 트리거
-                return .send(.regenerateImageFromSnapshot(previousSnapshot))
+                return .send(.rebuildDisplayImage(includeDrawing: state.selectedEditMode != .draw))
 
             case .redo:
                 guard !state.redoStack.isEmpty else { return .none }
@@ -469,12 +459,16 @@ struct EditPhotoFeature {
                 if state.text.isTextEditMode {
                     return .merge(
                         .send(.text(.exitTextEditMode)),
-                        .send(.regenerateImageFromSnapshot(nextSnapshot))
+                        .send(.rebuildDisplayImage(includeDrawing: state.selectedEditMode != .draw))
                     )
                 }
 
                 // 이미지 재생성 트리거
-                return .send(.regenerateImageFromSnapshot(nextSnapshot))
+                return .send(.rebuildDisplayImage(includeDrawing: state.selectedEditMode != .draw))
+
+            case let .setContainerSize(size):
+                state.containerSize = size
+                return .none
 
             case .completeButtonTapped:
                 // 텍스트 편집 모드면 먼저 종료
@@ -570,7 +564,8 @@ struct EditPhotoFeature {
                     textOverlays = state.text.textOverlays,
                     stickers = state.sticker.stickers,
                     drawing = state.drawing.pkDrawing,
-                    canvasSize = state.drawing.canvasSize
+                    canvasSize = state.drawing.canvasSize,
+                    containerSize = state.containerSize
                 ] send in
                     // 1. 자르기가 설정되어 있으면 먼저 적용
                     var baseImage = displayImage
@@ -586,7 +581,8 @@ struct EditPhotoFeature {
                         textOverlays: textOverlays,
                         stickers: stickers,
                         drawing: drawing,
-                        canvasSize: canvasSize
+                        canvasSize: canvasSize,
+                        containerSize: containerSize
                     )
 
                     guard let imageData = finalImage.jpegData(compressionQuality: 0.8) else {
@@ -597,53 +593,47 @@ struct EditPhotoFeature {
                     await send(.delegate(.didCompleteEditing(imageData)))
                 }
 
-            // MARK: - Image Regeneration (Undo/Redo용)
-            case let .regenerateImageFromSnapshot(snapshot):
-                // 스냅샷으로부터 이미지 재생성 (캐시 활용)
+            // MARK: - Image Regeneration (현재 상태 기준)
+            case let .rebuildDisplayImage(includeDrawing):
                 state.isProcessing = true
 
-                return .run { [originalImage = state.originalImage, filterCache] send in
-                    // 1. 필터 적용 (캐시 우선 확인)
+                return .run { [
+                    originalImage = state.originalImage,
+                    selectedFilter = state.filter.selectedFilter,
+                    drawing = state.drawing.pkDrawing,
+                    canvasSize = state.drawing.canvasSize,
+                    containerSize = state.containerSize,
+                    filterCache
+                ] send in
+                    // 1. 필터 적용 (캐시 우선)
                     var baseImage = originalImage
-                    let filterKey = snapshot.selectedFilter.rawValue
+                    let filterKey = selectedFilter.rawValue
 
-                    // FilterCache에서 확인
                     if let cachedImage = filterCache.getFullImage(filterKey) {
                         print("[Cache HIT] Filter '\(filterKey)' from cache")
                         baseImage = cachedImage
                     } else {
                         print("[Cache MISS] Applying filter '\(filterKey)'")
-                        if let filteredImage = snapshot.selectedFilter.apply(to: originalImage) {
+                        if let filteredImage = selectedFilter.apply(to: originalImage) {
                             baseImage = filteredImage
-                            // 캐시에 저장
                             filterCache.setFullImage(filteredImage, filterKey)
                         }
                     }
 
-                    // 2. 오버레이 합성 (텍스트, 스티커, 그림)
-                    // 오버레이가 있으면 합성, 없으면 베이스 이미지 그대로
-                    let hasOverlays = !snapshot.textOverlays.isEmpty ||
-                                      !snapshot.stickers.isEmpty ||
-                                      !snapshot.pkDrawing.strokes.isEmpty
-
-                    let finalImage: UIImage
-                    if hasOverlays {
-                        // 임시 canvasSize (실제 canvasSize는 State에서 가져와야 하지만 스냅샷에 없음)
-                        // Drawing이 있으면 이미지 크기로 가정
-                        let canvasSize = baseImage.size
-                        finalImage = await ImageEditHelper.compositeImageWithOverlays(
+                    // 2. 그리기 합성 (필요 시)
+                    if includeDrawing, !drawing.strokes.isEmpty {
+                        let composited = await ImageEditHelper.compositeImageWithDrawing(
                             baseImage: baseImage,
-                            textOverlays: snapshot.textOverlays,
-                            stickers: snapshot.stickers,
-                            drawing: snapshot.pkDrawing,
-                            canvasSize: canvasSize
+                            drawing: drawing,
+                            canvasSize: canvasSize,
+                            containerSize: containerSize
                         )
+                        await send(.imageRegenerated(composited))
                     } else {
-                        finalImage = baseImage
+                        await send(.imageRegenerated(baseImage))
                     }
-
-                    await send(.imageRegenerated(finalImage))
                 }
+                .cancellable(id: CancelID.regenerateImage, cancelInFlight: true)
 
             case let .imageRegenerated(image):
                 state.displayImage = image
@@ -726,6 +716,8 @@ extension EditPhotoFeature.Action: Equatable {
              (.checkPaidFilterPurchase, .checkPaidFilterPurchase),
              (.proceedToComplete, .proceedToComplete):
             return true
+        case let (.setContainerSize(l), .setContainerSize(r)):
+            return l == r
 
         case let (.editModeChanged(l), .editModeChanged(r)):
             return l == r
@@ -736,8 +728,8 @@ extension EditPhotoFeature.Action: Equatable {
         case (.filterApplied(_), .filterApplied(_)),
              (.imageRegenerated(_), .imageRegenerated(_)):
             return true  // UIImage는 무시
-        case (.regenerateImageFromSnapshot(_), .regenerateImageFromSnapshot(_)):
-            return true  // EditSnapshot 비교는 복잡하므로 무시
+        case let (.rebuildDisplayImage(l), .rebuildDisplayImage(r)):
+            return l == r
         case let (.crop(l), .crop(r)):
             return l == r
         case (.cropApplied(_), .cropApplied(_)):

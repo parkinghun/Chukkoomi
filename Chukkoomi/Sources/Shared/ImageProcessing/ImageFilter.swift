@@ -78,13 +78,18 @@ enum ImageFilter: String, CaseIterable, Identifiable, Codable {
     /// - 앱 시작 시 필요한 모델만 lazy 로딩
     /// - 메모리 효율을 위해 Dictionary 사용
     private static var modelCache: [String: MLModel] = [:]
+    /// 모델 캐시 동시 접근 보호용 큐
+    private static let modelCacheQueue = DispatchQueue(
+        label: "com.chukkoomi.imagefilter.modelCache",
+        attributes: .concurrent
+    )
 
     /// CoreML 모델 로드 (캐싱)
     /// - Parameter modelName: 모델 이름
     /// - Returns: 로드된 MLModel
     private static func loadModel(named modelName: String) throws -> MLModel {
-        // 캐시 확인
-        if let cachedModel = modelCache[modelName] {
+        // 캐시 확인 (thread-safe)
+        if let cachedModel = modelCacheQueue.sync(execute: { modelCache[modelName] }) {
             return cachedModel
         }
 
@@ -99,7 +104,10 @@ enum ImageFilter: String, CaseIterable, Identifiable, Codable {
 
         do {
             let model = try MLModel(contentsOf: modelURL, configuration: config)
-            modelCache[modelName] = model  // 캐시 저장
+            // 캐시 저장 (thread-safe)
+            modelCacheQueue.async(flags: .barrier) {
+                modelCache[modelName] = model
+            }
             print("[ImageFilter] ✅ Model loaded: \(modelName)")
             return model
         } catch {

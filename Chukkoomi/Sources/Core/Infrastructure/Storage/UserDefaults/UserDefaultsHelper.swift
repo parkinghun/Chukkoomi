@@ -11,6 +11,12 @@ enum UserDefaultsHelper {
     
     @UserDefaultsItem(key: "UserId", type: String.self)
     static var userId: String?
+
+#if DEBUG
+    /// 테스트용 로그인 우회 플래그
+    @UserDefaultsItem(key: "LoginBypassEnabled", type: Bool.self)
+    static var isLoginBypassEnabled: Bool?
+#endif
     
     static func clearAll() {
         UserDefaults.standard.dictionaryRepresentation().keys.forEach {

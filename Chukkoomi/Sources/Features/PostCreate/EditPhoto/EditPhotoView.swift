@@ -12,7 +12,6 @@ import PencilKit
 struct EditPhotoView: View {
     let store: StoreOf<EditPhotoFeature>
     @Environment(\.dismiss) private var dismiss
-
     var body: some View {
         VStack(spacing: 0) {
             customToolbar
@@ -22,7 +21,7 @@ struct EditPhotoView: View {
                 .background(Color.white)
                 .zIndex(100)  // 최상위 레이어로 설정하여 터치 보장
 
-            ZStack {
+            ZStack(alignment: .bottom) {
                 previewCanvas
 
                 // 폰트 크기 슬라이더 (텍스트 편집 모드일 때만, 우측에 표시)
@@ -33,11 +32,13 @@ struct EditPhotoView: View {
                             .padding(.trailing, 10)
                     }
                 }
-            }
 
-            // 선택된 편집 모드에 따른 UI 표시
-            editModeContentView
-                .padding(.bottom, 8)
+                // 선택된 편집 모드에 따른 UI 표시 (이미지 위 오버레이)
+                editModeContentView
+                    .padding(.bottom, 8)
+                    .background(Color.white)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
 
             // 하단 탭 바 (텍스트 편집 모드가 아닐 때만 표시)
             if !store.text.isTextEditMode {
@@ -143,6 +144,15 @@ struct EditPhotoView: View {
         GeometryReader { geometry in
             let width = geometry.size.width
             let height = geometry.size.height
+            let containerSize = CGSize(width: width, height: height)
+            let imageSize = store.displayImage.size
+
+            // 실제 이미지 표시 영역 계산 (scaledToFill 기준)
+            let visibleImageFrame = ImageEditHelper.calculateVisibleImageFrame(
+                imageSize: imageSize,
+                containerSize: containerSize,
+                scaleMode: .fill
+            )
 
             ZStack {
                 Image(uiImage: store.displayImage)
@@ -273,6 +283,7 @@ struct EditPhotoView: View {
                 }
 
                 // Drawing Canvas (그리기 모드일 때만)
+                // 컨테이너 크기로 설정 (실제로 보이는 영역에만 그리도록)
                 if store.selectedEditMode == .draw {
                     DrawingCanvasView(
                         drawing: Binding(
@@ -318,9 +329,14 @@ struct EditPhotoView: View {
                 }
             }
             .task(id: geometry.size) {
-                // 캔버스 크기 설정 (DrawingCanvas와 동일한 크기)
-                // geometry.size가 변경될 때마다 업데이트
-                store.send(.drawing(.setCanvasSize(CGSize(width: width, height: height))))
+                // 컨테이너 크기 설정 (Drawing 좌표계 변환에 필요)
+                store.send(.setContainerSize(containerSize))
+
+                // 캔버스 크기를 컨테이너 크기로 설정
+                // 사용자가 실제로 보는 영역(containerSize)에 맞춰야 displayedRegion과 비율이 일치함
+                if store.selectedEditMode == .draw || store.drawing.canvasSize == .zero {
+                    store.send(.drawing(.setCanvasSize(containerSize)))
+                }
             }
         }
     }

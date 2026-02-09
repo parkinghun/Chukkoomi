@@ -83,6 +83,11 @@ struct FilterFeature {
     // MARK: - Dependencies
     @Dependency(\.filterCache) var filterCache
 
+    // MARK: - Cancellation IDs
+    private enum CancelID {
+        case generateThumbnails
+    }
+
     // MARK: - Body
     var body: some ReducerOf<Self> {
         Reduce { state, action in
@@ -109,6 +114,7 @@ struct FilterFeature {
                         }
                     }
                 }
+                .cancellable(id: CancelID.generateThumbnails)
 
             case let .thumbnailGenerated(filter, thumbnail):
                 state.filterThumbnails[filter] = thumbnail

@@ -37,6 +37,17 @@ struct AppFeature {
             switch action {
             case .onAppear:
                 // 앱 시작 시 인증 상태 체크
+#if DEBUG
+                if UserDefaultsHelper.isLoginBypassEnabled == nil {
+                    UserDefaultsHelper.isLoginBypassEnabled = true
+                }
+                if UserDefaultsHelper.isLoginBypassEnabled == true {
+                    if UserDefaultsHelper.userId == nil {
+                        UserDefaultsHelper.userId = "TEST_USER"
+                    }
+                    return .send(.checkAuthenticationResult(true))
+                }
+#endif
                 return .run { send in
                     do {
                         let hasValidToken = try await checkAuthentication()
